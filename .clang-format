@@ -4,3 +4,6 @@ UseTab: Never
 BreakBeforeBraces: Linux
 AllowShortIfStatementsOnASingleLine: false
 IndentCaseLabels: false
+---
+Language: Cpp
+Standard: C++11

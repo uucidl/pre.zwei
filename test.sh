@@ -1,4 +1,7 @@
 #!/usr/bin/env sh
 HERE="$(dirname ${0})"
-BUILD="${HERE}/builds"
-[ -d "${BUILD}" ] || mkdir -p "${BUILD}"
+
+"${HERE}"/build.sh | grep '^PROGRAM' | cut -f2 | while read program ; do
+                                                     printf "running ${program}\n"
+                                                     ${program} || exit 1
+                                                 done
