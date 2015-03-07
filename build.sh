@@ -19,5 +19,5 @@ function compile_clang()
     clang++ "${cflags[@]}" "${cxxflags[@]}" "$@"
 }
 
-compile_clang "${HERE}"/src/zwei_osx.cpp -o "${BUILD}"/zwei
-find "${BUILD}" -type f -depth 1 | xargs printf "PROGRAM\t%s\n"
+compile_clang "${HERE}"/src/zwei_osx.cpp -o "${BUILD}"/zwei && \
+    find "${BUILD}" -type f -depth 1 | xargs printf "PROGRAM\t%s\n"
