@@ -13,7 +13,7 @@ function compile_clang()
     cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
     cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Werror")
     cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter" "-Wno-conversion")
-    cflags=("${cflags[@]}" -g -gdwarf-4)
+    cflags=("${cflags[@]}" -g -gdwarf-3)
     cxxflags=("${cflags[@]}" "-std=c++11")
 
     clang++ "${cflags[@]}" "${cxxflags[@]}" "$@"
