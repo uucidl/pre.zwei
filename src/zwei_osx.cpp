@@ -13,10 +13,10 @@
 #define TOKEN_PASTE(x, y) TOKEN_PASTE_inner(x, y)
 
 /// use it to mark symbols which should not escape the compilation unit
-#define internal static
+#define zw_internal static
 
 /// local variables that persist across calls
-#define local_persist static
+#define zw_local_persist static
 
 // <DEFER implementation
 
@@ -116,9 +116,9 @@ struct BufferRange
         enum BufferRangeErrorCode (*next)(struct BufferRange *);
 };
 
-internal enum BufferRangeErrorCode next_zeros(struct BufferRange *range)
+zw_internal enum BufferRangeErrorCode next_zeros(struct BufferRange *range)
 {
-        local_persist uint8_t const zeros[256] = {0};
+        zw_local_persist uint8_t const zeros[256] = {0};
 
         range->start = zeros;
         range->cursor = (uint8_t *)zeros;
@@ -127,8 +127,8 @@ internal enum BufferRangeErrorCode next_zeros(struct BufferRange *range)
         return range->error;
 }
 
-internal enum BufferRangeErrorCode fail(struct BufferRange *range,
-                                        enum BufferRangeErrorCode error)
+zw_internal enum BufferRangeErrorCode fail(struct BufferRange *range,
+                                           enum BufferRangeErrorCode error)
 {
         range->error = error;
         range->next = next_zeros;
@@ -136,7 +136,7 @@ internal enum BufferRangeErrorCode fail(struct BufferRange *range,
         return range->next(range);
 }
 
-internal enum BufferRangeErrorCode
+zw_internal enum BufferRangeErrorCode
 next_on_memory_buffer(struct BufferRange *range)
 {
         return fail(range, BR_ReadPastEnd);
