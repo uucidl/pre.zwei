@@ -5,3 +5,4 @@ HERE="$(dirname ${0})"
                                                      printf "running ${program}\n"
                                                      ${program} || exit 1
                                                  done
+"${HERE}"/scripts/balance.sh "${HERE}"
