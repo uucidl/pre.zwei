@@ -44,7 +44,7 @@ inline bool cstr_equals(char const *s1, char const *s2)
                 s2++;
         }
 
-        return s1[0] == 0;
+        return s1[0] == 0 && s2[0] == 0;
 }
 
 inline uint64_t cstr_size(char const *s)
