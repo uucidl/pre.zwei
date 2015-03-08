@@ -4,7 +4,7 @@ USAGE="${0} <top of the tree>"
 TOP=${1:?${USAGE}}
 
 date=$(date "+%Y/%m/%d")
-features=$(git -C "${TOP}" grep 'FEATURE' | wc -l)
+features=$(git -C "${TOP}" grep 'FEATURE' -- src/* | wc -l)
 srclines=$(wc -l "${TOP}"/src/*.* | awk '/[0-9]+ total/ { print $1 }')
 
 printf "%s Balances\n    Assets:FeatureCount %d FEATURE\n    Liabilities:Code %d Lines\n" "${date}" "${features}" "${srclines}"
