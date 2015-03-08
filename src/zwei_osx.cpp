@@ -138,8 +138,7 @@ int main(int argc, char **argv)
                 uint64_t options = FSOPT_NOFOLLOW | FSOPT_REPORT_FULLSIZE |
                                    FSOPT_PACK_INVAL_ATTRS;
 
-                struct ResultAttributes
-                {
+                struct ResultAttributes {
                         uint32_t size;
                         attribute_set_t attributes;
                         uint32_t error;
