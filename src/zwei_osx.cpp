@@ -12,6 +12,10 @@
 #define TOKEN_PASTE_inner(x, y) x##y
 #define TOKEN_PASTE(x, y) TOKEN_PASTE_inner(x, y)
 
+#define GIGABYTES(x) (MEGABYTES(x) * 1024LL)
+#define MEGABYTES(x) (KILOBYTES(x) * 1024LL)
+#define KILOBYTES(x) (x * 1024LL)
+
 /// use it to mark symbols which should not escape the compilation unit
 #define zw_internal static
 
@@ -55,7 +59,7 @@ inline bool cstr_equals(char const *s1, char const *s2)
         return s1[0] == 0 && s2[0] == 0;
 }
 
-inline uint64_t cstr_size(char const *s)
+inline uint64_t cstr_len(char const *s)
 {
         uint64_t size = 0;
 
@@ -214,6 +218,39 @@ bool string_terminate(struct BufferRange *range)
 
 // ..STRING CONSTRUCTION W/ BUFFERS>
 
+// <MEMORY ARENAS
+
+/**
+   only meant to work in one thread and one thread only.
+ */
+
+struct MemoryArena
+{
+        uint8_t *base;
+        size_t used;
+        size_t size;
+};
+
+struct MemoryArena memory_arena(void *base, size_t size)
+{
+        return {(uint8_t *)base, 0, size};
+}
+
+inline uint8_t *push_bytes(struct MemoryArena *arena, size_t bytes)
+{
+        assert(arena->used + bytes <= arena->size, "overallocating");
+        uint8_t *result = arena->base + arena->used;
+
+        arena->used += bytes;
+
+        return result;
+}
+
+#define push_struct(arena_pointer, type)                                       \
+        (type *) push_bytes(arena_pointer, sizeof(type))
+
+// ..MEMORY ARENAS>
+
 #include <unistd.h>
 #include <sys/attr.h>
 #include <sys/file.h>
@@ -224,7 +261,7 @@ bool string_terminate(struct BufferRange *range)
 
 inline void sync_print(int filedesc, char const *message)
 {
-        auto message_size = cstr_size(message);
+        auto message_size = cstr_len(message);
         struct iovec iovecs[] = {
             {(void *)message, message_size}, {(void *)"\n", 1},
         };
@@ -236,6 +273,7 @@ inline void error_print(char const *message) { sync_print(2, message); }
 inline void trace_print(char const *message) { sync_print(1, message); }
 
 #include <sys/vnode.h> // for enum vtype
+#include <mach/mach.h> // for vm_allocate
 
 /**
    NOTE(nicolas)
@@ -276,129 +314,328 @@ int main(int argc, char **argv)
                 }
         }
 
-        // FEATURE(nicolas): show content of any directory
+        void *permanent_storage = nullptr;
+        auto permanent_storage_memory_size = GIGABYTES(1);
+        void *transient_storage = nullptr;
+        auto transient_storage_memory_size = MEGABYTES(64);
         {
-                int root_dir_fd = open(root_dir, O_RDONLY, 0);
-                if (root_dir_fd < 0) {
-                        error_print("could not find root directory");
+                vm_address_t transient_storage_memory_address = 0x1000000000;
+                vm_address_t permanent_storage_memory_address = 0x2000000000;
+                kern_return_t vm_allocate_result;
+                vm_allocate_result = vm_allocate(
+                    mach_task_self(), &permanent_storage_memory_address,
+                    permanent_storage_memory_size, false);
+                if (KERN_SUCCESS != vm_allocate_result) {
+                        error_print("could not memory");
                         return 1;
                 }
-                DEFER({ close(root_dir_fd); });
-
-                struct attrlist attributes = {
-                    ATTR_BIT_MAP_COUNT, 0,
-                    (ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_ERROR | ATTR_CMN_NAME |
-                     ATTR_CMN_OBJTYPE | ATTR_CMN_OBJTAG),
-                    0, 0, ATTR_FILE_IOBLOCKSIZE, 0,
-                };
-                uint64_t options = FSOPT_NOFOLLOW | FSOPT_REPORT_FULLSIZE |
-                                   FSOPT_PACK_INVAL_ATTRS;
-
-                struct ResultAttributes
-                {
-                        uint32_t size;
-                        attribute_set_t attributes;
-                        uint32_t error;
-                        attrreference nameinfo;
-                        fsobj_type_t obj_type;
-                        fsobj_tag_t obj_tag;
-                        union
-                        {
-                                uint32_t file_ioblocksize;
-                        };
-                } __attribute__((aligned(4), packed));
-
-                uint32_t result_entries[16 * 256];
-                int result;
-
-                uint32_t entrycount = 0;
-                char linebuffer_memory[256];
-                {
-                        struct BufferRange linebuffer;
-                        stream_on_memory(&linebuffer,
-                                         (uint8_t *)linebuffer_memory,
-                                         sizeof linebuffer_memory);
-                        string_cat(&linebuffer, "name");
-                        string_cat(&linebuffer, "\t");
-                        string_cat(&linebuffer, "type");
-                        string_cat(&linebuffer, "\t");
-                        string_cat(&linebuffer, "tag");
-                        string_cat(&linebuffer, "\t");
-                        string_cat(&linebuffer, "ioblocksize");
-                        if (string_terminate(&linebuffer)) {
-                                trace_print(linebuffer_memory);
-                        }
+                permanent_storage = (void *)permanent_storage_memory_address;
+                vm_allocate_result = vm_allocate(
+                    mach_task_self(), &transient_storage_memory_address,
+                    transient_storage_memory_size, false);
+                if (KERN_SUCCESS != vm_allocate_result) {
+                        error_print("could not memory");
+                        return 1;
                 }
+                transient_storage = (void *)transient_storage_memory_address;
+        }
 
-                while ((result = getattrlistbulk(
-                            root_dir_fd, &attributes, &result_entries,
-                            sizeof result_entries, options)) > 0) {
-                        auto batch_entry_count = result;
+        // FEATURE(nicolas): show content of any directory recursively
+        if (!root_dir) {
+                error_print("you must pass a root directory with --root-dir");
+        } else {
+                // NOTE(nicolas)
+                //
+                // for each directory in the stack of directories to visit,
+                //
+                // pop that directory off the stack of directories to visit,
+                // and collect all entries using getattrlistbulk.
+                // - directories are pushed onto the stack of directories to
+                // visit.
+                //
+                // repeat until there is no more directories to visit
 
-                        uint8_t *data = (uint8_t *)result_entries;
-                        for (int entry_index = 0;
-                             entry_index < batch_entry_count; entry_index++) {
-                                struct ResultAttributes *entry =
-                                    (struct ResultAttributes *)data;
-                                char const *name =
-                                    (char *)((uint8_t *)&entry->nameinfo) +
-                                    entry->nameinfo.attr_dataoffset;
+                // TODO(nicolas) performance: we're nowhere near
+                // saturating the I/O there, especially when querying
+                // a network shared drive.
 
-                                {
+                struct MemoryArena dc_arena = memory_arena(
+                    transient_storage, transient_storage_memory_size);
+
+                struct Entry;
+
+                struct State
+                {
+                        struct Entry *entries = nullptr;
+                        struct Entry *free_entry = nullptr;
+                };
+
+                struct State *state = push_struct(&dc_arena, struct State);
+                struct Entry
+                {
+                        char const *path;
+                        struct Entry *next;
+                };
+
+                auto push_entry = [&state, &dc_arena]() {
+                        struct Entry *result;
+
+                        if (!state->free_entry) {
+                                result = push_struct(&dc_arena, struct Entry);
+                        } else {
+                                result = state->free_entry;
+                                state->free_entry = state->free_entry->next;
+                        }
+
+                        result->next = state->entries;
+                        state->entries = result;
+
+                        return result;
+                };
+
+                auto pop_entry = [&state]() {
+                        struct Entry *result = state->entries;
+                        if (result) {
+                                state->entries = result->next;
+                        }
+
+                        return result;
+                };
+
+                auto discard_entry = [&state](struct Entry *entry) {
+                        entry->next = state->free_entry;
+                        state->free_entry = entry;
+                };
+
+                struct Entry *entry = push_entry();
+                entry->path = root_dir;
+
+                char linebuffer_memory[256];
+                struct Entry *dir_entry;
+                while ((dir_entry = pop_entry())) {
+                        char const *dir_path;
+                        {
+                                dir_path = dir_entry->path;
+                                discard_entry(dir_entry);
+                                dir_entry = nullptr;
+                        }
+
+                        int dir_fd;
+                        {
+                                dir_fd = open(dir_path, O_RDONLY, 0);
+                                if (dir_fd < 0) {
                                         struct BufferRange linebuffer;
                                         stream_on_memory(
                                             &linebuffer,
                                             (uint8_t *)linebuffer_memory,
                                             sizeof linebuffer_memory);
-                                        string_cat(&linebuffer, name);
-                                        if (entry->obj_type == VREG) {
-                                                string_cat(&linebuffer,
-                                                           "\t[f]");
-                                        } else if (entry->obj_type == VDIR) {
-                                                string_cat(&linebuffer,
-                                                           "\t[d]");
-                                        } else {
-                                                // not a file, not a directory
-                                                string_cat_formatted(
-                                                    &linebuffer, "\t[%d]",
-                                                    entry->obj_type);
-                                        }
-
-                                        string_cat(&linebuffer, "\t");
-
-                                        if (entry->obj_tag == VT_HFS) {
-                                                string_cat(&linebuffer, "HFS");
-                                        } else if (entry->obj_tag == VT_AFP) {
-                                                string_cat(&linebuffer, "AFP");
-                                        } else {
-                                                string_cat_uint32(
-                                                    &linebuffer,
-                                                    entry->obj_tag);
-                                        }
-
-                                        if (entry->obj_type == VREG) {
-                                                string_cat(&linebuffer, "\t");
-                                                string_cat_uint32(
-                                                    &linebuffer,
-                                                    entry->file_ioblocksize);
-                                        }
-
+                                        string_cat(
+                                            &linebuffer,
+                                            "could not find directory: ");
+                                        string_cat(&linebuffer, dir_path);
                                         if (string_terminate(&linebuffer)) {
-                                                trace_print(linebuffer_memory);
+                                                error_print(linebuffer_memory);
                                         }
+                                        return 1;
                                 }
-
-                                data += entry->size;
                         }
-                        entrycount += batch_entry_count;
-                }
-                if (result < 0) {
-                        if (EBADF == errno || ENOTDIR == errno) {
-                                error_print("not a readable directory");
+                        DEFER({ close(dir_fd); });
+
+                        {
+                                struct BufferRange linebuffer;
+                                stream_on_memory(&linebuffer,
+                                                 (uint8_t *)linebuffer_memory,
+                                                 sizeof linebuffer_memory);
+                                string_cat(&linebuffer,
+                                           "\nlisting directory: ");
+                                string_cat(&linebuffer, dir_path);
+                                if (string_terminate(&linebuffer)) {
+                                        trace_print(linebuffer_memory);
+                                }
+                        }
+
+                        struct attrlist attributes = {
+                            ATTR_BIT_MAP_COUNT, 0,
+                            (ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_ERROR |
+                             ATTR_CMN_NAME | ATTR_CMN_OBJTYPE |
+                             ATTR_CMN_OBJTAG),
+                            0, 0, ATTR_FILE_IOBLOCKSIZE, 0,
+                        };
+                        uint64_t options = FSOPT_NOFOLLOW |
+                                           FSOPT_REPORT_FULLSIZE |
+                                           FSOPT_PACK_INVAL_ATTRS;
+
+                        struct ResultAttributes
+                        {
+                                uint32_t size;
+                                attribute_set_t attributes;
+                                uint32_t error;
+                                attrreference nameinfo;
+                                fsobj_type_t obj_type;
+                                fsobj_tag_t obj_tag;
+                                union
+                                {
+                                        uint32_t file_ioblocksize;
+                                };
+                        } __attribute__((aligned(4), packed));
+
+                        uint32_t result_entries[16 * 256];
+                        int result;
+
+                        uint32_t entrycount = 0;
+                        {
+                                struct BufferRange linebuffer;
+                                stream_on_memory(&linebuffer,
+                                                 (uint8_t *)linebuffer_memory,
+                                                 sizeof linebuffer_memory);
+                                string_cat(&linebuffer, "name");
+                                string_cat(&linebuffer, "\t");
+                                string_cat(&linebuffer, "type");
+                                string_cat(&linebuffer, "\t");
+                                string_cat(&linebuffer, "tag");
+                                string_cat(&linebuffer, "\t");
+                                string_cat(&linebuffer, "ioblocksize");
+                                if (string_terminate(&linebuffer)) {
+                                        trace_print(linebuffer_memory);
+                                }
+                        }
+
+                        while ((result = getattrlistbulk(
+                                    dir_fd, &attributes, &result_entries,
+                                    sizeof result_entries, options)) > 0) {
+                                auto batch_entry_count = result;
+
+                                uint8_t *data = (uint8_t *)result_entries;
+                                for (int entry_index = 0;
+                                     entry_index < batch_entry_count;
+                                     entry_index++) {
+                                        struct ResultAttributes *entry =
+                                            (struct ResultAttributes *)data;
+                                        char const *name =
+                                            (char *)((uint8_t *)&entry
+                                                         ->nameinfo) +
+                                            entry->nameinfo.attr_dataoffset;
+
+                                        {
+                                                struct BufferRange linebuffer;
+                                                stream_on_memory(
+                                                    &linebuffer, (uint8_t *)
+                                                    linebuffer_memory,
+                                                    sizeof linebuffer_memory);
+                                                string_cat(&linebuffer, name);
+                                                if (entry->obj_type == VREG) {
+                                                        string_cat(&linebuffer,
+                                                                   "\t[f]");
+                                                } else if (entry->obj_type ==
+                                                           VDIR) {
+                                                        string_cat(&linebuffer,
+                                                                   "\t[d]");
+                                                } else {
+                                                        // not a file, not a
+                                                        // directory
+                                                        string_cat_formatted(
+                                                            &linebuffer,
+                                                            "\t[%d]",
+                                                            entry->obj_type);
+                                                }
+
+                                                string_cat(&linebuffer, "\t");
+
+                                                if (entry->obj_tag == VT_HFS) {
+                                                        string_cat(&linebuffer,
+                                                                   "HFS");
+                                                } else if (entry->obj_tag ==
+                                                           VT_AFP) {
+                                                        string_cat(&linebuffer,
+                                                                   "AFP");
+                                                } else {
+                                                        string_cat_uint32(
+                                                            &linebuffer,
+                                                            entry->obj_tag);
+                                                }
+
+                                                if (entry->obj_type == VREG) {
+                                                        string_cat(&linebuffer,
+                                                                   "\t");
+                                                        string_cat_uint32(
+                                                            &linebuffer,
+                                                            entry
+                                                                ->file_ioblocksize);
+                                                }
+
+                                                if (string_terminate(
+                                                        &linebuffer)) {
+                                                        trace_print(
+                                                            linebuffer_memory);
+                                                }
+
+                                                if (entry->obj_type == VDIR) {
+                                                        char const *entry_name =
+                                                            (char *)((uint8_t *)&entry
+                                                                         ->nameinfo) +
+                                                            entry->nameinfo
+                                                                .attr_dataoffset;
+
+                                                        auto path_size =
+                                                            cstr_len(dir_path) +
+                                                            1 +
+                                                            cstr_len(
+                                                                entry_name) +
+                                                            1;
+                                                        uint8_t *path =
+                                                            push_bytes(
+                                                                &dc_arena,
+                                                                path_size);
+                                                        struct BufferRange
+                                                            path_buffer;
+                                                        stream_on_memory(
+                                                            &path_buffer, path,
+                                                            path_size);
+                                                        string_cat(&path_buffer,
+                                                                   dir_path);
+                                                        string_cat(&path_buffer,
+                                                                   "/");
+                                                        string_cat(&path_buffer,
+                                                                   entry_name);
+                                                        assert(
+                                                            string_terminate(
+                                                                &path_buffer),
+                                                            "unexpected size");
+
+                                                        struct Entry *
+                                                            dir_entry =
+                                                                push_entry();
+                                                        dir_entry->path =
+                                                            (char const *)path;
+                                                }
+                                        }
+
+                                        data += entry->size;
+                                }
+                                entrycount += batch_entry_count;
+                        }
+                        if (result < 0) {
+                                if (EBADF == errno || ENOTDIR == errno) {
+                                        error_print("not a readable directory");
+                                        return 1;
+                                }
+                                perror("getattrlistbulk");
                                 return 1;
                         }
-                        perror("getattrlistbulk");
-                        return 1;
+                }
+                {
+                        struct BufferRange linebuffer;
+                        stream_on_memory(&linebuffer,
+                                         (uint8_t *)linebuffer_memory,
+                                         sizeof linebuffer_memory);
+                        string_cat(
+                            &linebuffer,
+                            "total allocated memory for directory entries: ");
+                        string_cat_formatted(&linebuffer, "%lld",
+                                             dc_arena.used);
+                        if (string_terminate(&linebuffer)) {
+                                trace_print(linebuffer_memory);
+                        }
                 }
         }
 
