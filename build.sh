@@ -21,6 +21,8 @@ function compile_osx()
     cflags=("${cflags[@]}" -g -gdwarf-3)
     cxxflags=("${cxxflags[@]}" "-std=c++11")
 
+    cflags=("${cflags[@]}" -DZWEI_SLOW)
+
     clang++ "${cflags[@]}" "${cxxflags[@]}" "$@"
 }
 
