@@ -39,7 +39,8 @@ template <class Lambda> class AtScopeExit
 
 #define DEFER_inner(counter, ...)                                              \
         DEFER_inner2(TOKEN_PASTE(Defer_lambda, counter),                       \
-                     TOKEN_PASTE(Defer_instance, counter), __VA_ARGS__)
+                     TOKEN_PASTE(Defer_instance, counter),                     \
+                     __VA_ARGS__)
 
 #define DEFER(...) DEFER_inner(__COUNTER__, __VA_ARGS__)
 
@@ -83,8 +84,8 @@ enum BufferRangeErrorCode {
         BR_ReadPastEnd,
 };
 
-void stream_on_memory(struct BufferRange *range, uint8_t const *mem,
-                      size_t size);
+void
+stream_on_memory(struct BufferRange *range, uint8_t const *mem, size_t size);
 
 struct BufferRange
 {
@@ -146,8 +147,8 @@ next_on_memory_buffer(struct BufferRange *range)
         return fail(range, BR_ReadPastEnd);
 }
 
-void stream_on_memory(struct BufferRange *range, uint8_t *mem,
-                      size_t const size)
+void
+stream_on_memory(struct BufferRange *range, uint8_t *mem, size_t const size)
 {
         range->start = mem;
         range->cursor = mem;
@@ -322,17 +323,21 @@ int main(int argc, char **argv)
                 vm_address_t transient_storage_memory_address = 0x1000000000;
                 vm_address_t permanent_storage_memory_address = 0x2000000000;
                 kern_return_t vm_allocate_result;
-                vm_allocate_result = vm_allocate(
-                    mach_task_self(), &permanent_storage_memory_address,
-                    permanent_storage_memory_size, false);
+                vm_allocate_result =
+                    vm_allocate(mach_task_self(),
+                                &permanent_storage_memory_address,
+                                permanent_storage_memory_size,
+                                false);
                 if (KERN_SUCCESS != vm_allocate_result) {
                         error_print("could not memory");
                         return 1;
                 }
                 permanent_storage = (void *)permanent_storage_memory_address;
-                vm_allocate_result = vm_allocate(
-                    mach_task_self(), &transient_storage_memory_address,
-                    transient_storage_memory_size, false);
+                vm_allocate_result =
+                    vm_allocate(mach_task_self(),
+                                &transient_storage_memory_address,
+                                transient_storage_memory_size,
+                                false);
                 if (KERN_SUCCESS != vm_allocate_result) {
                         error_print("could not memory");
                         return 1;
