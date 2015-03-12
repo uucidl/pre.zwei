@@ -5,4 +5,9 @@ HERE="$(dirname ${0})"
                                                      printf "running ${program}\n"
                                                      ${program} || exit 1
                                                  done
+
+##
+# some reports
+
 "${HERE}"/scripts/balance.sh "${HERE}"
+"${HERE}"/scripts/todo.sh "${HERE}"
