@@ -1,8 +1,11 @@
 #include <cstdint>
 
+void error_print(char const *);
+
 #define assert(condition, message)                                             \
         do {                                                                   \
                 if (!(condition)) {                                            \
+                        error_print(message);                                  \
                         asm("int3");                                           \
                 }                                                              \
         } while (0)
@@ -39,7 +42,8 @@ template <class Lambda> class AtScopeExit
 
 #define DEFER_inner(counter, ...)                                              \
         DEFER_inner2(TOKEN_PASTE(Defer_lambda, counter),                       \
-                     TOKEN_PASTE(Defer_instance, counter), __VA_ARGS__)
+                     TOKEN_PASTE(Defer_instance, counter),                     \
+                     __VA_ARGS__)
 
 #define DEFER(...) DEFER_inner(__COUNTER__, __VA_ARGS__)
 
@@ -83,8 +87,8 @@ enum BufferRangeErrorCode {
         BR_ReadPastEnd,
 };
 
-void stream_on_memory(struct BufferRange *range, uint8_t const *mem,
-                      size_t size);
+void
+stream_on_memory(struct BufferRange *range, uint8_t const *mem, size_t size);
 
 struct BufferRange
 {
@@ -146,8 +150,8 @@ next_on_memory_buffer(struct BufferRange *range)
         return fail(range, BR_ReadPastEnd);
 }
 
-void stream_on_memory(struct BufferRange *range, uint8_t *mem,
-                      size_t const size)
+void
+stream_on_memory(struct BufferRange *range, uint8_t *mem, size_t const size)
 {
         range->start = mem;
         range->cursor = mem;
@@ -275,6 +279,486 @@ inline void trace_print(char const *message) { sync_print(1, message); }
 #include <sys/vnode.h> // for enum vtype
 #include <mach/mach.h> // for vm_allocate
 
+// NOTE(nicolas)
+//
+// for each directory in the stack of directories to visit,
+//
+// pop that directory off the stack of directories to visit,
+// and collect all entries using getattrlistbulk.
+// - directories are pushed onto the stack of directories to
+// visit.
+//
+// repeat until there is no more directories to visit
+
+// TODO(nicolas) performance: we're nowhere near
+// saturating the I/O there, especially when querying
+// a network shared drive.
+
+// TODO(nicolas) compare performance w/ CIFS and AFP network shares
+
+/*
+
+time ./builds/zwei --root-dir /Volumes/Documents/Projects\ \(Nicolas\)/Music/
+
+real	1m14.414s
+user	0m0.179s
+sys	0m2.439s
+
+w/ CIFS
+total used after scan: 1122699
+done
+
+real	0m37.408s
+user	0m0.148s
+sys	0m1.168s
+
+Also when checking iopattern / iosnoop I can see that the access pattern for
+directory listing is random.. blocks all over the place.
+
+TODO(nicolas) Is there a way in HFS+ to iterate over files in block order/get
+block lists?
+
+*/
+
+zw_internal int print_directory_content(struct MemoryArena *arena,
+                                        char const *root_dir_path)
+{
+        struct FSEntry;
+
+        struct State
+        {
+                struct FSEntry *free_entry = nullptr;
+                struct FSEntry *directories = nullptr;
+                struct FSEntry *files = nullptr;
+        };
+
+        struct State *state = push_struct(arena, struct State);
+        struct FSEntry
+        {
+                char const *path;
+                struct FSEntry *next;
+                uint64_t physical_offset; // for files
+        };
+
+        auto push_entry = [&state, arena]() {
+                struct FSEntry *result;
+
+                if (!state->free_entry) {
+                        result = push_struct(arena, struct FSEntry);
+                } else {
+                        result = state->free_entry;
+                        state->free_entry = state->free_entry->next;
+                }
+
+                return result;
+        };
+
+        auto push_directory = [&state, push_entry]() {
+                struct FSEntry *result = push_entry();
+
+                result->physical_offset = 0;
+                result->next = state->directories;
+                state->directories = result;
+
+                return result;
+        };
+
+        auto pop_directory = [&state]() {
+                struct FSEntry *result = state->directories;
+                if (result) {
+                        state->directories = result->next;
+                }
+
+                return result;
+        };
+
+        auto push_file = [&state, push_entry]() {
+                struct FSEntry *result = push_entry();
+
+                result->next = state->files;
+                state->files = result;
+
+                return result;
+        };
+
+        auto discard_entry = [&state](struct FSEntry *entry) {
+                entry->next = state->free_entry;
+                state->free_entry = entry;
+        };
+
+        struct FSEntry *entry = push_directory();
+        entry->path = root_dir_path;
+
+        class TextLine
+        {
+              public:
+                struct BufferRange linebuffer;
+                char *memory;
+                void (*print)(char const *);
+
+                TextLine(void (*print)(char const *),
+                         char *memory,
+                         size_t memory_size)
+                    : memory(memory), print(print)
+                {
+                        stream_on_memory(
+                            &linebuffer, (uint8_t *)memory, memory_size);
+                }
+
+                ~TextLine()
+                {
+                        if (string_terminate(&linebuffer)) {
+                                print(memory);
+                        }
+                }
+
+                TextLine &operator<<(char const *str)
+                {
+                        string_cat(&linebuffer, str);
+                        return *this;
+                }
+
+                TextLine &operator<<(uint8_t c)
+                {
+                        string_cat_uint32(&linebuffer, c);
+                        return *this;
+                }
+
+                TextLine &operator<<(long long ll)
+                {
+                        string_cat_formatted(&linebuffer, "%lld", ll);
+                        return *this;
+                }
+
+                TextLine &operator<<(unsigned long ll)
+                {
+                        string_cat_formatted(&linebuffer, "%lu", ll);
+                        return *this;
+                }
+
+                TextLine &operator<<(uint32_t i)
+                {
+                        string_cat_uint32(&linebuffer, i);
+                        return *this;
+                }
+
+                TextLine &operator<<(uint64_t ii)
+                {
+                        string_cat_formatted(&linebuffer, "%llu", ii);
+                        return *this;
+                }
+        };
+
+        char linebuffer_memory[256];
+#define ERROR                                                                  \
+        (TextLine(error_print, linebuffer_memory, sizeof linebuffer_memory))
+#define TRACE                                                                  \
+        (TextLine(trace_print, linebuffer_memory, sizeof linebuffer_memory))
+
+        struct FSEntry *dir_entry;
+        while ((dir_entry = pop_directory())) {
+                char const *dir_path;
+                {
+                        dir_path = dir_entry->path;
+                        discard_entry(dir_entry);
+                        dir_entry = nullptr;
+                }
+
+                int dir_fd;
+                off_t dir_devoffset = 0;
+                {
+                        dir_fd = open(dir_path, O_RDONLY, 0);
+                        if (dir_fd < 0) {
+                                ERROR
+                                << "could not find directory: " << dir_path;
+                                return 1;
+                        }
+                }
+                DEFER({ close(dir_fd); });
+
+                TRACE << "\nlisting directory: " << dir_path
+                      << " block: " << dir_devoffset;
+
+                struct attrlist attributes = {
+                    ATTR_BIT_MAP_COUNT,
+                    0,
+                    (ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_ERROR | ATTR_CMN_NAME |
+                     ATTR_CMN_OBJTYPE | ATTR_CMN_OBJTAG),
+                    0,
+                    0,
+                    ATTR_FILE_IOBLOCKSIZE,
+                    0,
+                };
+                uint64_t options = FSOPT_NOFOLLOW | FSOPT_REPORT_FULLSIZE |
+                                   FSOPT_PACK_INVAL_ATTRS;
+
+                struct ResultAttributes
+                {
+                        uint32_t size;
+                        attribute_set_t attributes;
+                        uint32_t error;
+                        attrreference nameinfo;
+                        fsobj_type_t obj_type;
+                        fsobj_tag_t obj_tag;
+                        union
+                        {
+                                uint32_t file_ioblocksize;
+                        };
+                } __attribute__((aligned(4), packed));
+
+                uint32_t entrycount = 0;
+                TRACE << "name"
+                      << "\t"
+                      << "type"
+                      << "\t"
+                      << "tag"
+                      << "\t"
+                      << "ioblocksize"
+                      << "\t"
+                      << "physical location";
+
+                uint32_t result_batch[16 * 256];
+                int result;
+                while ((result = getattrlistbulk(dir_fd,
+                                                 &attributes,
+                                                 &result_batch,
+                                                 sizeof result_batch,
+                                                 options)) > 0) {
+                        auto batch_entry_count = result;
+
+                        uint8_t *data = (uint8_t *)result_batch;
+                        for (int entry_index = 0;
+                             entry_index < batch_entry_count;
+                             entry_index++) {
+                                struct ResultAttributes *entry =
+                                    (struct ResultAttributes *)data;
+                                char const *name =
+                                    (char *)((uint8_t *)&entry->nameinfo) +
+                                    entry->nameinfo.attr_dataoffset;
+
+                                auto path_size =
+                                    cstr_len(dir_path) + 1 + cstr_len(name) + 1;
+                                uint8_t *path = push_bytes(arena, path_size);
+                                {
+                                        struct BufferRange path_buffer;
+                                        stream_on_memory(
+                                            &path_buffer, path, path_size);
+                                        string_cat(&path_buffer, dir_path);
+                                        string_cat(&path_buffer, "/");
+                                        string_cat(&path_buffer, name);
+                                        assert(string_terminate(&path_buffer),
+                                               "unexpected size");
+                                }
+                                char *path_cstr = (char *)path;
+
+                                uint64_t physical_offset = 0;
+                                {
+                                        auto trace = TRACE;
+
+                                        trace << name;
+                                        if (entry->obj_type == VREG) {
+                                                trace << "\t[f]";
+                                        } else if (entry->obj_type == VDIR) {
+                                                trace << "\t[d]";
+                                        } else {
+                                                // not a file, not a
+                                                // directory
+                                                string_cat_formatted(
+                                                    &trace.linebuffer,
+                                                    "\t[%d]",
+                                                    entry->obj_type);
+                                        }
+
+                                        trace << "\t";
+
+                                        if (entry->obj_tag == VT_HFS) {
+                                                trace << "HFS";
+                                        } else if (entry->obj_tag == VT_AFP) {
+                                                trace << "AFP";
+                                        } else if (entry->obj_tag == VT_CIFS) {
+                                                trace << "CIFS";
+                                        } else {
+                                                trace << entry->obj_tag;
+                                        }
+
+                                        if (entry->obj_type == VREG) {
+                                                trace
+                                                    << "\t"
+                                                    << entry->file_ioblocksize;
+
+                                                int const fd = open(
+                                                    path_cstr, O_RDONLY, 0);
+                                                // TODO(nil) check that we have
+                                                // permissions to open that file
+                                                // at all
+                                                assert(fd >= 0, "open file");
+                                                DEFER(close(fd));
+
+                                                struct log2phys filephys;
+                                                int fcntl_result = fcntl(
+                                                    fd, F_LOG2PHYS, &filephys);
+                                                if (fcntl_result < 0) {
+                                                        error_print("could not "
+                                                                    "get phys");
+                                                } else {
+                                                        physical_offset =
+                                                            filephys
+                                                                .l2p_devoffset;
+                                                        trace
+                                                            << "\t"
+                                                            << filephys
+                                                                   .l2p_devoffset;
+                                                }
+                                        }
+                                }
+
+                                if (entry->obj_type == VREG) {
+                                        struct FSEntry *file_entry =
+                                            push_file();
+                                        file_entry->path = path_cstr;
+                                        file_entry->physical_offset =
+                                            physical_offset;
+                                } else if (entry->obj_type == VDIR) {
+                                        struct FSEntry *dir_entry =
+                                            push_directory();
+                                        dir_entry->path = path_cstr;
+                                }
+
+                                data += entry->size;
+                        }
+                        entrycount += batch_entry_count;
+                }
+                if (result < 0) {
+                        if (EBADF == errno || ENOTDIR == errno) {
+                                error_print("not a readable directory");
+                                return 1;
+                        }
+                        perror("getattrlistbulk");
+                        return 1;
+                }
+        }
+        {
+                struct BufferRange linebuffer;
+                stream_on_memory(&linebuffer,
+                                 (uint8_t *)linebuffer_memory,
+                                 sizeof linebuffer_memory);
+                string_cat(&linebuffer, "total used after scan: ");
+                string_cat_formatted(&linebuffer, "%lld", arena->used);
+                if (string_terminate(&linebuffer)) {
+                        trace_print(linebuffer_memory);
+                }
+        }
+
+        assert(state->directories == nullptr, "no more directories");
+
+        // NOTE(nil) sort our files by physical offset to reduce seeking
+        {
+                size_t file_count = 0;
+                for (struct FSEntry *fs_entry = state->files; fs_entry;
+                     fs_entry = fs_entry->next) {
+                        file_count++;
+                }
+                TRACE << "found " << file_count << " files";
+
+                // 64-bit radix sort
+                // 8-bit character
+
+                size_t entry_array_count = file_count;
+                struct FSEntry *entry_array = (struct FSEntry *)push_bytes(
+                    arena, entry_array_count * sizeof *entry_array);
+                for (struct FSEntry *fs_entry = state->files,
+                                    *dest_entry = entry_array;
+                     fs_entry;
+                     fs_entry = fs_entry->next, dest_entry++) {
+                        *dest_entry = *fs_entry;
+                }
+
+                struct FSEntryInBucket
+                {
+                        struct FSEntry fs_entry_value;
+                        struct FSEntryInBucket *next;
+                };
+
+                struct FSEntryInBucket *bucket_entries =
+                    (struct FSEntryInBucket *)push_bytes(
+                        arena, entry_array_count * sizeof *bucket_entries);
+
+                // circular linked-list per bucket, this bucket is pointing
+                // to the last element
+                struct
+                {
+                        struct FSEntryInBucket *last;
+                } buckets[256] = {};
+
+                for (size_t passIndex = 0; passIndex < sizeof(uint64_t);
+                     passIndex++) {
+                        size_t bucket_entry_index = 0;
+                        for (size_t entry_index = 0;
+                             entry_index < entry_array_count;
+                             entry_index++) {
+                                auto fs_entry = &entry_array[entry_index];
+                                uint8_t key = (fs_entry->physical_offset >>
+                                               (8 * passIndex)) &
+                                              0xFF;
+
+                                struct FSEntryInBucket *bucket_entry =
+                                    &bucket_entries[bucket_entry_index++];
+                                bucket_entry->fs_entry_value = *fs_entry;
+
+                                struct FSEntryInBucket *current_last_entry =
+                                    buckets[key].last;
+                                if (!current_last_entry) {
+                                        bucket_entry->next = bucket_entry;
+                                } else {
+                                        bucket_entry->next =
+                                            current_last_entry->next;
+                                        current_last_entry->next = bucket_entry;
+                                }
+                                buckets[key].last = bucket_entry;
+                        }
+
+                        struct FSEntry *fs_entry = entry_array;
+                        for (auto &bucket : buckets) {
+                                if (bucket.last == nullptr) {
+                                        continue;
+                                }
+
+                                auto first_entry = bucket.last->next;
+                                auto entry_in_bucket = first_entry;
+                                do {
+                                        *(fs_entry++) =
+                                            entry_in_bucket->fs_entry_value;
+                                        entry_in_bucket = entry_in_bucket->next;
+                                } while (entry_in_bucket != first_entry);
+                                bucket.last = nullptr;
+                        }
+                }
+
+#if defined(ZWEI_SLOW)
+                // NOTE(nicolas) in SLOW mode assert that elements are well
+                // sorted
+                uint64_t previous_offset = 0;
+                for (size_t i = 0; i < entry_array_count; i++) {
+                        uint64_t this_offset = entry_array[i].physical_offset;
+                        assert(this_offset >= previous_offset,
+                               "file entries should be monotonic");
+                        previous_offset = this_offset;
+                }
+#endif
+
+                for (size_t i = 0; i < entry_array_count; i++) {
+                        TRACE << "A" << i << "\t"
+                              << entry_array[i].physical_offset << "\t"
+                              << entry_array[i].path;
+                }
+        }
+
+        return 0;
+
+#undef ERROR
+#undef TRACE
+}
+
 /**
    NOTE(nicolas)
 
@@ -295,7 +779,7 @@ int main(int argc, char **argv)
         assert(argc > 0, "unexpected argc");
         DEFER(trace_print("done"));
 
-        char const *root_dir = nullptr;
+        char const *root_dir_path = nullptr;
 
         auto current_arg = 1;
         while (current_arg < argc) {
@@ -305,7 +789,7 @@ int main(int argc, char **argv)
                                 error_print(
                                     "expected argument after --root-dir");
                         }
-                        root_dir = argv[current_arg];
+                        root_dir_path = argv[current_arg];
                         current_arg++;
                 } else {
                         error_print("unexpected argument");
@@ -322,17 +806,21 @@ int main(int argc, char **argv)
                 vm_address_t transient_storage_memory_address = 0x1000000000;
                 vm_address_t permanent_storage_memory_address = 0x2000000000;
                 kern_return_t vm_allocate_result;
-                vm_allocate_result = vm_allocate(
-                    mach_task_self(), &permanent_storage_memory_address,
-                    permanent_storage_memory_size, false);
+                vm_allocate_result =
+                    vm_allocate(mach_task_self(),
+                                &permanent_storage_memory_address,
+                                permanent_storage_memory_size,
+                                false);
                 if (KERN_SUCCESS != vm_allocate_result) {
                         error_print("could not memory");
                         return 1;
                 }
                 permanent_storage = (void *)permanent_storage_memory_address;
-                vm_allocate_result = vm_allocate(
-                    mach_task_self(), &transient_storage_memory_address,
-                    transient_storage_memory_size, false);
+                vm_allocate_result =
+                    vm_allocate(mach_task_self(),
+                                &transient_storage_memory_address,
+                                transient_storage_memory_size,
+                                false);
                 if (KERN_SUCCESS != vm_allocate_result) {
                         error_print("could not memory");
                         return 1;
@@ -341,302 +829,13 @@ int main(int argc, char **argv)
         }
 
         // FEATURE(nicolas): show content of any directory recursively
-        if (!root_dir) {
+        if (!root_dir_path) {
                 error_print("you must pass a root directory with --root-dir");
         } else {
-                // NOTE(nicolas)
-                //
-                // for each directory in the stack of directories to visit,
-                //
-                // pop that directory off the stack of directories to visit,
-                // and collect all entries using getattrlistbulk.
-                // - directories are pushed onto the stack of directories to
-                // visit.
-                //
-                // repeat until there is no more directories to visit
-
-                // TODO(nicolas) performance: we're nowhere near
-                // saturating the I/O there, especially when querying
-                // a network shared drive.
-
                 struct MemoryArena dc_arena = memory_arena(
                     transient_storage, transient_storage_memory_size);
 
-                struct Entry;
-
-                struct State
-                {
-                        struct Entry *entries = nullptr;
-                        struct Entry *free_entry = nullptr;
-                };
-
-                struct State *state = push_struct(&dc_arena, struct State);
-                struct Entry
-                {
-                        char const *path;
-                        struct Entry *next;
-                };
-
-                auto push_entry = [&state, &dc_arena]() {
-                        struct Entry *result;
-
-                        if (!state->free_entry) {
-                                result = push_struct(&dc_arena, struct Entry);
-                        } else {
-                                result = state->free_entry;
-                                state->free_entry = state->free_entry->next;
-                        }
-
-                        result->next = state->entries;
-                        state->entries = result;
-
-                        return result;
-                };
-
-                auto pop_entry = [&state]() {
-                        struct Entry *result = state->entries;
-                        if (result) {
-                                state->entries = result->next;
-                        }
-
-                        return result;
-                };
-
-                auto discard_entry = [&state](struct Entry *entry) {
-                        entry->next = state->free_entry;
-                        state->free_entry = entry;
-                };
-
-                struct Entry *entry = push_entry();
-                entry->path = root_dir;
-
-                char linebuffer_memory[256];
-                struct Entry *dir_entry;
-                while ((dir_entry = pop_entry())) {
-                        char const *dir_path;
-                        {
-                                dir_path = dir_entry->path;
-                                discard_entry(dir_entry);
-                                dir_entry = nullptr;
-                        }
-
-                        int dir_fd;
-                        {
-                                dir_fd = open(dir_path, O_RDONLY, 0);
-                                if (dir_fd < 0) {
-                                        struct BufferRange linebuffer;
-                                        stream_on_memory(
-                                            &linebuffer,
-                                            (uint8_t *)linebuffer_memory,
-                                            sizeof linebuffer_memory);
-                                        string_cat(
-                                            &linebuffer,
-                                            "could not find directory: ");
-                                        string_cat(&linebuffer, dir_path);
-                                        if (string_terminate(&linebuffer)) {
-                                                error_print(linebuffer_memory);
-                                        }
-                                        return 1;
-                                }
-                        }
-                        DEFER({ close(dir_fd); });
-
-                        {
-                                struct BufferRange linebuffer;
-                                stream_on_memory(&linebuffer,
-                                                 (uint8_t *)linebuffer_memory,
-                                                 sizeof linebuffer_memory);
-                                string_cat(&linebuffer,
-                                           "\nlisting directory: ");
-                                string_cat(&linebuffer, dir_path);
-                                if (string_terminate(&linebuffer)) {
-                                        trace_print(linebuffer_memory);
-                                }
-                        }
-
-                        struct attrlist attributes = {
-                            ATTR_BIT_MAP_COUNT, 0,
-                            (ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_ERROR |
-                             ATTR_CMN_NAME | ATTR_CMN_OBJTYPE |
-                             ATTR_CMN_OBJTAG),
-                            0, 0, ATTR_FILE_IOBLOCKSIZE, 0,
-                        };
-                        uint64_t options = FSOPT_NOFOLLOW |
-                                           FSOPT_REPORT_FULLSIZE |
-                                           FSOPT_PACK_INVAL_ATTRS;
-
-                        struct ResultAttributes
-                        {
-                                uint32_t size;
-                                attribute_set_t attributes;
-                                uint32_t error;
-                                attrreference nameinfo;
-                                fsobj_type_t obj_type;
-                                fsobj_tag_t obj_tag;
-                                union
-                                {
-                                        uint32_t file_ioblocksize;
-                                };
-                        } __attribute__((aligned(4), packed));
-
-                        uint32_t result_entries[16 * 256];
-                        int result;
-
-                        uint32_t entrycount = 0;
-                        {
-                                struct BufferRange linebuffer;
-                                stream_on_memory(&linebuffer,
-                                                 (uint8_t *)linebuffer_memory,
-                                                 sizeof linebuffer_memory);
-                                string_cat(&linebuffer, "name");
-                                string_cat(&linebuffer, "\t");
-                                string_cat(&linebuffer, "type");
-                                string_cat(&linebuffer, "\t");
-                                string_cat(&linebuffer, "tag");
-                                string_cat(&linebuffer, "\t");
-                                string_cat(&linebuffer, "ioblocksize");
-                                if (string_terminate(&linebuffer)) {
-                                        trace_print(linebuffer_memory);
-                                }
-                        }
-
-                        while ((result = getattrlistbulk(
-                                    dir_fd, &attributes, &result_entries,
-                                    sizeof result_entries, options)) > 0) {
-                                auto batch_entry_count = result;
-
-                                uint8_t *data = (uint8_t *)result_entries;
-                                for (int entry_index = 0;
-                                     entry_index < batch_entry_count;
-                                     entry_index++) {
-                                        struct ResultAttributes *entry =
-                                            (struct ResultAttributes *)data;
-                                        char const *name =
-                                            (char *)((uint8_t *)&entry
-                                                         ->nameinfo) +
-                                            entry->nameinfo.attr_dataoffset;
-
-                                        {
-                                                struct BufferRange linebuffer;
-                                                stream_on_memory(
-                                                    &linebuffer, (uint8_t *)
-                                                    linebuffer_memory,
-                                                    sizeof linebuffer_memory);
-                                                string_cat(&linebuffer, name);
-                                                if (entry->obj_type == VREG) {
-                                                        string_cat(&linebuffer,
-                                                                   "\t[f]");
-                                                } else if (entry->obj_type ==
-                                                           VDIR) {
-                                                        string_cat(&linebuffer,
-                                                                   "\t[d]");
-                                                } else {
-                                                        // not a file, not a
-                                                        // directory
-                                                        string_cat_formatted(
-                                                            &linebuffer,
-                                                            "\t[%d]",
-                                                            entry->obj_type);
-                                                }
-
-                                                string_cat(&linebuffer, "\t");
-
-                                                if (entry->obj_tag == VT_HFS) {
-                                                        string_cat(&linebuffer,
-                                                                   "HFS");
-                                                } else if (entry->obj_tag ==
-                                                           VT_AFP) {
-                                                        string_cat(&linebuffer,
-                                                                   "AFP");
-                                                } else {
-                                                        string_cat_uint32(
-                                                            &linebuffer,
-                                                            entry->obj_tag);
-                                                }
-
-                                                if (entry->obj_type == VREG) {
-                                                        string_cat(&linebuffer,
-                                                                   "\t");
-                                                        string_cat_uint32(
-                                                            &linebuffer,
-                                                            entry
-                                                                ->file_ioblocksize);
-                                                }
-
-                                                if (string_terminate(
-                                                        &linebuffer)) {
-                                                        trace_print(
-                                                            linebuffer_memory);
-                                                }
-
-                                                if (entry->obj_type == VDIR) {
-                                                        char const *entry_name =
-                                                            (char *)((uint8_t *)&entry
-                                                                         ->nameinfo) +
-                                                            entry->nameinfo
-                                                                .attr_dataoffset;
-
-                                                        auto path_size =
-                                                            cstr_len(dir_path) +
-                                                            1 +
-                                                            cstr_len(
-                                                                entry_name) +
-                                                            1;
-                                                        uint8_t *path =
-                                                            push_bytes(
-                                                                &dc_arena,
-                                                                path_size);
-                                                        struct BufferRange
-                                                            path_buffer;
-                                                        stream_on_memory(
-                                                            &path_buffer, path,
-                                                            path_size);
-                                                        string_cat(&path_buffer,
-                                                                   dir_path);
-                                                        string_cat(&path_buffer,
-                                                                   "/");
-                                                        string_cat(&path_buffer,
-                                                                   entry_name);
-                                                        assert(
-                                                            string_terminate(
-                                                                &path_buffer),
-                                                            "unexpected size");
-
-                                                        struct Entry *
-                                                            dir_entry =
-                                                                push_entry();
-                                                        dir_entry->path =
-                                                            (char const *)path;
-                                                }
-                                        }
-
-                                        data += entry->size;
-                                }
-                                entrycount += batch_entry_count;
-                        }
-                        if (result < 0) {
-                                if (EBADF == errno || ENOTDIR == errno) {
-                                        error_print("not a readable directory");
-                                        return 1;
-                                }
-                                perror("getattrlistbulk");
-                                return 1;
-                        }
-                }
-                {
-                        struct BufferRange linebuffer;
-                        stream_on_memory(&linebuffer,
-                                         (uint8_t *)linebuffer_memory,
-                                         sizeof linebuffer_memory);
-                        string_cat(
-                            &linebuffer,
-                            "total allocated memory for directory entries: ");
-                        string_cat_formatted(&linebuffer, "%lld",
-                                             dc_arena.used);
-                        if (string_terminate(&linebuffer)) {
-                                trace_print(linebuffer_memory);
-                        }
-                }
+                return print_directory_content(&dc_arena, root_dir_path);
         }
 
         return 0;
