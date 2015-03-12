@@ -16,8 +16,8 @@ function compile_osx()
 
     cflags=("${cflags[@]}" "-fno-rtti" "-fno-exceptions")
     cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
-    cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Werror")
-    cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter" "-Wno-conversion")
+    cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Wshorten-64-to-32" "-Werror")
+    cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter")
     cflags=("${cflags[@]}" -g -gdwarf-3)
     cxxflags=("${cxxflags[@]}" "-std=c++11")
 
