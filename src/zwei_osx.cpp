@@ -2,6 +2,7 @@
 
 void error_print(char const *);
 
+#if ZWEI_SLOW
 #define assert(condition, message)                                             \
         do {                                                                   \
                 if (!(condition)) {                                            \
@@ -9,6 +10,9 @@ void error_print(char const *);
                         asm("int3");                                           \
                 }                                                              \
         } while (0)
+#else
+#define assert(condition, message)
+#endif
 
 #define NCOUNT(array) (sizeof array) / (sizeof array[0])
 
