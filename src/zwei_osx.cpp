@@ -542,6 +542,129 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
 #define TRACE                                                                  \
         (TextLine(trace_print, linebuffer_memory, sizeof linebuffer_memory))
 
+        // what we are asking getattrlistbulk
+        struct attrlist query_attributes = {
+            ATTR_BIT_MAP_COUNT,
+            0,
+            (ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_ERROR | ATTR_CMN_NAME |
+             ATTR_CMN_OBJTYPE | ATTR_CMN_OBJTAG),
+            0,
+            0,
+            ATTR_FILE_TOTALSIZE | ATTR_FILE_IOBLOCKSIZE,
+            0,
+        };
+
+        uint64_t query_options =
+            FSOPT_NOFOLLOW | FSOPT_REPORT_FULLSIZE | FSOPT_PACK_INVAL_ATTRS;
+
+        // what getattrlistbulk will return
+        struct DirEntryAttributes {
+                uint32_t size;
+                attribute_set_t attributes;
+                uint32_t error;
+                attrreference nameinfo;
+                fsobj_type_t obj_type;
+                fsobj_tag_t obj_tag;
+                union {
+                        struct {
+                                off_t file_totalsize;
+                                uint32_t file_ioblocksize;
+                        };
+                };
+        } __attribute__((aligned(4), packed));
+
+        // record a directory entry, depending if it's a file
+        // or another directory
+        auto record_directory_entry = [&linebuffer_memory, arena, push_file,
+                                       push_directory](
+            char const *dir_path, struct DirEntryAttributes const *entry) {
+                char const *name = (char *)((uint8_t *)&entry->nameinfo) +
+                                   entry->nameinfo.attr_dataoffset;
+
+                auto path_size = cstr_len(dir_path) + 1 + cstr_len(name) + 1;
+                uint8_t *path = push_array_rvalue(arena, path, path_size);
+                {
+                        struct BufferRange path_buffer;
+                        stream_on_memory(&path_buffer, path, path_size);
+                        string_cat(&path_buffer, dir_path);
+                        string_cat(&path_buffer, "/");
+                        string_cat(&path_buffer, name);
+                        assert(string_terminate(&path_buffer),
+                               "unexpected size");
+                }
+                char *path_cstr = (char *)path;
+
+                uint64_t physical_offset = 0;
+                {
+                        auto trace = TRACE;
+
+                        trace << name;
+                        if (entry->obj_type == VREG) {
+                                trace << "\t[f]";
+                        } else if (entry->obj_type == VDIR) {
+                                trace << "\t[d]";
+                        } else {
+                                // not a file, not a directory
+                                string_cat_formatted(&trace.linebuffer,
+                                                     "\t[%d]", entry->obj_type);
+                        }
+
+                        trace << "\t";
+
+                        if (entry->obj_tag == VT_HFS) {
+                                trace << "HFS";
+                        } else if (entry->obj_tag == VT_AFP) {
+                                trace << "AFP";
+                        } else if (entry->obj_tag == VT_CIFS) {
+                                trace << "CIFS";
+                        } else {
+                                trace << entry->obj_tag;
+                        }
+
+                        if (entry->obj_type == VREG) {
+                                trace << "\t" << entry->file_ioblocksize;
+
+                                trace << "\t" << entry->file_totalsize;
+
+                                int const fd = open(path_cstr, O_RDONLY, 0);
+                                // TODO(nil) check that we have
+                                // permissions to open that file
+                                // at all
+                                assert(fd >= 0, "open file");
+                                DEFER(close(fd));
+
+                                if (entry->file_totalsize > 0) {
+
+                                        struct log2phys filephys;
+                                        int fcntl_result =
+                                            fcntl(fd, F_LOG2PHYS, &filephys);
+                                        assert(fcntl_result >= 0,
+                                               "could not get "
+                                               "phys");
+                                        if (fcntl_result < 0) {
+                                                error_print("could not "
+                                                            "get phys");
+                                        } else {
+                                                physical_offset =
+                                                    filephys.l2p_devoffset;
+                                                trace << "\t"
+                                                      << filephys.l2p_devoffset;
+                                        }
+                                }
+                        }
+                }
+
+                if (entry->obj_type == VREG) {
+                        struct FSEntry *file_entry = push_file();
+                        file_entry->path = path_cstr;
+                        file_entry->physical_offset = physical_offset;
+                } else if (entry->obj_type == VDIR) {
+                        struct FSEntry *dir_entry = push_directory();
+                        dir_entry->path = path_cstr;
+                }
+
+        };
+
         struct FSEntry *dir_entry;
         while ((dir_entry = pop_directory())) {
                 char const *dir_path;
@@ -552,7 +675,6 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
                 }
 
                 int dir_fd;
-                off_t dir_devoffset = 0;
                 {
                         dir_fd = open(dir_path, O_RDONLY, 0);
                         if (dir_fd < 0) {
@@ -563,36 +685,7 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
                 }
                 DEFER({ close(dir_fd); });
 
-                TRACE << "\nlisting directory: " << dir_path
-                      << " block: " << dir_devoffset;
-
-                struct attrlist attributes = {
-                    ATTR_BIT_MAP_COUNT,
-                    0,
-                    (ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_ERROR | ATTR_CMN_NAME |
-                     ATTR_CMN_OBJTYPE | ATTR_CMN_OBJTAG),
-                    0,
-                    0,
-                    ATTR_FILE_TOTALSIZE | ATTR_FILE_IOBLOCKSIZE,
-                    0,
-                };
-                uint64_t options = FSOPT_NOFOLLOW | FSOPT_REPORT_FULLSIZE |
-                                   FSOPT_PACK_INVAL_ATTRS;
-
-                struct ResultAttributes {
-                        uint32_t size;
-                        attribute_set_t attributes;
-                        uint32_t error;
-                        attrreference nameinfo;
-                        fsobj_type_t obj_type;
-                        fsobj_tag_t obj_tag;
-                        union {
-                                struct {
-                                        off_t file_totalsize;
-                                        uint32_t file_ioblocksize;
-                                };
-                        };
-                } __attribute__((aligned(4), packed));
+                TRACE << "\nlisting directory: " << dir_path;
 
                 uint32_t entrycount = 0;
                 TRACE << "name"
@@ -610,121 +703,16 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
                 uint32_t result_batch[16 * 256];
                 int result;
                 while ((result = getattrlistbulk(
-                            dir_fd, &attributes, &result_batch,
-                            sizeof result_batch, options)) > 0) {
+                            dir_fd, &query_attributes, &result_batch,
+                            sizeof result_batch, query_options)) > 0) {
                         auto batch_entry_count = result;
 
                         uint8_t *data = (uint8_t *)result_batch;
                         for (int entry_index = 0;
                              entry_index < batch_entry_count; entry_index++) {
-                                struct ResultAttributes *entry =
-                                    (struct ResultAttributes *)data;
-                                char const *name =
-                                    (char *)((uint8_t *)&entry->nameinfo) +
-                                    entry->nameinfo.attr_dataoffset;
-
-                                auto path_size =
-                                    cstr_len(dir_path) + 1 + cstr_len(name) + 1;
-                                uint8_t *path =
-                                    push_array_rvalue(arena, path, path_size);
-                                {
-                                        struct BufferRange path_buffer;
-                                        stream_on_memory(&path_buffer, path,
-                                                         path_size);
-                                        string_cat(&path_buffer, dir_path);
-                                        string_cat(&path_buffer, "/");
-                                        string_cat(&path_buffer, name);
-                                        assert(string_terminate(&path_buffer),
-                                               "unexpected size");
-                                }
-                                char *path_cstr = (char *)path;
-
-                                uint64_t physical_offset = 0;
-                                {
-                                        auto trace = TRACE;
-
-                                        trace << name;
-                                        if (entry->obj_type == VREG) {
-                                                trace << "\t[f]";
-                                        } else if (entry->obj_type == VDIR) {
-                                                trace << "\t[d]";
-                                        } else {
-                                                // not a file, not a
-                                                // directory
-                                                string_cat_formatted(
-                                                    &trace.linebuffer, "\t[%d]",
-                                                    entry->obj_type);
-                                        }
-
-                                        trace << "\t";
-
-                                        if (entry->obj_tag == VT_HFS) {
-                                                trace << "HFS";
-                                        } else if (entry->obj_tag == VT_AFP) {
-                                                trace << "AFP";
-                                        } else if (entry->obj_tag == VT_CIFS) {
-                                                trace << "CIFS";
-                                        } else {
-                                                trace << entry->obj_tag;
-                                        }
-
-                                        if (entry->obj_type == VREG) {
-                                                trace
-                                                    << "\t"
-                                                    << entry->file_ioblocksize;
-
-                                                trace << "\t"
-                                                      << entry->file_totalsize;
-
-                                                int const fd = open(
-                                                    path_cstr, O_RDONLY, 0);
-                                                // TODO(nil) check that we have
-                                                // permissions to open that file
-                                                // at all
-                                                assert(fd >= 0, "open file");
-                                                DEFER(close(fd));
-
-                                                if (entry->file_totalsize > 0) {
-
-                                                        struct log2phys
-                                                            filephys;
-                                                        int fcntl_result =
-                                                            fcntl(fd,
-                                                                  F_LOG2PHYS,
-                                                                  &filephys);
-                                                        assert(fcntl_result >=
-                                                                   0,
-                                                               "could not get "
-                                                               "phys");
-                                                        if (fcntl_result < 0) {
-                                                                error_print(
-                                                                    "could not "
-                                                                    "get phys");
-                                                        } else {
-                                                                physical_offset =
-                                                                    filephys
-                                                                        .l2p_devoffset;
-                                                                trace
-                                                                    << "\t"
-                                                                    << filephys
-                                                                           .l2p_devoffset;
-                                                        }
-                                                }
-                                        }
-                                }
-
-                                if (entry->obj_type == VREG) {
-                                        struct FSEntry *file_entry =
-                                            push_file();
-                                        file_entry->path = path_cstr;
-                                        file_entry->physical_offset =
-                                            physical_offset;
-                                } else if (entry->obj_type == VDIR) {
-                                        struct FSEntry *dir_entry =
-                                            push_directory();
-                                        dir_entry->path = path_cstr;
-                                }
-
+                                struct DirEntryAttributes *entry =
+                                    (struct DirEntryAttributes *)data;
+                                record_directory_entry(dir_path, entry);
                                 data += entry->size;
                         }
                         entrycount += batch_entry_count;
@@ -736,16 +724,6 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
                         }
                         perror("getattrlistbulk");
                         return nullptr;
-                }
-        }
-        {
-                struct BufferRange linebuffer;
-                stream_on_memory(&linebuffer, (uint8_t *)linebuffer_memory,
-                                 sizeof linebuffer_memory);
-                string_cat(&linebuffer, "total used after scan: ");
-                string_cat_formatted(&linebuffer, "%lld", arena->used);
-                if (string_terminate(&linebuffer)) {
-                        trace_print(linebuffer_memory);
                 }
         }
 
@@ -1011,6 +989,19 @@ int main(int argc, char **argv)
 
                 struct FileList *all_files =
                     directory_query_all_files(&dc_arena, root_dir_path);
+
+                {
+                        char linebuffer_memory[256];
+                        struct BufferRange linebuffer;
+                        stream_on_memory(&linebuffer, (uint8_t *)linebuffer_memory,
+                                         sizeof linebuffer_memory);
+                        string_cat(&linebuffer, "bytes used after query: ");
+                        string_cat_formatted(&linebuffer, "%lld", (&dc_arena)->used);
+                        if (string_terminate(&linebuffer)) {
+                                trace_print(linebuffer_memory);
+                        }
+                }
+
                 if (all_files) {
                         // TODO(nil) always measure bytes/sec or sec/MB
                         char linebuffer_memory[256];
