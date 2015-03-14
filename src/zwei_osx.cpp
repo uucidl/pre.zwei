@@ -11,7 +11,7 @@ void error_print(char const *);
                 }                                                              \
         } while (0)
 #else
-#define assert(condition, message)
+#define assert(condition, message) (void)(condition)
 #endif
 
 #define NCOUNT(array) (sizeof array) / (sizeof array[0])
