@@ -71,5 +71,8 @@ function compile_osx()
 }
 
 [ -d "${BUILD}" ] || mkdir -p "${BUILD}"
-compile_osx "${HERE}"/src/zwei_osx.cpp -o "${BUILD}"/zwei && \
-    find "${BUILD}" -type f -depth 1 | xargs printf "PROGRAM\t%s\n"
+
+PROGRAM="${BUILD}"/zwei
+
+compile_osx "${HERE}"/src/zwei_osx.cpp -o "${PROGRAM}" \
+    && printf "PROGRAM\t%s\n" "${PROGRAM}"
