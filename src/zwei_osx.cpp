@@ -11,7 +11,7 @@ void error_print(char const *);
                 }                                                              \
         } while (0)
 #else
-#define assert(condition, message)
+#define assert(condition, message) (void)(condition)
 #endif
 
 #define NCOUNT(array) (sizeof array) / (sizeof array[0])
@@ -314,48 +314,6 @@ inline void error_print(char const *message) { sync_print(2, message); }
 
 inline void trace_print(char const *message) { sync_print(1, message); }
 
-#include <sys/vnode.h> // for enum vtype
-#include <mach/mach.h> // for vm_allocate
-
-// NOTE(nicolas)
-//
-// for each directory in the stack of directories to visit,
-//
-// pop that directory off the stack of directories to visit,
-// and collect all entries using getattrlistbulk.
-// - directories are pushed onto the stack of directories to
-// visit.
-//
-// repeat until there is no more directories to visit
-
-// TODO(nicolas) performance: we're nowhere near
-// saturating the I/O there, especially when querying
-// a network shared drive.
-
-// TODO(nicolas) compare performance w/ CIFS and AFP network shares
-
-/*
-
-time ./builds/zwei --root-dir /Volumes/Documents/Projects\ \(Nicolas\)/Music/
-
-real	1m14.414s
-user	0m0.179s
-sys	0m2.439s
-
-w/ CIFS
-total used after scan: 1122699
-done
-
-real	0m37.408s
-user	0m0.148s
-sys	0m1.168s
-
-Also when checking iopattern / iosnoop I can see that the access pattern for
-directory listing is random.. blocks all over the place.
-
-TODO(nicolas) how to minimize seeking of a NAS/mounted disk?
-*/
-
 #include <CommonCrypto/CommonDigest.h>
 #include <limits>
 
@@ -396,16 +354,106 @@ MayFail<Sha1> sha1(struct BufferRange *range)
         return result;
 }
 
+/// open an input stream on a path, with the intent of reading it
+/// fully and only once
+void inputstream_on_filepath(struct MemoryArena *arena,
+                             struct BufferRange *result,
+                             char const *path)
+{
+        struct StreamedFile {
+                int filedesc = 0;
+                char const *path = nullptr;
+                bool32 is_opened = 0;
+
+                // TODO(nil) what about io advice received before?
+                uint8_t buffer[4 * 4096] = {};
+        };
+
+        auto next_on_streamed_file = [](struct BufferRange *range) {
+                struct StreamedFile *file =
+                    reinterpret_cast<struct StreamedFile *>(
+                        range->start - offsetof(struct StreamedFile, buffer));
+
+                if (BR_NoError == range->error && !file->is_opened) {
+                        int filedesc = open(file->path, O_RDONLY, 0);
+                        fcntl(filedesc, F_NOCACHE, 1);
+                        fcntl(filedesc, F_RDAHEAD, 1);
+
+                        file->filedesc = filedesc;
+                        if (file->filedesc < 0) {
+                                return fail(range, BR_IOError);
+                        }
+                        file->is_opened = true;
+                }
+
+                ssize_t size_read =
+                    read(file->filedesc, &file->buffer, sizeof file->buffer);
+                if (size_read < 0) {
+                        close(file->filedesc);
+                        return fail(range, BR_IOError);
+                } else if (size_read == 0) {
+                        close(file->filedesc);
+                        return fail(range, BR_ReadPastEnd);
+                }
+
+                range->start = file->buffer;
+                range->cursor = range->start;
+                range->end = range->start + size_read;
+
+                return BR_NoError;
+        };
+
+        auto stream_on_file = [next_on_streamed_file](
+            struct BufferRange *range, struct StreamedFile *file) {
+                range->start = file->buffer;
+                range->cursor = range->start;
+                range->end = range->start;
+                range->error = BR_NoError;
+                range->next = next_on_streamed_file;
+        };
+
+        struct StreamedFile *file = push_pointer_rvalue(arena, file);
+        *file = StreamedFile{};
+        file->path = path;
+
+        stream_on_file(result, file);
+}
+
+#include <sys/vnode.h> // for enum vtype
+#include <mach/mach.h> // for vm_allocate
+
 struct FileList {
         size_t count;
         char const **paths;
-        struct BufferRange *buffers;
 };
 
-/// @return null or a valid file list allocated in the given arena
+/**
+   Query a directory and its sub-directories for all their files,
+   sorted to maximize throughput when streaming their content.
+
+   @return null or a valid file list allocated in the given arena
+*/
 zw_internal struct FileList *
 directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
 {
+        // NOTE(nicolas)
+        //
+        // for each directory in the stack of directories to visit,
+        //
+        // pop that directory off the stack of directories to visit,
+        // and collect all entries using getattrlistbulk.
+        // - directories are pushed onto the stack of directories to
+        // visit.
+        //
+        // repeat until there is no more directories to visit
+
+        // TODO(nicolas) performance: we're nowhere near
+        // saturating the I/O there, especially when querying
+        // a network shared drive.
+
+        // TODO(nicolas) compare performance w/ CIFS and AFP network shares
+        // TODO(nicolas) how to minimize seeking of a NAS/mounted disk?
+
         struct FSEntry;
 
         struct State {
@@ -838,72 +886,11 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
         result = push_struct(arena, struct FileList);
         result->count = entry_array_count;
 
-        struct StreamedFile {
-                int filedesc;
-                char const *path;
-                bool32 is_opened;
-
-                // TODO(nil) what about io advice received before?
-                uint8_t buffer[4 * 4096];
-        };
-
-        auto next_on_streamed_file = [](struct BufferRange *range) {
-                struct StreamedFile *file =
-                    reinterpret_cast<struct StreamedFile *>(
-                        range->start - offsetof(struct StreamedFile, buffer));
-
-                if (BR_NoError == range->error && !file->is_opened) {
-                        int filedesc = open(file->path, O_RDONLY, 0);
-                        fcntl(filedesc, F_NOCACHE, 1);
-                        fcntl(filedesc, F_RDAHEAD, 1);
-
-                        file->filedesc = filedesc;
-                        if (file->filedesc < 0) {
-                                return fail(range, BR_IOError);
-                        }
-                        file->is_opened = true;
-                }
-
-                ssize_t size_read =
-                    read(file->filedesc, &file->buffer, sizeof file->buffer);
-                if (size_read < 0) {
-                        close(file->filedesc);
-                        return fail(range, BR_IOError);
-                } else if (size_read == 0) {
-                        close(file->filedesc);
-                        return fail(range, BR_ReadPastEnd);
-                }
-
-                range->start = file->buffer;
-                range->cursor = range->start;
-                range->end = range->start + size_read;
-
-                return BR_NoError;
-        };
-
-        auto stream_on_file = [next_on_streamed_file](
-            struct BufferRange *range, struct StreamedFile *file) {
-                range->start = file->buffer;
-                range->cursor = range->start;
-                range->end = range->start;
-                range->error = BR_NoError;
-                range->next = next_on_streamed_file;
-        };
-
         if (result->count) {
                 size_t count = result->count;
                 result->paths = push_array_rvalue(arena, result->paths, count);
-                result->buffers =
-                    push_array_rvalue(arena, result->buffers, count);
                 for (size_t i = 0; i < count; i++) {
                         result->paths[i] = entry_array[i].path;
-
-                        struct StreamedFile *file =
-                            push_pointer_rvalue(arena, file);
-                        file->filedesc = -1;
-                        file->path = result->paths[i];
-
-                        stream_on_file(&result->buffers[i], file);
                 }
         }
 
@@ -993,10 +980,12 @@ int main(int argc, char **argv)
                 {
                         char linebuffer_memory[256];
                         struct BufferRange linebuffer;
-                        stream_on_memory(&linebuffer, (uint8_t *)linebuffer_memory,
+                        stream_on_memory(&linebuffer,
+                                         (uint8_t *)linebuffer_memory,
                                          sizeof linebuffer_memory);
                         string_cat(&linebuffer, "bytes used after query: ");
-                        string_cat_formatted(&linebuffer, "%lld", (&dc_arena)->used);
+                        string_cat_formatted(&linebuffer, "%lld",
+                                             (&dc_arena)->used);
                         if (string_terminate(&linebuffer)) {
                                 trace_print(linebuffer_memory);
                         }
@@ -1014,19 +1003,26 @@ int main(int argc, char **argv)
                                 string_cat(&line, all_files->paths[i]);
                                 string_cat(&line, " is ");
 
-                                // TODO(nil) how about allocating the
-                                // stream only here, with user's
-                                // recommendations and in its own
-                                // memory?
-                                struct BufferRange *content =
-                                    &all_files->buffers[i];
+                                // arena for our file streaming
+                                struct MemoryArena stream_arena =
+                                    memory_arena(dc_arena.base + dc_arena.size,
+                                                 KILOBYTES(32));
 
-                                auto sha1_result = sha1(content);
+                                struct BufferRange file_content;
+                                inputstream_on_filepath(&stream_arena,
+                                                        &file_content,
+                                                        all_files->paths[i]);
+
+                                auto sha1_result = sha1(&file_content);
                                 if (failed(sha1_result)) {
                                         string_cat(
                                             &line,
                                             "<failed to compute result>");
                                 } else {
+                                        assert(file_content.error ==
+                                                   BR_ReadPastEnd,
+                                               "must read until end");
+
                                         auto sha1_value = just(sha1_result);
                                         char byteToHexChar[] = {
                                             '0',

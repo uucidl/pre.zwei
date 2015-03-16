@@ -1,7 +1,45 @@
 #!/usr/bin/env sh
 HERE="$(dirname ${0})"
 BUILD="${HERE}/builds"
-[ -d "${BUILD}" ] || mkdir -p "${BUILD}"
+
+CONFIG=development
+CONFIG_LIST=(development release)
+
+function validate_config () {
+    local found_success=1;
+
+    for c in ${CONFIG_LIST[@]}; do
+        if [[ ${c} == ${CONFIG} ]]; then
+            found_success=0
+        fi
+    done
+
+    return ${found_success}
+}
+
+while [ "$#" -gt 0 ]; do
+    case $1 in
+        --config)
+            CONFIG=${2:?"build config expected"}
+            validate_config
+            if [[ $? -ne 0 ]]; then
+                printf "expected a valid configuration (one of %s), got %s\n" "${CONFIG_LIST[*]}" "${CONFIG}"
+                exit 1
+            fi
+            shift
+            shift
+            ;;
+        --help|-h)
+            printf -- "Usage: %s [--config [%s]]\n" "${0}" "$(IFS="|" ; echo "${CONFIG_LIST[*]}")"
+            unset IFS
+            exit 1
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
 
 
 function compile_osx()
@@ -21,10 +59,20 @@ function compile_osx()
     cflags=("${cflags[@]}" -g -gdwarf-3)
     cxxflags=("${cxxflags[@]}" "-std=c++11")
 
-    cflags=("${cflags[@]}" -DZWEI_SLOW)
+    if [[ "${CONFIG}" == "development" ]]; then
+        cflags=("${cflags[@]}" -DZWEI_SLOW)
+    fi
+
+    if [[ "${CONFIG}" == "release" ]]; then
+        cflags=("${cflags[@]}" -O3)
+    fi
 
     clang++ "${cflags[@]}" "${cxxflags[@]}" "$@"
 }
 
-compile_osx "${HERE}"/src/zwei_osx.cpp -o "${BUILD}"/zwei && \
-    find "${BUILD}" -type f -depth 1 | xargs printf "PROGRAM\t%s\n"
+[ -d "${BUILD}" ] || mkdir -p "${BUILD}"
+
+PROGRAM="${BUILD}"/zwei
+
+compile_osx "${HERE}"/src/zwei_osx.cpp -o "${PROGRAM}" \
+    && printf "PROGRAM\t%s\n" "${PROGRAM}"
