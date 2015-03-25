@@ -1,4 +1,6 @@
 #!/usr/bin/env sh
+set -u
+
 HERE="$(dirname ${0})"
 BUILD="${HERE}/builds"
 
@@ -44,8 +46,8 @@ done
 
 function compile_osx()
 {
-    local cflags=()
-    local cxxflags=()
+    local cflags
+    local cxxflags
     local PLATFORM_SDK="/Applications/Xcode.app/Contents//Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/usr/include/"
 
     cflags=("${cflags[@]}" -mmacosx-version-min=10.8)
@@ -76,3 +78,6 @@ PROGRAM="${BUILD}"/zwei
 
 compile_osx "${HERE}"/src/zwei_osx.cpp -o "${PROGRAM}" \
     && printf "PROGRAM\t%s\n" "${PROGRAM}"
+
+# beep
+printf "\a"
