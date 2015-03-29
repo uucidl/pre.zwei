@@ -1,157 +1,9 @@
-#include <cstdint>
-
-void error_print(char const *);
-
-#if ZWEI_SLOW
-#define assert(condition, message)                                             \
-        do {                                                                   \
-                if (!(condition)) {                                            \
-                        error_print(message);                                  \
-                        asm("int3");                                           \
-                }                                                              \
-        } while (0)
-#else
-#define assert(condition, message) (void)(condition)
-#endif
-
-#define NCOUNT(array) (sizeof array) / (sizeof array[0])
-
-#define TOKEN_PASTE_inner(x, y) x##y
-#define TOKEN_PASTE(x, y) TOKEN_PASTE_inner(x, y)
-
-#define GIGABYTES(x) (MEGABYTES(x) * 1024LL)
-#define MEGABYTES(x) (KILOBYTES(x) * 1024LL)
-#define KILOBYTES(x) (x * 1024LL)
-
-/// use it to mark symbols which should not escape the compilation unit
-#define zw_internal static
-
-/// local variables that persist across calls
-#define zw_local_persist static
-
-// <BASIC integer types
-
-typedef uint32_t bool32;
-
-// ..BASIC integer types>
-
-// <Error handling
-
-template <typename ValueType> struct MayFail {
-        ValueType value;
-        uint32_t errorcode = 0;
-};
-
-template <typename ValueType> bool failed(MayFail<ValueType> const result)
-{
-        return result.errorcode != 0;
-}
-
-template <typename ValueType> ValueType just(MayFail<ValueType> const result)
-{
-        assert(result.errorcode == 0, "valid result");
-        return result.value;
-}
-
-// ..Error handling>
-
-// <DEFER implementation
-
-template <class Lambda> class AtScopeExit
-{
-        Lambda &action;
-
-      public:
-        AtScopeExit(Lambda &action) : action(action) {}
-        ~AtScopeExit() { action(); }
-};
-
-#define DEFER_inner2(lambda_name, instance_name, ...)                          \
-        auto lambda_name = [&]() { __VA_ARGS__; };                             \
-        AtScopeExit<decltype(lambda_name)> instance_name(lambda_name);
-
-#define DEFER_inner(counter, ...)                                              \
-        DEFER_inner2(TOKEN_PASTE(Defer_lambda, counter),                       \
-                     TOKEN_PASTE(Defer_instance, counter), __VA_ARGS__)
-
-#define DEFER(...) DEFER_inner(__COUNTER__, __VA_ARGS__)
-
-// ..DEFER implementation>
-
-// <CSTRINGS
-
-inline bool cstr_equals(char const *s1, char const *s2)
-{
-        assert(s1, "s1 should not be null");
-        assert(s2, "s2 should not be null");
-        while (s1[0] != 0 && s1[0] == s2[0]) {
-                s1++;
-                s2++;
-        }
-
-        return s1[0] == 0 && s2[0] == 0;
-}
-
-inline uint64_t cstr_len(char const *s)
-{
-        uint64_t size = 0;
-
-        while (s[size]) {
-                size++;
-        };
-
-        return size;
-}
-
-// ..CSTRINGS>
+#include "zwei.hpp"
+#include "zwei_iobuffer.hpp"
+#include "zwei_logging.hpp"
+#include "zwei_mime.hpp"
 
 // <BUFFER-CENTRIC IO
-
-#include <cstddef>
-
-enum BufferRangeErrorCode {
-        /// no error has occured
-        BR_NoError,
-        /// the consumer attempted to read past the end
-        BR_ReadPastEnd,
-        /// unrecoverable IO error
-        BR_IOError,
-};
-
-void stream_on_memory(struct BufferRange *range, uint8_t *mem, size_t size);
-
-struct BufferRange {
-        /**
-         * start of buffer.
-         */
-        uint8_t *start;
-
-        /**
-         * one byte past the end of buffer.
-         *
-         * so that:
-         * - size = end - start
-         * - end >= start
-         */
-        uint8_t *end;
-
-        /**
-         * interesting point in the buffer
-         *
-         * start <= cursor <= end
-         */
-        uint8_t *cursor;
-
-        enum BufferRangeErrorCode error;
-
-        /**
-         * Refill function, called when more data is needed by the writer/reader
-         *
-         * - pre-condition: cursor == end
-         * - post-condition: start == cursor < end
-         */
-        enum BufferRangeErrorCode (*next)(struct BufferRange *);
-};
 
 zw_internal enum BufferRangeErrorCode next_zeros(struct BufferRange *range)
 {
@@ -214,6 +66,26 @@ void string_cat(struct BufferRange *range, char const *cstring)
                 }
         }
 }
+/// try to concatenate the given c string region when possible, always truncate
+void string_cat(struct BufferRange *range,
+                char const *cstring,
+                char const *cstring_end)
+{
+        uint8_t *byte = (uint8_t *)cstring;
+        uint8_t *end_byte = (uint8_t *)cstring_end;
+        while (range->error == BR_NoError && range->cursor < range->end) {
+                *(range->cursor) = *byte;
+
+                byte++;
+                range->cursor++;
+
+                if (byte == end_byte)
+                        break;
+                if (range->cursor == range->end) {
+                        range->next(range);
+                }
+        }
+}
 
 void string_cat_formatted(struct BufferRange *range, char const *pattern, ...)
 {
@@ -251,68 +123,6 @@ bool string_terminate(struct BufferRange *range)
 }
 
 // ..STRING CONSTRUCTION W/ BUFFERS>
-
-// <MEMORY ARENAS
-
-/**
-   only meant to work in one thread and one thread only.
- */
-
-struct MemoryArena {
-        uint8_t *base;
-        size_t used;
-        size_t size;
-};
-
-struct MemoryArena memory_arena(void *base, size_t size)
-{
-        return {(uint8_t *)base, 0, size};
-}
-
-inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
-{
-        assert(arena->used + bytes <= arena->size, "overallocating");
-        uint8_t *result = arena->base + arena->used;
-
-        arena->used += bytes;
-
-        return result;
-}
-
-#define push_struct(arena_pointer, type)                                       \
-        (type *) push_bytes(arena_pointer, sizeof(type))
-
-#define push_pointer_rvalue(arena_pointer, lvalue)                             \
-        static_cast<decltype(lvalue)>(push_bytes(arena_pointer, sizeof *lvalue))
-
-#define push_array_rvalue(arena_pointer, lvalue, count)                        \
-        static_cast<decltype(lvalue)>(                                         \
-            push_bytes(arena_pointer, count * sizeof *lvalue))
-
-// ..MEMORY ARENAS>
-
-#include <unistd.h>
-#include <sys/attr.h>
-#include <sys/file.h>
-#include <sys/uio.h>
-#include <cerrno>
-#include <cstdio>
-#include <cstring>
-
-inline void sync_print(int filedesc, char const *message)
-{
-        auto message_size = cstr_len(message);
-        struct iovec iovecs[] = {
-            {(void *)message, message_size}, {(void *)"\n", 1},
-        };
-        writev(filedesc, iovecs, NCOUNT(iovecs));
-}
-
-// TODO(nicolas) print functions that work on streams rather than strings
-
-inline void error_print(char const *message) { sync_print(2, message); }
-
-inline void trace_print(char const *message) { sync_print(1, message); }
 
 #include <CommonCrypto/CommonDigest.h>
 #include <limits>
@@ -353,6 +163,9 @@ MayFail<Sha1> sha1(struct BufferRange *range)
 
         return result;
 }
+
+#include <fcntl.h>
+#include <unistd.h>
 
 /// open an input stream on a path, with the intent of reading it
 /// fully and only once
@@ -419,6 +232,13 @@ void inputstream_on_filepath(struct MemoryArena *arena,
         stream_on_file(result, file);
 }
 
+void inputstream_finish(struct BufferRange *range)
+{
+        while (range->error == BR_NoError) {
+                range->next(range);
+        }
+}
+
 #include <sys/vnode.h> // for enum vtype
 #include <mach/mach.h> // for vm_allocate
 
@@ -426,6 +246,9 @@ struct FileList {
         size_t count;
         char const **paths;
 };
+
+#include <sys/attr.h>
+#include <cerrno>
 
 /**
    Query a directory and its sub-directories for all their files,
@@ -659,20 +482,58 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
 
                         trace << "\t";
 
-                        if (entry->obj_tag == VT_HFS) {
+                        // NOTE(nicolas) non native file systems
+                        // (AFP/CIFS) are problematic not only for
+                        // performance reasons (no possibility to
+                        // maximize locality) and also because they
+                        // may not faithfully represent the filenames
+                        // of our directory stores, making
+                        // renames/maintenance potentially difficult.
+
+                        bool mounted_share = false;
+                        bool supports_semicolon = false;
+                        if (entry->obj_tag == VT_NFS) {
+                                trace << "NFS";
+                                supports_semicolon = true;
+                        } else if (entry->obj_tag == VT_HFS) {
                                 trace << "HFS";
+                                supports_semicolon = true;
                         } else if (entry->obj_tag == VT_AFP) {
                                 trace << "AFP";
+                                mounted_share = true;
                         } else if (entry->obj_tag == VT_CIFS) {
                                 trace << "CIFS";
+                                mounted_share = true;
                         } else {
                                 trace << entry->obj_tag;
+                        }
+
+                        if (mounted_share) {
+                                ERROR << "path '" << path_cstr
+                                      << "' is a mounted share.";
                         }
 
                         if (entry->obj_type == VREG) {
                                 trace << "\t" << entry->file_ioblocksize;
 
                                 trace << "\t" << entry->file_totalsize;
+
+                                if (!supports_semicolon) {
+                                        auto contains_colon =
+                                            [](char const *cstr) {
+                                                    while (*cstr != ':' &&
+                                                           *cstr != 0)
+                                                            cstr++;
+                                                    return *cstr == ':';
+                                            };
+                                        if (contains_colon(path_cstr)) {
+                                                ERROR
+                                                    << "path: '" << path_cstr
+                                                    << "'  contains a colon, "
+                                                       "which is not supported "
+                                                       "by vnode tag type";
+                                        }
+                                }
 
                                 int const fd = open(path_cstr, O_RDONLY, 0);
                                 // TODO(nil) check that we have
@@ -911,11 +772,82 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
    We extract features from these files in memory.
 */
 
-// this is the first version
+#include <dlfcn.h>
+#include <sys/stat.h>
+
+struct LoadedLibrary {
+        void *dlhandle;
+        char file_path[4096];
+        int64_t file_mtime;
+};
+
+zw_internal bool refresh_library(struct LoadedLibrary *library)
+{
+        struct stat stats;
+        stat(library->file_path, &stats);
+        if (stats.st_mtime > library->file_mtime) {
+                if (library->dlhandle) {
+                        assert(0 == dlclose(library->dlhandle),
+                               "could not close library");
+                }
+                void *dlhandle =
+                    dlopen(library->file_path, RTLD_NOW | RTLD_LOCAL);
+                assert(dlhandle, "could not open libzwei.dylib");
+                if (!dlhandle) {
+                        error_print("fatal error, could not load library");
+                        return false;
+                }
+
+                library->dlhandle = dlhandle;
+                library->file_mtime = stats.st_mtime;
+
+                return true;
+        }
+
+        return false;
+}
+
 int main(int argc, char **argv)
 {
         assert(argc > 0, "unexpected argc");
         DEFER(trace_print("done"));
+
+        CheckMimeMessageFn *check_mime_message;
+        struct LoadedLibrary zwei_mime_library = {};
+        {
+                struct BufferRange buffer;
+                stream_on_memory(&buffer,
+                                 (uint8_t *)zwei_mime_library.file_path,
+                                 sizeof zwei_mime_library.file_path);
+                string_cat(&buffer, argv[0],
+                           cstr_last_occurrence(argv[0], '/'));
+                string_cat(&buffer, "/libzwei.dylib");
+                if (!string_terminate(&buffer)) {
+                        return 1;
+                }
+
+                struct LoadedLibrary *lib = &zwei_mime_library;
+                lib->dlhandle = 0;
+                lib->file_mtime = 0;
+        }
+
+        auto refresh_zwei_mime = [&zwei_mime_library, &check_mime_message]() {
+                struct LoadedLibrary *lib = &zwei_mime_library;
+                bool was_loaded = !!lib->dlhandle;
+                if (refresh_library(lib)) {
+                        if (was_loaded) {
+                                trace_print("reloaded library!");
+                        }
+                        check_mime_message =
+                            reinterpret_cast<CheckMimeMessageFn *>(
+                                dlsym(lib->dlhandle, "check_mime_message"));
+                        return true;
+                }
+
+                return false;
+        };
+
+        refresh_zwei_mime();
 
         char const *root_dir_path = nullptr;
 
@@ -962,6 +894,10 @@ int main(int argc, char **argv)
                 transient_storage = (void *)transient_storage_memory_address;
         }
 
+        // TODO(nicolas): traces should feature a timestamp for
+        // performance and auditing. i.e. the platform layer should
+        // offer a logging service
+
         // FEATURE(nicolas): show content of any directory recursively
         // FEATURE(nicolas): show sha-1 digests of all files inside a directory
         if (!root_dir_path) {
@@ -992,10 +928,23 @@ int main(int argc, char **argv)
                 }
 
                 if (all_files) {
-                        // TODO(nil) always measure bytes/sec or sec/MB
+                        // TODO(nil) always measure bytes/sec or sec/MB and
+                        // print out total bytes
                         char linebuffer_memory[256];
                         for (size_t i = 0; i < all_files->count; i++) {
                                 struct BufferRange line;
+                                stream_on_memory(&line,
+                                                 (uint8_t *)linebuffer_memory,
+                                                 sizeof linebuffer_memory);
+                                string_cat(&line, "A");
+                                string_cat_formatted(&line, "%lld", i);
+                                string_cat(&line, " ");
+                                string_cat(&line, all_files->paths[i]);
+                                string_cat(&line, ":");
+                                if (string_terminate(&line)) {
+                                        trace_print(linebuffer_memory);
+                                }
+
                                 stream_on_memory(&line,
                                                  (uint8_t *)linebuffer_memory,
                                                  sizeof linebuffer_memory);
@@ -1004,16 +953,29 @@ int main(int argc, char **argv)
                                 string_cat(&line, " is ");
 
                                 // arena for our file streaming
+
+                                // TODO(nicolas) a dedicated
+                                // datastructure to store all our
+                                // streams, able to discard them on
+                                // exit, allocate more than one buffer
+                                // at a time, and reuse unused ones.
+                                //
+                                // TODO(nicolas) a task queue that goes with it,
+                                // to compute values on a series of
+                                // blocks.
+                                struct BufferRange file_content;
+
                                 struct MemoryArena stream_arena =
                                     memory_arena(dc_arena.base + dc_arena.size,
                                                  KILOBYTES(32));
 
-                                struct BufferRange file_content;
                                 inputstream_on_filepath(&stream_arena,
                                                         &file_content,
                                                         all_files->paths[i]);
 
                                 auto sha1_result = sha1(&file_content);
+                                inputstream_finish(&file_content);
+
                                 if (failed(sha1_result)) {
                                         string_cat(
                                             &line,
@@ -1054,9 +1016,31 @@ int main(int argc, char **argv)
                                                     byteToHexChar[byte >> 4],
                                                     byteToHexChar[byte & 0xF]);
                                         }
-                                        if (string_terminate(&line)) {
-                                                trace_print(linebuffer_memory);
-                                        }
+                                }
+                                if (string_terminate(&line)) {
+                                        trace_print(linebuffer_memory);
+                                }
+
+                                if (cstr_endswith(all_files->paths[i],
+                                                  ".eml")) {
+                                        do {
+                                                struct MemoryArena
+                                                    stream_arena = memory_arena(
+                                                        dc_arena.base +
+                                                            dc_arena.size,
+                                                        KILOBYTES(32));
+
+                                                inputstream_on_filepath(
+                                                    &stream_arena,
+                                                    &file_content,
+                                                    all_files->paths[i]);
+                                                check_mime_message(
+                                                    &file_content);
+                                                inputstream_finish(
+                                                    &file_content);
+                                        } while (refresh_zwei_mime());
+                                } else {
+                                        trace_print("ignored file");
                                 }
                         }
                 }
@@ -1064,3 +1048,5 @@ int main(int argc, char **argv)
 
         return 0;
 }
+
+#include "zwei_osx_logging.cpp"

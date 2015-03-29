@@ -75,6 +75,10 @@ function compile_osx()
 [ -d "${BUILD}" ] || mkdir -p "${BUILD}"
 
 PROGRAM="${BUILD}"/zwei
+LIBRARY="${BUILD}"/libzwei.dylib
+
+compile_osx -fvisibility=hidden -shared "${HERE}"/src/zwei_lib_osx.cpp -o "${LIBRARY}" \
+    && printf "SHARED_LIBRARY\t%s\n" "${LIBRARY}"
 
 compile_osx "${HERE}"/src/zwei_osx.cpp -o "${PROGRAM}" \
     && printf "PROGRAM\t%s\n" "${PROGRAM}"
