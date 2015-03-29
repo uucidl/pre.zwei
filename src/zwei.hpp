@@ -161,15 +161,20 @@ inline bool cstr_endswith(char const *s, char const *terminator)
         return cstr_equals(&s[s_len - terminator_len], terminator);
 }
 
-inline char const *cstr_last_occurrence(char const *s, char character)
-{
-        auto len = cstr_len(s);
-        char const *end = &s[len];
-        while (*end != character && end != s) {
+inline char const *cstr_walk_backwards_until(char const *start, char const * end, char character) {
+        assert(end >= start, "incorrect start/end order");
+
+        while (*end != character && end != start) {
                 end--;
         }
 
         return end;
+}
+
+inline char const *cstr_last_occurrence(char const *s, char character)
+{
+        auto len = cstr_len(s);
+        return cstr_walk_backwards_until(s, &s[len], character);
 }
 
 // ..CSTRINGS>

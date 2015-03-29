@@ -245,6 +245,7 @@ void inputstream_finish(struct BufferRange *range)
 struct FileList {
         size_t count;
         char const **paths;
+        char const **filenames;
 };
 
 #include <sys/attr.h>
@@ -750,8 +751,12 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
         if (result->count) {
                 size_t count = result->count;
                 result->paths = push_array_rvalue(arena, result->paths, count);
+                result->filenames =
+                    push_array_rvalue(arena, result->filenames, count);
                 for (size_t i = 0; i < count; i++) {
                         result->paths[i] = entry_array[i].path;
+                        result->filenames[i] =
+                            1 + cstr_last_occurrence(entry_array[i].path, '/');
                 }
         }
 
@@ -813,6 +818,8 @@ int main(int argc, char **argv)
         DEFER(trace_print("done"));
 
         CheckMimeMessageFn *check_mime_message;
+        ParseZoeMailstorePathFn *parse_zoe_mailstore_path;
+
         struct LoadedLibrary zwei_mime_library = {};
         {
                 struct BufferRange buffer;
@@ -831,7 +838,8 @@ int main(int argc, char **argv)
                 lib->file_mtime = 0;
         }
 
-        auto refresh_zwei_mime = [&zwei_mime_library, &check_mime_message]() {
+        auto refresh_zwei_mime = [&zwei_mime_library, &check_mime_message,
+                                  &parse_zoe_mailstore_path]() {
                 struct LoadedLibrary *lib = &zwei_mime_library;
                 bool was_loaded = !!lib->dlhandle;
                 if (refresh_library(lib)) {
@@ -839,8 +847,17 @@ int main(int argc, char **argv)
                                 trace_print("reloaded library!");
                         }
                         check_mime_message =
-                            reinterpret_cast<CheckMimeMessageFn *>(
+                            reinterpret_cast<decltype(check_mime_message)>(
                                 dlsym(lib->dlhandle, "check_mime_message"));
+                        assert(check_mime_message,
+                               "expected symbol check_mime_message");
+
+                        parse_zoe_mailstore_path = reinterpret_cast<decltype(
+                            parse_zoe_mailstore_path)>(
+                            dlsym(lib->dlhandle, "parse_zoe_mailstore_path"));
+                        assert(parse_zoe_mailstore_path,
+                               "expected symbol parse_zoe_mailstore_path");
+
                         return true;
                 }
 
@@ -950,9 +967,8 @@ int main(int argc, char **argv)
 
                         stream_on_memory(&line, (uint8_t *)linebuffer_memory,
                                          sizeof linebuffer_memory);
-                        string_cat(&line, "sha1 of ");
-                        string_cat(&line, all_files->paths[i]);
-                        string_cat(&line, " is ");
+                        string_cat(&line, "SHA1");
+                        string_cat(&line, "\t");
 
                         // arena for our file streaming
 
@@ -1016,16 +1032,66 @@ int main(int argc, char **argv)
                                 trace_print(linebuffer_memory);
                         }
 
-                        if (cstr_endswith(all_files->paths[i], ".eml")) {
+                        auto const filename = all_files->filenames[i];
+                        auto const filepath = all_files->paths[i];
+
+                        struct ZoeMailStoreFile zoefile;
+                        auto zoefile_errorcode =
+                            parse_zoe_mailstore_path(&zoefile, filename);
+
+                        if (0 == zoefile_errorcode ||
+                            cstr_endswith(filename, ".eml")) {
+                                // FEATURE(nicolas) print filing timestamp
+                                struct BufferRange line;
+
+                                stream_on_memory(&line,
+                                                 (uint8_t *)linebuffer_memory,
+                                                 sizeof linebuffer_memory);
+                                string_cat(&line, "PATH");
+                                string_cat(&line, "\t");
+                                string_cat(&line, filepath);
+                                if (string_terminate(&line)) {
+                                        trace_print(linebuffer_memory);
+                                }
+
+                                if (0 == zoefile_errorcode) {
+                                        stream_on_memory(
+                                            &line, (uint8_t *)linebuffer_memory,
+                                            sizeof linebuffer_memory);
+                                        string_cat(&line, "UUID");
+                                        string_cat(&line, "\t");
+                                        for (size_t i = 0;
+                                             i < NCOUNT(zoefile.uuid); i++) {
+                                                string_cat_formatted(
+                                                    &line, "%x",
+                                                    zoefile.uuid[i]);
+                                        }
+                                        if (string_terminate(&line)) {
+                                                trace_print(linebuffer_memory);
+                                        }
+
+                                        stream_on_memory(
+                                            &line, (uint8_t *)linebuffer_memory,
+                                            sizeof linebuffer_memory);
+                                        string_cat(&line, "UNIX TIMESTAMP");
+                                        string_cat(&line, "\t");
+                                        string_cat_formatted(
+                                            &line, "%llu",
+                                            zoefile.unix_epoch_millis);
+                                        if (string_terminate(&line)) {
+                                                trace_print(linebuffer_memory);
+                                        }
+                                }
+
                                 do {
                                         struct MemoryArena stream_arena =
                                             memory_arena(dc_arena.base +
                                                              dc_arena.size,
                                                          KILOBYTES(32));
 
-                                        inputstream_on_filepath(
-                                            &stream_arena, &file_content,
-                                            all_files->paths[i]);
+                                        inputstream_on_filepath(&stream_arena,
+                                                                &file_content,
+                                                                filepath);
                                         check_mime_message(&file_content);
                                         inputstream_finish(&file_content);
                                 } while (refresh_zwei_mime());
