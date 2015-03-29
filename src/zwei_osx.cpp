@@ -913,6 +913,11 @@ int main(int argc, char **argv)
                 struct FileList *all_files =
                     directory_query_all_files(&dc_arena, root_dir_path);
 
+                if (!all_files) {
+                        error_print("could not query all files");
+                        return 1;
+                }
+
                 {
                         char linebuffer_memory[256];
                         struct BufferRange linebuffer;
@@ -927,121 +932,105 @@ int main(int argc, char **argv)
                         }
                 }
 
-                if (all_files) {
-                        // TODO(nil) always measure bytes/sec or sec/MB and
-                        // print out total bytes
-                        char linebuffer_memory[256];
-                        for (size_t i = 0; i < all_files->count; i++) {
-                                struct BufferRange line;
-                                stream_on_memory(&line,
-                                                 (uint8_t *)linebuffer_memory,
-                                                 sizeof linebuffer_memory);
-                                string_cat(&line, "A");
-                                string_cat_formatted(&line, "%lld", i);
-                                string_cat(&line, " ");
-                                string_cat(&line, all_files->paths[i]);
-                                string_cat(&line, ":");
-                                if (string_terminate(&line)) {
-                                        trace_print(linebuffer_memory);
+                // TODO(nil) always measure bytes/sec or sec/MB and
+                // print out total bytes
+                char linebuffer_memory[256];
+                for (size_t i = 0; i < all_files->count; i++) {
+                        struct BufferRange line;
+                        stream_on_memory(&line, (uint8_t *)linebuffer_memory,
+                                         sizeof linebuffer_memory);
+                        string_cat(&line, "A");
+                        string_cat_formatted(&line, "%lld", i);
+                        string_cat(&line, " ");
+                        string_cat(&line, all_files->paths[i]);
+                        string_cat(&line, ":");
+                        if (string_terminate(&line)) {
+                                trace_print(linebuffer_memory);
+                        }
+
+                        stream_on_memory(&line, (uint8_t *)linebuffer_memory,
+                                         sizeof linebuffer_memory);
+                        string_cat(&line, "sha1 of ");
+                        string_cat(&line, all_files->paths[i]);
+                        string_cat(&line, " is ");
+
+                        // arena for our file streaming
+
+                        // TODO(nicolas) a dedicated
+                        // datastructure to store all our
+                        // streams, able to discard them on
+                        // exit, allocate more than one buffer
+                        // at a time, and reuse unused ones.
+                        //
+                        // TODO(nicolas) a task queue that goes with it,
+                        // to compute values on a series of
+                        // blocks.
+                        struct BufferRange file_content;
+
+                        struct MemoryArena stream_arena = memory_arena(
+                            dc_arena.base + dc_arena.size, KILOBYTES(32));
+
+                        inputstream_on_filepath(&stream_arena, &file_content,
+                                                all_files->paths[i]);
+
+                        auto sha1_result = sha1(&file_content);
+                        inputstream_finish(&file_content);
+
+                        if (failed(sha1_result)) {
+                                string_cat(&line, "<failed to compute result>");
+                        } else {
+                                assert(file_content.error == BR_ReadPastEnd,
+                                       "must read until end");
+
+                                auto sha1_value = just(sha1_result);
+                                char byteToHexChar[] = {
+                                    '0',
+                                    '1',
+                                    '2',
+                                    '3',
+                                    '4',
+                                    '5',
+                                    '6',
+                                    '7',
+                                    '8',
+                                    '9',
+                                    'a',
+                                    'b',
+                                    'c',
+                                    'd',
+                                    'e',
+                                    'f',
+                                };
+                                for (size_t byteIndex = 0;
+                                     byteIndex < NCOUNT(sha1_value.digest);
+                                     byteIndex++) {
+                                        uint8_t const byte =
+                                            sha1_value.digest[byteIndex];
+                                        string_cat_formatted(
+                                            &line, "%c%c",
+                                            byteToHexChar[byte >> 4],
+                                            byteToHexChar[byte & 0xF]);
                                 }
+                        }
+                        if (string_terminate(&line)) {
+                                trace_print(linebuffer_memory);
+                        }
 
-                                stream_on_memory(&line,
-                                                 (uint8_t *)linebuffer_memory,
-                                                 sizeof linebuffer_memory);
-                                string_cat(&line, "sha1 of ");
-                                string_cat(&line, all_files->paths[i]);
-                                string_cat(&line, " is ");
+                        if (cstr_endswith(all_files->paths[i], ".eml")) {
+                                do {
+                                        struct MemoryArena stream_arena =
+                                            memory_arena(dc_arena.base +
+                                                             dc_arena.size,
+                                                         KILOBYTES(32));
 
-                                // arena for our file streaming
-
-                                // TODO(nicolas) a dedicated
-                                // datastructure to store all our
-                                // streams, able to discard them on
-                                // exit, allocate more than one buffer
-                                // at a time, and reuse unused ones.
-                                //
-                                // TODO(nicolas) a task queue that goes with it,
-                                // to compute values on a series of
-                                // blocks.
-                                struct BufferRange file_content;
-
-                                struct MemoryArena stream_arena =
-                                    memory_arena(dc_arena.base + dc_arena.size,
-                                                 KILOBYTES(32));
-
-                                inputstream_on_filepath(&stream_arena,
-                                                        &file_content,
-                                                        all_files->paths[i]);
-
-                                auto sha1_result = sha1(&file_content);
-                                inputstream_finish(&file_content);
-
-                                if (failed(sha1_result)) {
-                                        string_cat(
-                                            &line,
-                                            "<failed to compute result>");
-                                } else {
-                                        assert(file_content.error ==
-                                                   BR_ReadPastEnd,
-                                               "must read until end");
-
-                                        auto sha1_value = just(sha1_result);
-                                        char byteToHexChar[] = {
-                                            '0',
-                                            '1',
-                                            '2',
-                                            '3',
-                                            '4',
-                                            '5',
-                                            '6',
-                                            '7',
-                                            '8',
-                                            '9',
-                                            'a',
-                                            'b',
-                                            'c',
-                                            'd',
-                                            'e',
-                                            'f',
-                                        };
-                                        for (size_t byteIndex = 0;
-                                             byteIndex <
-                                                 NCOUNT(sha1_value.digest);
-                                             byteIndex++) {
-                                                uint8_t const byte =
-                                                    sha1_value
-                                                        .digest[byteIndex];
-                                                string_cat_formatted(
-                                                    &line, "%c%c",
-                                                    byteToHexChar[byte >> 4],
-                                                    byteToHexChar[byte & 0xF]);
-                                        }
-                                }
-                                if (string_terminate(&line)) {
-                                        trace_print(linebuffer_memory);
-                                }
-
-                                if (cstr_endswith(all_files->paths[i],
-                                                  ".eml")) {
-                                        do {
-                                                struct MemoryArena
-                                                    stream_arena = memory_arena(
-                                                        dc_arena.base +
-                                                            dc_arena.size,
-                                                        KILOBYTES(32));
-
-                                                inputstream_on_filepath(
-                                                    &stream_arena,
-                                                    &file_content,
-                                                    all_files->paths[i]);
-                                                check_mime_message(
-                                                    &file_content);
-                                                inputstream_finish(
-                                                    &file_content);
-                                        } while (refresh_zwei_mime());
-                                } else {
-                                        trace_print("ignored file");
-                                }
+                                        inputstream_on_filepath(
+                                            &stream_arena, &file_content,
+                                            all_files->paths[i]);
+                                        check_mime_message(&file_content);
+                                        inputstream_finish(&file_content);
+                                } while (refresh_zwei_mime());
+                        } else {
+                                trace_print("ignored file");
                         }
                 }
         }

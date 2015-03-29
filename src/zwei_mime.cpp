@@ -104,7 +104,8 @@ extern "C" EXPORT CHECK_MIME_MESSAGE(check_mime_message)
         assert(adhoc.from_count >= 1, "unexpected From count");
         assert(adhoc.sender_count <= 1, "unexpected Sender: count");
         if (adhoc.messageid_count != 1) {
-                // NOTE(nicolas) we have actually seen emails with 3x Message-Id tags!
+                // NOTE(nicolas) we have actually seen emails with 3x Message-Id
+                // tags!
                 // Of course only one of them was really valid!
                 // TODO(nicolas) reject invalid Message-Id headers
                 error_print("surprising messageid count");
