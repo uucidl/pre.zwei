@@ -1,4 +1,7 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
+set -o pipefail
+set -e
+
 HERE="$(dirname ${0})"
 
 "${HERE}"/build.sh | grep '^PROGRAM' | cut -f2 | \
