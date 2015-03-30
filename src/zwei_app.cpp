@@ -25,14 +25,6 @@
   RFC 6657 -- Update to MIME regarding "charset" Parameter Handling in Textual
   Media Types
 
-  TODO(nicolas) write lenient mail parser inspired by the ABNF one
-  targetting the fields we want. Fields which are in 7bit can be
-  tokenized. Fields which are 8bit should be stored and tokenized
-  later after some further analysis has been made.
-
-  Field names themselves can be interesting as they identify certain
-  patterns of a sender.
-
   NOTES(nicolas): it seems rather frequent for foreign language operators
   to have 8-bit characters in their From: One would assume that they
   then used the charset that was in the Content-Type header.
@@ -46,20 +38,6 @@
 
   TODO(nicolas) charsets can be deducted from parties in a correspondance,
   possibly by MUA.
-
-  TODO(nicolas) support alternative 8-bit text sequences for bodies + from +
-  subject and test against corpus
-
-  TODO(nicolas) oh my, dates too can have 8-bit crap in them
-
-  TODO(nicolas) recompile and reload dynamically the parser so as to resume a
-  chunk of work
-
-  TODO(nicolas) a lenient parser would just ignore the text of any field it
-  doesn't care about and allow 8-bit there
-
-  TODO(nicolas) revert and split lenient and strict parsers. Strict parsers to
-  be used for sending only or for testing.
 */
 
 #include "zwei_app.hpp"
