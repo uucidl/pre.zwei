@@ -62,9 +62,9 @@
   be used for sending only or for testing.
 */
 
-#include "zwei_mime.hpp"
+#include "zwei_app.hpp"
 
-#include "zwei.hpp"
+#include "zwei_inlines.hpp"
 #include "zwei_iobuffer.hpp"
 #include "zwei_logging.hpp"
 
