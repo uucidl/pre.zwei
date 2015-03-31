@@ -821,12 +821,12 @@ int main(int argc, char **argv)
         CheckMimeMessageFn *check_mime_message;
         ParseZoeMailstorePathFn *parse_zoe_mailstore_path;
 
-        struct LoadedLibrary zwei_mime_library = {};
+        struct LoadedLibrary zwei_app_library = {};
         {
                 struct BufferRange buffer;
                 stream_on_memory(&buffer,
-                                 (uint8_t *)zwei_mime_library.file_path,
-                                 sizeof zwei_mime_library.file_path);
+                                 (uint8_t *)zwei_app_library.file_path,
+                                 sizeof zwei_app_library.file_path);
                 string_cat(&buffer, argv[0],
                            cstr_last_occurrence(argv[0], '/'));
                 string_cat(&buffer, "/libzwei.dylib");
@@ -834,14 +834,14 @@ int main(int argc, char **argv)
                         return 1;
                 }
 
-                struct LoadedLibrary *lib = &zwei_mime_library;
+                struct LoadedLibrary *lib = &zwei_app_library;
                 lib->dlhandle = 0;
                 lib->file_mtime = 0;
         }
 
-        auto refresh_zwei_mime = [&zwei_mime_library, &check_mime_message,
+        auto refresh_zwei_app = [&zwei_app_library, &check_mime_message,
                                   &parse_zoe_mailstore_path]() {
-                struct LoadedLibrary *lib = &zwei_mime_library;
+                struct LoadedLibrary *lib = &zwei_app_library;
                 bool was_loaded = !!lib->dlhandle;
                 if (refresh_library(lib)) {
                         if (was_loaded) {
@@ -865,7 +865,7 @@ int main(int argc, char **argv)
                 return false;
         };
 
-        refresh_zwei_mime();
+        refresh_zwei_app();
 
         char const *root_dir_path = nullptr;
 
@@ -1095,7 +1095,7 @@ int main(int argc, char **argv)
                                                                 filepath);
                                         check_mime_message(&file_content);
                                         inputstream_finish(&file_content);
-                                } while (refresh_zwei_mime());
+                                } while (refresh_zwei_app());
                         } else {
                                 trace_print("ignored file");
                         }
