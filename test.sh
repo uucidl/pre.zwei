@@ -17,5 +17,11 @@ fi
 ##
 # some reports
 
+printf -- "# Balance Sheet\n"
 "${HERE}"/scripts/balance.sh "${HERE}"
+
+printf -- "\n# Features\n"
+"${HERE}"/scripts/features.sh --only-matches "${HERE}"
+
+printf -- "\n# Issues\n"
 "${HERE}"/scripts/todo.sh "${HERE}"
