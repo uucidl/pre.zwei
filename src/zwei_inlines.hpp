@@ -100,6 +100,9 @@ struct MemoryArena memory_arena(void *base, size_t size)
 inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
 {
         assert(arena->used + bytes <= arena->size, "overallocating");
+	if (arena->used + bytes > arena->size) {
+	    return nullptr;
+	}
         uint8_t *result = arena->base + arena->used;
 
         arena->used += bytes;
