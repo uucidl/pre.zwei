@@ -12,4 +12,4 @@ RAGEL=${RAGEL:-$(which ragel)}
 [ -x "${RAGEL}" ] || die "missing ragel or RAGEL env variable"
 
 
-"${RAGEL}" "${TOP}"/src/adhoc_parser.rl.c -G2 -o "${TOP}"/src-generated/adhoc_parser.c
+"${RAGEL}" "${TOP}"/src/adhoc_parser.rl.c -T1 -o "${TOP}"/src-generated/adhoc_parser.c
