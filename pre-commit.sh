@@ -1,10 +1,6 @@
 #!/usr/bin/env sh
-
-function die() {
-    msg=$1
-    printf "%s\n" "$msg" >&2
-    exit 1
-}
+HERE="$(dirname ${0})"
+source "${HERE}"/scripts/lib/user.sh
 
 CLANG_FORMAT=${CLANG_FORMAT:-$(which clang-format)}
 [ -x "${CLANG_FORMAT}" ] || die "missing CLANG_FORMAT env variable"
