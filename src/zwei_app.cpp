@@ -120,9 +120,11 @@ extern "C" EXPORT PARSE_ZOE_MAILSTORE_PATH(parse_zoe_mailstore_path)
                         uint64_t sequence = 0;
                         uint64_t node = 0;
 
-                        assert(2 * NCOUNT(result->uuid) ==
-                                   uuid_end - uuid_start,
-                               "not enough room in result for uuid");
+                        ssize_t const max_nibble_count =
+                            2 * NCOUNT(result->uuid);
+                        if (uuid_end - uuid_start > max_nibble_count) {
+                                return -2;
+                        }
 
                         uint8_t *uuid_value = result->uuid;
                         for (auto cursor = uuid_start; cursor < uuid_end;
@@ -146,10 +148,8 @@ extern "C" EXPORT PARSE_ZOE_MAILSTORE_PATH(parse_zoe_mailstore_path)
                                         ok = true;
                                 }
 
-                                if (!ok) {
-                                        trace_print("weird format");
-                                        assert(false, "weird format");
-                                        return -2;
+                                if (cursor - uuid_start > max_nibble_count) {
+                                        ok = false;
                                 }
 
                                 auto nibble_index = cursor - uuid_start;
