@@ -258,8 +258,8 @@ struct FileList {
 
    @return null or a valid file list allocated in the given arena
 */
-zw_internal struct FileList *
-directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
+zw_internal struct FileList *directory_query_all_files(
+    struct MemoryArena *arena, char const *root_dir_path, bool trace_on)
 {
         // NOTE(nicolas)
         //
@@ -353,11 +353,13 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
                 struct BufferRange linebuffer;
                 char *memory;
                 void (*print)(char const *);
+                bool trace_on;
 
                 TextLine(void (*print)(char const *),
                          char *memory,
-                         size_t memory_size)
-                    : memory(memory), print(print)
+                         size_t memory_size,
+                         bool trace_on)
+                    : memory(memory), print(print), trace_on(trace_on)
                 {
                         stream_on_memory(&linebuffer, (uint8_t *)memory,
                                          memory_size);
@@ -366,7 +368,9 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
                 ~TextLine()
                 {
                         if (string_terminate(&linebuffer)) {
-                                print(memory);
+                                if (trace_on) {
+                                        print(memory);
+                                }
                         }
                 }
 
@@ -411,9 +415,11 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
 
         char linebuffer_memory[256];
 #define ERROR                                                                  \
-        (TextLine(error_print, linebuffer_memory, sizeof linebuffer_memory))
+        (TextLine(error_print, linebuffer_memory, sizeof linebuffer_memory,    \
+                  trace_on))
 #define TRACE                                                                  \
-        (TextLine(trace_print, linebuffer_memory, sizeof linebuffer_memory))
+        (TextLine(trace_print, linebuffer_memory, sizeof linebuffer_memory,    \
+                  trace_on))
 
         // what we are asking getattrlistbulk
         struct attrlist query_attributes = {
@@ -449,7 +455,7 @@ directory_query_all_files(struct MemoryArena *arena, char const *root_dir_path)
         // record a directory entry, depending if it's a file
         // or another directory
         auto record_directory_entry = [&linebuffer_memory, arena, push_file,
-                                       push_directory](
+                                       push_directory, trace_on](
             char const *dir_path, struct DirEntryAttributes const *entry) {
                 char const *name = (char *)((uint8_t *)&entry->nameinfo) +
                                    entry->nameinfo.attr_dataoffset;
@@ -869,6 +875,9 @@ int main(int argc, char **argv)
 
         char const *root_dir_path = nullptr;
 
+        auto USAGE = "<program> [--help|--ls] --root-dir <root-dir>";
+
+        auto directory_listing_on = false;
         auto current_arg = 1;
         while (current_arg < argc) {
                 if (cstr_equals(argv[current_arg], "--root-dir")) {
@@ -879,8 +888,13 @@ int main(int argc, char **argv)
                         }
                         root_dir_path = argv[current_arg];
                         current_arg++;
+                } else if (cstr_equals(argv[current_arg], "--ls")) {
+                        current_arg++;
+                        // FEATURE(nicolas): Optionally prints all files in <root-dir> using `--ls`
+                        directory_listing_on = true;
                 } else {
                         error_print("unexpected argument");
+                        trace_print(USAGE);
                         return 1;
                         current_arg++;
                 }
@@ -928,8 +942,8 @@ int main(int argc, char **argv)
                 // .. but how much parallelism can a HDD/SDD/Raid
                 // device support?
 
-                struct FileList *all_files =
-                    directory_query_all_files(&dc_arena, root_dir_path);
+                struct FileList *all_files = directory_query_all_files(
+                    &dc_arena, root_dir_path, directory_listing_on);
 
                 if (!all_files) {
                         error_print("could not query all files");
