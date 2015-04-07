@@ -80,7 +80,7 @@ LIBRARY="${BUILD}"/libzwei.dylib
 compile_osx -fvisibility=hidden -shared "${HERE}"/src/zwei_lib_osx_unit.cpp -o "${LIBRARY}" \
     && printf "SHARED_LIBRARY\t%s\n" "${LIBRARY}"
 
-compile_osx "${HERE}"/src/zwei_osx_unit.cpp -o "${PROGRAM}" \
+compile_osx "${HERE}"/src/zwei_main_osx_unit.cpp -o "${PROGRAM}" \
     && printf "PROGRAM\t%s\n" "${PROGRAM}"
 
 # beep
