@@ -4,27 +4,7 @@
 
 #include "zwei_app.hpp"
 
-// <BUFFER-CENTRIC IO
-
-zw_internal enum BufferRangeErrorCode next_zeros(struct BufferRange *range)
-{
-        zw_local_persist uint8_t const zeros[256] = {0};
-
-        range->start = (uint8_t *)zeros;
-        range->cursor = (uint8_t *)zeros;
-        range->end = (uint8_t *)zeros + sizeof(zeros);
-
-        return range->error;
-}
-
-zw_internal enum BufferRangeErrorCode fail(struct BufferRange *range,
-                                           enum BufferRangeErrorCode error)
-{
-        range->error = error;
-        range->next = next_zeros;
-
-        return range->next(range);
-}
+#include "zwei_iobuffer_inlines.hpp"
 
 zw_internal enum BufferRangeErrorCode
 next_on_memory_buffer(struct BufferRange *range)
