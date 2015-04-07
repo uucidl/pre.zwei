@@ -18,3 +18,8 @@ function onlymatches_pipeline() {
         tee
     fi
 }
+
+function remove_leading_spaces_grep_pipeline() {
+    sed -e 's/^\([^:]*:[^:]*:\) *\([^ ].*\)$/\1 \2/' \
+        -e 's/^\([^\-]*-[^\-]*-\) *\([^ ].*\)$/\1 \2/'
+}
