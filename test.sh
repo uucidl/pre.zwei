@@ -19,8 +19,14 @@ fi
 printf -- "# Balance Sheet\n"
 "${HERE}"/scripts/balance.sh "${HERE}"
 
-printf -- "\n# Features\n"
+printf -- "\n# Features Summary\n"
 "${HERE}"/scripts/features.sh --only-matches "${HERE}"
+
+printf -- "\n# Todo Summary\n"
+"${HERE}"/scripts/todo.sh --only-matches "${HERE}"
+
+printf -- "\n# Features\n"
+"${HERE}"/scripts/features.sh "${HERE}"
 
 printf -- "\n# Issues\n"
 "${HERE}"/scripts/todo.sh "${HERE}"
