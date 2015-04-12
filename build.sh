@@ -44,7 +44,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 
-function compile_osx()
+function must_compile_osx()
 {
     local cflags
     local cxxflags
@@ -70,6 +70,9 @@ function compile_osx()
     fi
 
     clang++ "${cflags[@]}" "${cxxflags[@]}" "$@"
+    if [[ "$?" -ne 0 ]]; then
+        exit 1
+    fi
 }
 
 [ -d "${BUILD}" ] || mkdir -p "${BUILD}"
@@ -77,10 +80,10 @@ function compile_osx()
 PROGRAM="${BUILD}"/zwei
 LIBRARY="${BUILD}"/libzwei.dylib
 
-compile_osx -fvisibility=hidden -shared "${HERE}"/src/zwei_lib_osx_unit.cpp -o "${LIBRARY}" \
+must_compile_osx -fvisibility=hidden -shared "${HERE}"/src/zwei_lib_osx_unit.cpp -o "${LIBRARY}" \
     && printf "SHARED_LIBRARY\t%s\n" "${LIBRARY}"
 
-compile_osx "${HERE}"/src/zwei_main_osx_unit.cpp -o "${PROGRAM}" \
+must_compile_osx "${HERE}"/src/zwei_main_osx_unit.cpp -o "${PROGRAM}" \
     && printf "PROGRAM\t%s\n" "${PROGRAM}"
 
 # beep
