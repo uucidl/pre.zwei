@@ -38,6 +38,8 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         *)
+            printf -- "Unknown option: %s\n" "$1"
+            exit 1
             break
             ;;
     esac
