@@ -1,9 +1,11 @@
+#pragma once
+
 // TODO(nicolas) let me chain parsers/processors on buffer. How do I
 // do that?  this is to avoid having to create n streams for n
 // processors.  also think that next() represents I/O, so it should be
 // split from processing.
 
-#include <cstddef>
+#include <cstdint>
 
 enum BufferRangeErrorCode {
         /// no error has occured

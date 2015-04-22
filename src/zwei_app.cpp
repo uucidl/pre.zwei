@@ -51,6 +51,8 @@
 
 #include "zwei_iobuffer_inlines.hpp"
 
+#include <cstddef>
+
 zw_internal bool ucs4_to_macintosh(uint8_t *destination,
                                    uint32_t const *codepoints,
                                    size_t count);
