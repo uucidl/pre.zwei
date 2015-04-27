@@ -13,7 +13,7 @@ function onlymatches_pipeline() {
     local ON="${1}"
     local REGEX="${2}"
     if [[ "${ON}" -ne 0 ]]; then
-        grep -o -e "${REGEX}"
+        grep -o -e "${REGEX}" | sort
     else
         tee
     fi
