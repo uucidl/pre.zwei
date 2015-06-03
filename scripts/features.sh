@@ -30,5 +30,4 @@ ATOP=$(cd ${TOP} && pwd)
 source "${HERE}"/lib/pipelines.sh
 
 git --no-pager -C "${TOP}" grep --full-name -n 'FEATURE' -- src/* | \
-    prepend_top_grep_pipeline "${TOP}" | onlymatches_pipeline "${ONLY_MATCHES}" "FEATURE(.*"
-
+    prepend_top_grep_pipeline "${TOP}" | remove_leading_spaces_grep_pipeline | onlymatches_pipeline "${ONLY_MATCHES}" "FEATURE(.*"

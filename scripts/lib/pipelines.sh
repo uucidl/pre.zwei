@@ -13,8 +13,13 @@ function onlymatches_pipeline() {
     local ON="${1}"
     local REGEX="${2}"
     if [[ "${ON}" -ne 0 ]]; then
-        grep -o -e "${REGEX}"
+        grep -o -e "${REGEX}" | sort
     else
         tee
     fi
+}
+
+function remove_leading_spaces_grep_pipeline() {
+    sed -e 's/^\([^:]*:[^:]*:\) *\([^ ].*\)$/\1 \2/' \
+        -e 's/^\([^\-]*-[^\-]*-\) *\([^ ].*\)$/\1 \2/'
 }
