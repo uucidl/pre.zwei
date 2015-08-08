@@ -334,8 +334,6 @@ extern "C" EXPORT PARSE_ZOE_MAILSTORE_PATH(parse_zoe_mailstore_path)
                     maildir_flags > filename ? maildir_flags : extension;
                 char const *uuid_start = filename;
 
-                trace_print(uuid_start, uuid_end - uuid_start);
-
                 // parse UUID and date from UUID
                 // example: C8E4A7A0014A88C76DA9A00DDF5D464B
 

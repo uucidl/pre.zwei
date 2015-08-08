@@ -724,7 +724,7 @@ zw_internal struct FileList *directory_query_all_files(
 #endif
 
                 for (size_t i = 0; i < entry_array_count; i++) {
-                        TRACE << "A" << i << "\t"
+                        TRACE << "FILE" << i << "\t"
                               << entry_array[i].physical_offset << "\t"
                               << entry_array[i].path;
                 }
@@ -951,7 +951,7 @@ int main(int argc, char **argv)
                         struct BufferRange line;
                         stream_on_memory(&line, (uint8_t *)linebuffer_memory,
                                          sizeof linebuffer_memory);
-                        string_cat(&line, "A");
+                        string_cat(&line, "FILE");
                         string_cat_formatted(&line, "%lld", i);
                         string_cat(&line, " ");
                         string_cat(&line, all_files->paths[i]);
