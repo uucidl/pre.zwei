@@ -5,10 +5,11 @@
 USAGE="${0} <top of the tree>"
 TOP=${1:?${USAGE}}
 
-grep --no-filename --recursive --only-matching \
-     -e 'https://[^ $$]*' \
-     -e 'http://[^ $$]*' \
-     "${TOP}"/src/* |\
+grep --no-filename --recursive -e '\[http.*\]' "${TOP}"/src/* | \
+    grep --only-matching \
+     -e 'https://[^]]*' \
+     -e 'http://[^]]*' \
+    | \
     (
         cd "${TOP}"/docs
         while read url; do
