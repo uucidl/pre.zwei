@@ -31,6 +31,6 @@ function find_all_sources() {
 }
 
 set -e
-find_all_sources | while read f; do
+find_all_sources | grep -v '.*' | while read f; do
     "${CLANG_FORMAT}" -i "${f}"
 done
