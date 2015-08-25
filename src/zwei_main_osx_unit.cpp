@@ -183,6 +183,8 @@ struct FileList {
 #include <sys/attr.h>
 #include <cerrno>
 
+zw_global bool global_can_ignore_file = false;
+
 /**
    Query a directory and its sub-directories for all their files,
    sorted to maximize throughput when streaming their content.
@@ -336,6 +338,7 @@ zw_internal struct FileList *directory_query_all_files(
                                   "unexpected size");
                 }
                 char *path_cstr = (char *)path;
+                bool ignore_file = false;
 
                 clear(dirlisting);
 
@@ -397,7 +400,8 @@ zw_internal struct FileList *directory_query_all_files(
                                 push_back_u64(dirlisting,
                                               entry->file_totalsize);
 
-                                if (!supports_semicolon) {
+                                if (!supports_semicolon &&
+                                    global_can_ignore_file) {
                                         if (':' == *cstr_find(path_cstr, ':')) {
                                                 MemoryArena temp_arena = *arena;
                                                 auto errorg = TextOutputGroup{};
@@ -413,16 +417,17 @@ zw_internal struct FileList *directory_query_all_files(
                                                     "which is not supported "
                                                     "by vnode tag type");
                                                 error(errorg);
+                                                ignore_file = true;
                                         }
                                 }
 
                                 int const fd = open(path_cstr, O_RDONLY, 0);
                                 // TODO(nicolas) permissions to open
                                 // that file at all?
-                                zw_assert(fd >= 0, "open file");
+                                zw_assert(ignore_file || fd >= 0, "open file");
                                 DEFER(close(fd));
 
-                                if (entry->file_totalsize > 0) {
+                                if (!ignore_file && entry->file_totalsize > 0) {
                                         struct log2phys filephys;
                                         int fcntl_result =
                                             fcntl(fd, F_LOG2PHYS, &filephys);
@@ -446,7 +451,7 @@ zw_internal struct FileList *directory_query_all_files(
                         print_dirlisting_line();
                 }
 
-                if (entry->obj_type == VREG) {
+                if (entry->obj_type == VREG && !ignore_file) {
                         struct FSEntry *file_entry = push_file();
                         file_entry->path = path_cstr;
                         file_entry->physical_offset = physical_offset;
@@ -719,7 +724,8 @@ int main(int argc, char **argv)
 
         char const *root_dir_path = nullptr;
 
-        auto USAGE = "<program> [--help|--ls] --root-dir <root-dir>";
+        auto USAGE =
+            "<program> [--help|--ls|--can-ignore] --root-dir <root-dir>";
 
         auto directory_listing_on = false;
         auto current_arg = 1;
@@ -737,6 +743,9 @@ int main(int argc, char **argv)
                         // FEATURE(nicolas): Optionally prints all files in
                         // <root-dir> using `--ls`
                         directory_listing_on = true;
+                } else if (cstr_equals(argv[current_arg], "--can-ignore")) {
+                        current_arg++;
+                        global_can_ignore_file = true;
                 } else {
                         error_print("unexpected argument");
                         trace_print(USAGE);
@@ -947,6 +956,40 @@ int main(int argc, char **argv)
                                 push_back_cstr(traceg, "PATH");
                                 push_back_cstr(traceg, "\t");
                                 push_back_cstr(traceg, filepath);
+                                trace(traceg);
+
+                                clear(traceg);
+                                push_back_cstr(traceg, "ZOE_REL_URL");
+                                push_back_cstr(traceg, "\t");
+                                {
+                                        // find predecessor, until you reach
+                                        // boundary
+                                        auto pred = [](char const *const first,
+                                                       char const *const pos) {
+                                                if (pos != first) {
+                                                        return algos::
+                                                            predecessor(pos);
+                                                }
+                                                return pos;
+                                        };
+                                        // skip day, month, year
+                                        auto first =
+                                            cstr_find_last(filepath, '/');
+                                        first = algos::find_backward(
+                                            filepath, pred(filepath, first),
+                                            '/');
+                                        first = algos::find_backward(
+                                            filepath, pred(filepath, first),
+                                            '/');
+                                        first = algos::find_backward(
+                                            filepath, pred(filepath, first),
+                                            '/');
+                                        first = algos::successor(first);
+                                        auto last = cstr_find_last(first, '.');
+                                        push_back_extent(traceg,
+                                                         (uint8_t *)first,
+                                                         size_t(last - first));
+                                }
                                 trace(traceg);
 
                                 if (0 == zoefile_errorcode) {
