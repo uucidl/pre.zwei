@@ -76,7 +76,7 @@
                         assert(state->field_content_arena.base[0] != ' ', "did not expect whitespace");
                         assert(state->field_content_arena.base[0] != '\t', "did not expect whitespace");
 
-                        trace_print((char*)state->field_content_arena.base, state->field_content_arena.used);
+                        trace_print_n((char*)state->field_content_arena.base, state->field_content_arena.used);
                         state->record_on = false;
                         reset_arena();
                 }

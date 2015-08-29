@@ -24,7 +24,7 @@ void trace_print(char const *message)
         sync_print(1, message, message_size);
 }
 
-void trace_print(char const *message, size_t message_len)
+void trace_print_n(char const *message, size_t message_len)
 {
         sync_print(1, message, message_len);
 }
