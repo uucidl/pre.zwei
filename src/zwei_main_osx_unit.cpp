@@ -1,3 +1,9 @@
+/**
+   TODO(nicolas): FEATURE search timeline ranges [date-start,date-end)
+   TODO(nicolas): FEATURE on OSX, use open command or similar to open a mail in
+   Mail.app
+*/
+
 #include "zwei_inlines.hpp"
 #include "zwei_iobuffer.hpp"
 #include "zwei_iobuffer_inlines.hpp"
@@ -231,7 +237,7 @@ zw_internal struct FileList *directory_query_all_files(
         //
         // repeat until there is no more directories to visit
 
-        // TODO(nicolas) performance: we're nowhere near
+        // TODO(nicolas) @perf we're nowhere near
         // saturating the I/O there, especially when querying
         // a network shared drive.
 
@@ -503,9 +509,8 @@ zw_internal struct FileList *directory_query_all_files(
                                 }
 
                                 int const fd = open(path_cstr, O_RDONLY, 0);
-                                // TODO(nicolas) check that we have
-                                // permissions to open that file
-                                // at all
+                                // TODO(nicolas) permissions to open
+                                // that file at all?
                                 zw_assert(fd >= 0, "open file");
                                 DEFER(close(fd));
 
@@ -946,14 +951,13 @@ int main(int argc, char **argv)
 
                         // arena for our file streaming
 
-                        // TODO(nicolas) a dedicated
-                        // datastructure to store all our
-                        // streams, able to discard them on
-                        // exit, allocate more than one buffer
-                        // at a time, and reuse unused ones.
+                        // TODO(nicolas) a dedicated datastructure to
+                        // store all our streams, able to discard them
+                        // on exit, allocate more than one buffer at a
+                        // time, and reuse unused ones.
                         //
-                        // TODO(nicolas) a task queue that goes with it,
-                        // to compute values on a series of
+                        // TODO(nicolas) a task queue that goes with
+                        // it, to compute values on a series of
                         // blocks.
                         struct BufferRange file_content;
 
