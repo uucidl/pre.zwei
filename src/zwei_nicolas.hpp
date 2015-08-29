@@ -1,7 +1,8 @@
 #pragma once
 
 struct MacRomanWorkaround {
-        enum { RUNE_COUNT = 8,
+        // TODO(nicolas) this is way too low
+        enum { RUNE_COUNT = 64,
         };
 
         uint32_t utf8decoder_state;
