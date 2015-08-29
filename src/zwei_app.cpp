@@ -55,7 +55,8 @@ zw_internal bool ucs4_to_macintosh(uint8_t *destination,
                                    uint32_t const *codepoints,
                                    size_t count);
 
-/// @see http://bjoern.hoehrmann.de/utf-8/decoder/dfa/
+/// @see
+/// [economical-utf8.html](http://bjoern.hoehrmann.de/utf-8/decoder/dfa/index.html)
 enum { UTF8_ACCEPT = 0,
        UTF8_REJECT = 1,
 };
