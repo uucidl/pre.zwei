@@ -2,8 +2,8 @@
 
 struct BufferRange;
 
-#define CHECK_MIME_MESSAGE(name) void name(struct BufferRange* range)
-typedef CHECK_MIME_MESSAGE(CheckMimeMessageFn);
+#define ACCEPT_MIME_MESSAGE(name) void name(struct BufferRange* range, struct ZoeMailStoreFile* zoe_mailstore_file, struct MemoryArena* message_arena)
+typedef ACCEPT_MIME_MESSAGE(AcceptMimeMessageFn);
 
 #include <cstdint>
 

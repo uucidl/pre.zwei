@@ -804,7 +804,7 @@ int main(int argc, char **argv)
         assert(argc > 0, "unexpected argc");
         DEFER(trace_print("done"));
 
-        CheckMimeMessageFn *check_mime_message;
+        AcceptMimeMessageFn *accept_mime_message;
         ParseZoeMailstorePathFn *parse_zoe_mailstore_path;
 
         struct LoadedLibrary zwei_app_library = {};
@@ -824,18 +824,18 @@ int main(int argc, char **argv)
                 lib->file_mtime = 0;
         }
 
-        auto refresh_zwei_app = [&zwei_app_library, &check_mime_message,
-                                  &parse_zoe_mailstore_path]() {
+        auto refresh_zwei_app = [&zwei_app_library, &accept_mime_message,
+                                 &parse_zoe_mailstore_path]() {
                 struct LoadedLibrary *lib = &zwei_app_library;
                 bool was_loaded = !!lib->dlhandle;
                 if (refresh_library(lib)) {
                         if (was_loaded) {
                                 trace_print("reloaded library!");
                         }
-                        check_mime_message =
-                            reinterpret_cast<decltype(check_mime_message)>(
-                                dlsym(lib->dlhandle, "check_mime_message"));
-                        assert(check_mime_message,
+                        accept_mime_message =
+                            reinterpret_cast<decltype(accept_mime_message)>(
+                                dlsym(lib->dlhandle, "accept_mime_message"));
+                        assert(accept_mime_message,
                                "expected symbol check_mime_message");
 
                         parse_zoe_mailstore_path = reinterpret_cast<decltype(
@@ -1082,11 +1082,23 @@ int main(int argc, char **argv)
                                             memory_arena(dc_arena.base +
                                                              dc_arena.size,
                                                          KILOBYTES(32));
+                                        struct MemoryArena message_arena =
+                                            memory_arena(
+                                                stream_arena.base +
+                                                    stream_arena.size,
+                                                (uint8_t *)transient_storage +
+                                                    transient_storage_memory_size -
+                                                    stream_arena.base +
+                                                    stream_arena.size);
 
                                         inputstream_on_filepath(&stream_arena,
                                                                 &file_content,
                                                                 filepath);
-                                        check_mime_message(&file_content);
+                                        accept_mime_message(
+                                            &file_content,
+                                            zoefile_errorcode == 0 ? &zoefile
+                                                                   : nullptr,
+                                            &message_arena);
                                         inputstream_finish(&file_content);
                                 } while (refresh_zwei_app());
                         } else {

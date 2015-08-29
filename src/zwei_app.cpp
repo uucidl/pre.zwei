@@ -48,7 +48,7 @@
 
 #include "message_parsers.hpp"
 
-extern "C" EXPORT CHECK_MIME_MESSAGE(check_mime_message)
+extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
 {
         if (range->error == BR_NoError && range->cursor == range->end) {
                 range->next(range);
