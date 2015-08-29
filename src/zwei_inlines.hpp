@@ -32,6 +32,9 @@
 /// local variables that persist across calls
 #define zw_local_persist static
 
+/// global variables
+#define zw_global
+
 // <BASIC integer types
 
 typedef uint32_t bool32;
