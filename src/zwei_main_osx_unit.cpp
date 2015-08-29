@@ -11,6 +11,8 @@
 
 #include "zwei_app.hpp"
 
+#include "algos.hpp"
+
 #include <cstdarg>
 #include <cstdio>
 
@@ -99,6 +101,7 @@ struct Sha1 {
 MayFail<Sha1> sha1(struct BufferRange *range)
 {
         MayFail<Sha1> result;
+        using algos::sink;
 
         size_t const MAX_CHUNK_SIZE = std::numeric_limits<CC_LONG>::max();
         auto chunk_size = [MAX_CHUNK_SIZE](size_t size) {
@@ -121,7 +124,7 @@ MayFail<Sha1> sha1(struct BufferRange *range)
         }
 
         if (range->error == BR_ReadPastEnd) {
-                zw_assert(1 == CC_SHA1_Final(result.value.digest, &ctx),
+                zw_assert(1 == CC_SHA1_Final(sink(result).digest, &ctx),
                           "CC_SHA1_Final");
         } else {
                 result.errorcode = 1;

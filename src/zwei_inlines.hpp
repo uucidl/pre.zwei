@@ -1,5 +1,7 @@
 #pragma once
 
+#include "algos_concepts.hpp"
+
 #include <cstdint>
 #include <cstdio>
 
@@ -46,6 +48,14 @@ typedef uint32_t bool32;
 template <typename ValueType> struct MayFail {
         ValueType value;
         uint32_t errorcode = 0;
+
+        using WritableMe = MayFail;
+        friend ValueType &sink(WritableMe &self) { return self.value; }
+};
+
+template <typename ValueType>
+struct algos::WritableConcept<MayFail<ValueType>> {
+        using value_type = ValueType;
 };
 
 template <typename ValueType> bool failed(MayFail<ValueType> const result)
