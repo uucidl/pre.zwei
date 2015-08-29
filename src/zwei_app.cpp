@@ -256,6 +256,8 @@ macroman_workaround_stream(struct BufferRange *input, struct MemoryArena *arena)
         return range;
 }
 
+extern "C" EXPORT INIT_APP(init_app) { trace_print("Initializing app"); }
+
 extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
 {
         struct BufferRange *message_range = range;

@@ -810,6 +810,11 @@ int main(int argc, char **argv)
                                 trace_print("reloaded library!");
                         }
 
+                        InitAppFn *init_app;
+                        init_app = reinterpret_cast<decltype(init_app)>(
+                            dlsym(lib->dlhandle, "init_app"));
+                        zw_assert(init_app, "expected symbol init_app");
+
                         accept_mime_message =
                             reinterpret_cast<decltype(accept_mime_message)>(
                                 dlsym(lib->dlhandle, "accept_mime_message"));
@@ -821,6 +826,9 @@ int main(int argc, char **argv)
                             dlsym(lib->dlhandle, "parse_zoe_mailstore_path"));
                         zw_assert(parse_zoe_mailstore_path,
                                   "expected symbol parse_zoe_mailstore_path");
+
+                        init_app();
+
                         return true;
                 }
 

@@ -4,6 +4,9 @@
 
 #include <cstdint>
 
+#define INIT_APP(name) void name()
+typedef INIT_APP(InitAppFn);
+
 struct BufferRange;
 
 #define ACCEPT_MIME_MESSAGE(name)                                              \
