@@ -14,9 +14,9 @@ zoe_parse_uuid_filename(const char *filename, size_t filename_size)
                 result.errorcode = 1;
                 return result;
         } else {
-                char const *extension = cstr_last_occurrence(filename, '.');
+                char const *extension = cstr_find_last(filename, '.');
                 char const *maildir_flags =
-                    cstr_walk_backwards_until(filename, extension, ':');
+                    algos::find_backward(filename, extension, ':');
                 char const *uuid_end =
                     maildir_flags > filename ? maildir_flags : extension;
                 char const *uuid_start = filename;

@@ -17,72 +17,35 @@
 #include <cstdio>
 
 /// try to concatenate the given c string when possible, always truncate
-void string_cat(struct BufferRange *range, char const *cstring)
+void string_cat(uint8_t *&string_last,
+                uint8_t *buffer_last,
+                char const *cstring)
 {
         uint8_t *byte = (uint8_t *)cstring;
-        while (range->error == BR_NoError && range->cursor < range->end) {
-                *(range->cursor) = *byte;
-
-                byte++;
-                range->cursor++;
-
-                if (!*byte)
-                        break;
-                if (range->cursor == range->end) {
-                        range->next(range);
-                }
-        }
+        string_last = algos::copy_bounded_unguarded(
+                          byte, is_cstr_char, string_last, buffer_last).second;
 }
+
 /// try to concatenate the given c string region when possible, always truncate
-void string_cat(struct BufferRange *range,
+void string_cat(uint8_t *&string_last,
+                uint8_t *buffer_last,
                 char const *cstring,
                 char const *cstring_end)
 {
-        uint8_t *byte = (uint8_t *)cstring;
-        uint8_t *end_byte = (uint8_t *)cstring_end;
-        while (range->error == BR_NoError && range->cursor < range->end) {
-                *(range->cursor) = *byte;
-
-                byte++;
-                range->cursor++;
-
-                if (byte == end_byte)
-                        break;
-                if (range->cursor == range->end) {
-                        range->next(range);
-                }
-        }
+        uint8_t *byte_first = (uint8_t *)cstring;
+        uint8_t *byte_last = (uint8_t *)cstring_end;
+        string_last = algos::copy_bounded(byte_first, byte_last, string_last,
+                                          buffer_last).second;
 }
 
-void string_cat_formatted(struct BufferRange *range, char const *pattern, ...)
+bool string_terminate(uint8_t *&string_last, uint8_t *buffer_last)
 {
-        size_t needed_size = 0;
-        va_list original_args;
-        va_start(original_args, pattern);
-        DEFER(va_end(original_args));
-        {
-                va_list args;
-                va_copy(args, original_args);
-                DEFER(va_end(args));
+        using algos::sink;
+        using algos::successor;
 
-                needed_size = vsnprintf(0, 0, pattern, args);
-                zw_assert(needed_size > 0, "invalid format string");
-        }
-
-        char buffer[needed_size + 1];
-        vsnprintf(buffer, sizeof buffer, pattern, original_args);
-        string_cat(range, buffer);
-}
-
-void string_cat_uint32(struct BufferRange *range, uint32_t value)
-{
-        string_cat_formatted(range, "%u", value);
-}
-
-bool string_terminate(struct BufferRange *range)
-{
-        if (range->error == BR_NoError && range->cursor < range->end) {
-                *range->cursor = 0;
+        if (string_last != buffer_last) {
+                sink(string_last) = 0;
+                string_last = successor(string_last);
                 return true;
         }
 
@@ -311,83 +274,14 @@ zw_internal struct FileList *directory_query_all_files(
         struct FSEntry *entry = push_directory();
         entry->path = root_dir_path;
 
-        // TODO(nicolas) is this a thing? stdout is actually a stream so
-        // you should not have to build a line unless you're
-        // converting from some other datatype (uint's etc...)  or
-        // doing some type conversion/formatting (dec to hexa etc...)
-        class TextLine
-        {
-              public:
-                struct BufferRange linebuffer;
-                char *memory;
-                void (*print)(char const *);
-                bool trace_on;
+        TextOutputGroup dirlisting = {};
+        allocate(dirlisting, arena, KILOBYTES(1));
 
-                TextLine(void (*print)(char const *),
-                         char *memory,
-                         size_t memory_size,
-                         bool trace_on)
-                    : memory(memory), print(print), trace_on(trace_on)
-                {
-                        stream_on_memory(&linebuffer, (uint8_t *)memory,
-                                         memory_size);
-                }
-
-                ~TextLine()
-                {
-                        if (string_terminate(&linebuffer)) {
-                                if (trace_on) {
-                                        print(memory);
-                                }
-                        }
-                }
-
-                // TODO(nicolas) make and use a generic string_cat here
-
-                TextLine &operator<<(char const *str)
-                {
-                        string_cat(&linebuffer, str);
-                        return *this;
-                }
-
-                TextLine &operator<<(uint8_t c)
-                {
-                        string_cat_uint32(&linebuffer, c);
-                        return *this;
-                }
-
-                TextLine &operator<<(long long ll)
-                {
-                        string_cat_formatted(&linebuffer, "%lld", ll);
-                        return *this;
-                }
-
-                TextLine &operator<<(unsigned long ll)
-                {
-                        string_cat_formatted(&linebuffer, "%lu", ll);
-                        return *this;
-                }
-
-                TextLine &operator<<(uint32_t i)
-                {
-                        string_cat_uint32(&linebuffer, i);
-                        return *this;
-                }
-
-                TextLine &operator<<(uint64_t ii)
-                {
-                        string_cat_formatted(&linebuffer, "%llu", ii);
-                        return *this;
+        auto print_dirlisting_line = [&dirlisting, trace_on]() {
+                if (trace_on) {
+                        trace(dirlisting);
                 }
         };
-
-        char linebuffer_memory[256];
-#define ERROR                                                                  \
-        (TextLine(error_print, linebuffer_memory, sizeof linebuffer_memory,    \
-                  trace_on))
-#define TRACE                                                                  \
-        (TextLine(trace_print, linebuffer_memory, sizeof linebuffer_memory,    \
-                  trace_on))
 
         // what we are asking getattrlistbulk
         struct attrlist query_attributes = {
@@ -422,8 +316,9 @@ zw_internal struct FileList *directory_query_all_files(
 
         // record a directory entry, depending if it's a file
         // or another directory
-        auto record_directory_entry = [&linebuffer_memory, arena, push_file,
-                                       push_directory, trace_on](
+        auto record_directory_entry = [&dirlisting, print_dirlisting_line,
+                                       arena, push_file, push_directory,
+                                       trace_on](
             char const *dir_path, struct DirEntryAttributes const *entry) {
                 char const *name = (char *)((uint8_t *)&entry->nameinfo) +
                                    entry->nameinfo.attr_dataoffset;
@@ -431,32 +326,32 @@ zw_internal struct FileList *directory_query_all_files(
                 auto path_size = cstr_len(dir_path) + 1 + cstr_len(name) + 1;
                 uint8_t *path = push_array_rvalue(arena, path, path_size);
                 {
-                        struct BufferRange path_buffer;
-                        stream_on_memory(&path_buffer, path, path_size);
-                        string_cat(&path_buffer, dir_path);
-                        string_cat(&path_buffer, "/");
-                        string_cat(&path_buffer, name);
-                        zw_assert(string_terminate(&path_buffer),
+                        auto const buffer_first = path;
+                        auto const buffer_last = buffer_first + path_size;
+                        auto string_last = buffer_first;
+                        string_cat(string_last, buffer_last, dir_path);
+                        string_cat(string_last, buffer_last, "/");
+                        string_cat(string_last, buffer_last, name);
+                        zw_assert(string_terminate(string_last, buffer_last),
                                   "unexpected size");
                 }
                 char *path_cstr = (char *)path;
 
+                clear(dirlisting);
+
                 uint64_t physical_offset = 0;
                 {
-                        auto trace = TRACE;
-
-                        trace << name;
+                        push_back_cstr(dirlisting, name);
                         if (entry->obj_type == VREG) {
-                                trace << "\t[f]";
+                                push_back_cstr(dirlisting, "\t[f]");
                         } else if (entry->obj_type == VDIR) {
-                                trace << "\t[d]";
+                                push_back_cstr(dirlisting, "\t[d]");
                         } else {
                                 // not a file, not a directory
-                                string_cat_formatted(&trace.linebuffer,
-                                                     "\t[%d]", entry->obj_type);
+                                push_back_formatted(dirlisting, "\t[%d]",
+                                                    entry->obj_type);
                         }
-
-                        trace << "\t";
+                        push_back_cstr(dirlisting, "\t");
 
                         // NOTE(nicolas) non native file systems
                         // (AFP/CIFS) are problematic not only for
@@ -469,45 +364,55 @@ zw_internal struct FileList *directory_query_all_files(
                         bool mounted_share = false;
                         bool supports_semicolon = false;
                         if (entry->obj_tag == VT_NFS) {
-                                trace << "NFS";
+                                push_back_cstr(dirlisting, "NFS");
                                 supports_semicolon = true;
                         } else if (entry->obj_tag == VT_HFS) {
-                                trace << "HFS";
+                                push_back_cstr(dirlisting, "HFS");
                                 supports_semicolon = true;
                         } else if (entry->obj_tag == VT_AFP) {
-                                trace << "AFP";
+                                push_back_cstr(dirlisting, "AFP");
                                 mounted_share = true;
                         } else if (entry->obj_tag == VT_CIFS) {
-                                trace << "CIFS";
+                                push_back_cstr(dirlisting, "CIFS");
                                 mounted_share = true;
                         } else {
-                                trace << entry->obj_tag;
+                                push_back_u32(dirlisting, entry->obj_tag);
                         }
 
                         if (mounted_share) {
-                                ERROR << "path '" << path_cstr
-                                      << "' is a mounted share.";
+                                MemoryArena temp_arena = *arena;
+                                auto errorg = TextOutputGroup{};
+                                allocate(errorg, &temp_arena, KILOBYTES(1));
+                                push_back_cstr(errorg, "path '");
+                                push_back_cstr(errorg, path_cstr);
+                                push_back_cstr(errorg, "' is a mounted share.");
+                                error(errorg);
                         }
 
                         if (entry->obj_type == VREG) {
-                                trace << "\t" << entry->file_ioblocksize;
-
-                                trace << "\t" << entry->file_totalsize;
+                                push_back_cstr(dirlisting, "\t");
+                                push_back_u32(dirlisting,
+                                              entry->file_ioblocksize);
+                                push_back_cstr(dirlisting, "\t");
+                                push_back_u64(dirlisting,
+                                              entry->file_totalsize);
 
                                 if (!supports_semicolon) {
-                                        auto contains_colon =
-                                            [](char const *cstr) {
-                                                    while (*cstr != ':' &&
-                                                           *cstr != 0)
-                                                            cstr++;
-                                                    return *cstr == ':';
-                                            };
-                                        if (contains_colon(path_cstr)) {
-                                                ERROR
-                                                    << "path: '" << path_cstr
-                                                    << "'  contains a colon, "
-                                                       "which is not supported "
-                                                       "by vnode tag type";
+                                        if (':' == *cstr_find(path_cstr, ':')) {
+                                                MemoryArena temp_arena = *arena;
+                                                auto errorg = TextOutputGroup{};
+                                                allocate(errorg, &temp_arena,
+                                                         KILOBYTES(1));
+                                                push_back_cstr(errorg,
+                                                               "path: '");
+                                                push_back_cstr(errorg,
+                                                               path_cstr);
+                                                push_back_cstr(
+                                                    errorg,
+                                                    "'  contains a colon, "
+                                                    "which is not supported "
+                                                    "by vnode tag type");
+                                                error(errorg);
                                         }
                                 }
 
@@ -518,7 +423,6 @@ zw_internal struct FileList *directory_query_all_files(
                                 DEFER(close(fd));
 
                                 if (entry->file_totalsize > 0) {
-
                                         struct log2phys filephys;
                                         int fcntl_result =
                                             fcntl(fd, F_LOG2PHYS, &filephys);
@@ -526,16 +430,20 @@ zw_internal struct FileList *directory_query_all_files(
                                                   "could not get "
                                                   "phys");
                                         if (fcntl_result < 0) {
-                                                error_print("could not "
-                                                            "get phys");
+                                                error_print(
+                                                    "could not get phys");
                                         } else {
                                                 physical_offset =
                                                     filephys.l2p_devoffset;
-                                                trace << "\t"
-                                                      << filephys.l2p_devoffset;
+                                                push_back_cstr(dirlisting,
+                                                               "\t");
+                                                push_back_u64(
+                                                    dirlisting,
+                                                    filephys.l2p_devoffset);
                                         }
                                 }
                         }
+                        print_dirlisting_line();
                 }
 
                 if (entry->obj_type == VREG) {
@@ -562,28 +470,39 @@ zw_internal struct FileList *directory_query_all_files(
                 {
                         dir_fd = open(dir_path, O_RDONLY, 0);
                         if (dir_fd < 0) {
-                                ERROR
-                                    << "could not find directory: " << dir_path;
+                                MemoryArena temp_arena = *arena;
+                                TextOutputGroup errorg = {};
+                                allocate(errorg, &temp_arena, KILOBYTES(1));
+                                push_back_cstr(errorg,
+                                               "could not find directory: ");
+                                push_back_cstr(errorg, dir_path);
+                                error(errorg);
                                 return nullptr;
                         }
                 }
                 DEFER({ close(dir_fd); });
 
-                TRACE << "\nlisting directory: " << dir_path;
+                clear(dirlisting);
+                push_back_cstr(dirlisting, "\nlisting directory: ");
+                push_back_cstr(dirlisting, dir_path);
+                print_dirlisting_line();
+
+                // TODO(nicolas): push sep by "\t"
+                clear(dirlisting);
+                push_back_cstr(dirlisting, "name");
+                push_back_cstr(dirlisting, "\t");
+                push_back_cstr(dirlisting, "type");
+                push_back_cstr(dirlisting, "\t");
+                push_back_cstr(dirlisting, "tag");
+                push_back_cstr(dirlisting, "\t");
+                push_back_cstr(dirlisting, "ioblocksize");
+                push_back_cstr(dirlisting, "\t");
+                push_back_cstr(dirlisting, "size");
+                push_back_cstr(dirlisting, "\t");
+                push_back_cstr(dirlisting, "physical location");
+                print_dirlisting_line();
 
                 uint32_t entrycount = 0;
-                TRACE << "name"
-                      << "\t"
-                      << "type"
-                      << "\t"
-                      << "tag"
-                      << "\t"
-                      << "ioblocksize"
-                      << "\t"
-                      << "size"
-                      << "\t"
-                      << "physical location";
-
                 uint32_t result_batch[16 * 256];
                 int result;
                 while ((result = getattrlistbulk(
@@ -621,7 +540,12 @@ zw_internal struct FileList *directory_query_all_files(
                      fs_entry = fs_entry->next) {
                         file_count++;
                 }
-                TRACE << "found " << file_count << " files";
+
+                clear(dirlisting);
+                push_back_cstr(dirlisting, "found ");
+                push_back_u64(dirlisting, file_count);
+                push_back_cstr(dirlisting, " files");
+                print_dirlisting_line();
 
                 entry_array_count = file_count;
                 entry_array =
@@ -711,9 +635,14 @@ zw_internal struct FileList *directory_query_all_files(
 #endif
 
                 for (size_t i = 0; i < entry_array_count; i++) {
-                        TRACE << "FILE" << i << "\t"
-                              << entry_array[i].physical_offset << "\t"
-                              << entry_array[i].path;
+                        clear(dirlisting);
+                        push_back_cstr(dirlisting, "FILE");
+                        push_back_u64(dirlisting, i);
+                        push_back_cstr(dirlisting, "\t");
+                        push_back_u64(dirlisting,
+                                      entry_array[i].physical_offset);
+                        push_back_cstr(dirlisting, entry_array[i].path);
+                        print_dirlisting_line();
                 }
         }
 
@@ -730,14 +659,11 @@ zw_internal struct FileList *directory_query_all_files(
                 for (size_t i = 0; i < count; i++) {
                         result->paths[i] = entry_array[i].path;
                         result->filenames[i] =
-                            1 + cstr_last_occurrence(entry_array[i].path, '/');
+                            1 + cstr_find_last(entry_array[i].path, '/');
                 }
         }
 
         return result;
-
-#undef ERROR
-#undef TRACE
 }
 
 /**
@@ -790,54 +716,6 @@ int main(int argc, char **argv)
 {
         zw_assert(argc > 0, "unexpected argc");
         DEFER(trace_print("done"));
-
-        AcceptMimeMessageFn *accept_mime_message;
-        ParseZoeMailstorePathFn *parse_zoe_mailstore_path;
-
-        struct LoadedLibrary zwei_app_library = {};
-        {
-                struct BufferRange buffer;
-                stream_on_memory(&buffer, (uint8_t *)zwei_app_library.file_path,
-                                 sizeof zwei_app_library.file_path);
-                string_cat(&buffer, argv[0],
-                           cstr_last_occurrence(argv[0], '/'));
-                string_cat(&buffer, "/libzwei.dylib");
-                if (!string_terminate(&buffer)) {
-                        return 1;
-                }
-
-                struct LoadedLibrary *lib = &zwei_app_library;
-                lib->dlhandle = 0;
-                lib->file_mtime = 0;
-        }
-
-        auto refresh_zwei_app = [&zwei_app_library, &accept_mime_message,
-                                 &parse_zoe_mailstore_path]() {
-                struct LoadedLibrary *lib = &zwei_app_library;
-                bool was_loaded = !!lib->dlhandle;
-                if (refresh_library(lib)) {
-                        if (was_loaded) {
-                                trace_print("reloaded library!");
-                        }
-                        accept_mime_message =
-                            reinterpret_cast<decltype(accept_mime_message)>(
-                                dlsym(lib->dlhandle, "accept_mime_message"));
-                        zw_assert(accept_mime_message,
-                                  "expected symbol check_mime_message");
-
-                        parse_zoe_mailstore_path = reinterpret_cast<decltype(
-                            parse_zoe_mailstore_path)>(
-                            dlsym(lib->dlhandle, "parse_zoe_mailstore_path"));
-                        zw_assert(parse_zoe_mailstore_path,
-                                  "expected symbol parse_zoe_mailstore_path");
-
-                        return true;
-                }
-
-                return false;
-        };
-
-        refresh_zwei_app();
 
         char const *root_dir_path = nullptr;
 
@@ -893,6 +771,55 @@ int main(int argc, char **argv)
                 transient_storage = (void *)transient_storage_memory_address;
         }
 
+        AcceptMimeMessageFn *accept_mime_message;
+        ParseZoeMailstorePathFn *parse_zoe_mailstore_path;
+
+        struct LoadedLibrary zwei_app_library = {};
+        {
+                auto const buffer_first = (uint8_t *)zwei_app_library.file_path;
+                auto const buffer_last =
+                    buffer_first + sizeof zwei_app_library.file_path;
+                auto string_last = buffer_first;
+                string_cat(string_last, buffer_last, argv[0],
+                           cstr_find_last(argv[0], '/'));
+                string_cat(string_last, buffer_last, "/libzwei.dylib");
+                if (!string_terminate(string_last, buffer_last)) {
+                        return 1;
+                }
+
+                struct LoadedLibrary *lib = &zwei_app_library;
+                lib->dlhandle = 0;
+                lib->file_mtime = 0;
+        }
+
+        auto refresh_zwei_app = [&zwei_app_library, &accept_mime_message,
+                                 &parse_zoe_mailstore_path]() {
+                struct LoadedLibrary *lib = &zwei_app_library;
+                bool was_loaded = !!lib->dlhandle;
+                if (refresh_library(lib)) {
+                        if (was_loaded) {
+                                trace_print("reloaded library!");
+                        }
+
+                        accept_mime_message =
+                            reinterpret_cast<decltype(accept_mime_message)>(
+                                dlsym(lib->dlhandle, "accept_mime_message"));
+                        zw_assert(accept_mime_message,
+                                  "expected symbol check_mime_message");
+
+                        parse_zoe_mailstore_path = reinterpret_cast<decltype(
+                            parse_zoe_mailstore_path)>(
+                            dlsym(lib->dlhandle, "parse_zoe_mailstore_path"));
+                        zw_assert(parse_zoe_mailstore_path,
+                                  "expected symbol parse_zoe_mailstore_path");
+                        return true;
+                }
+
+                return false;
+        };
+
+        refresh_zwei_app();
+
         // TODO(nicolas): traces should feature a timestamp for
         // performance and auditing. i.e. the platform layer should
         // offer a logging service
@@ -918,39 +845,33 @@ int main(int argc, char **argv)
                 }
 
                 {
-                        char linebuffer_memory[256];
-                        struct BufferRange linebuffer;
-                        stream_on_memory(&linebuffer,
-                                         (uint8_t *)linebuffer_memory,
-                                         sizeof linebuffer_memory);
-                        string_cat(&linebuffer, "bytes used after query: ");
-                        string_cat_formatted(&linebuffer, "%lld",
-                                             (&dc_arena)->used);
-                        if (string_terminate(&linebuffer)) {
-                                trace_print(linebuffer_memory);
-                        }
+                        MemoryArena temp_arena = dc_arena;
+                        TextOutputGroup traceg = {};
+                        allocate(traceg, &temp_arena, KILOBYTES(1));
+                        push_back_cstr(traceg, "bytes used after query: ");
+                        push_back_formatted(traceg, "%lld", (&dc_arena)->used);
+                        trace(traceg);
                 }
 
                 // TODO(nicolas) always measure bytes/sec or sec/MB and
                 // print out total bytes
-                char linebuffer_memory[256];
                 for (size_t i = 0; i < all_files->count; i++) {
-                        struct BufferRange line;
-                        stream_on_memory(&line, (uint8_t *)linebuffer_memory,
-                                         sizeof linebuffer_memory);
-                        string_cat(&line, "FILE");
-                        string_cat_formatted(&line, "%lld", i);
-                        string_cat(&line, " ");
-                        string_cat(&line, all_files->paths[i]);
-                        string_cat(&line, ":");
-                        if (string_terminate(&line)) {
-                                trace_print(linebuffer_memory);
+                        MemoryArena temp_arena = dc_arena;
+                        TextOutputGroup traceg = {};
+                        allocate(traceg, &temp_arena, KILOBYTES(1));
+                        {
+                                clear(traceg);
+                                push_back_cstr(traceg, "FILE");
+                                push_back_formatted(traceg, "%lld", i);
+                                push_back_cstr(traceg, " ");
+                                push_back_cstr(traceg, all_files->paths[i]);
+                                push_back_cstr(traceg, ":");
+                                trace(traceg);
                         }
 
-                        stream_on_memory(&line, (uint8_t *)linebuffer_memory,
-                                         sizeof linebuffer_memory);
-                        string_cat(&line, "SHA1");
-                        string_cat(&line, "\t");
+                        clear(traceg);
+                        push_back_cstr(traceg, "SHA1");
+                        push_back_cstr(traceg, "\t");
 
                         // arena for our file streaming
 
@@ -974,7 +895,8 @@ int main(int argc, char **argv)
                         inputstream_finish(&file_content);
 
                         if (failed(sha1_result)) {
-                                string_cat(&line, "<failed to compute result>");
+                                push_back_cstr(traceg,
+                                               "<failed to compute result>");
                         } else {
                                 zw_assert(file_content.error == BR_ReadPastEnd,
                                           "must read until end");
@@ -1003,15 +925,13 @@ int main(int argc, char **argv)
                                      byteIndex++) {
                                         uint8_t const byte =
                                             sha1_value.digest[byteIndex];
-                                        string_cat_formatted(
-                                            &line, "%c%c",
+                                        push_back_formatted(
+                                            traceg, "%c%c",
                                             byteToHexChar[byte >> 4],
                                             byteToHexChar[byte & 0xF]);
                                 }
                         }
-                        if (string_terminate(&line)) {
-                                trace_print(linebuffer_memory);
-                        }
+                        trace(traceg);
 
                         auto const filename = all_files->filenames[i];
                         auto const filepath = all_files->paths[i];
@@ -1023,45 +943,32 @@ int main(int argc, char **argv)
                         if (0 == zoefile_errorcode ||
                             cstr_endswith(filename, ".eml")) {
                                 // FEATURE(nicolas): print filing timestamp
-                                struct BufferRange line;
-
-                                stream_on_memory(&line,
-                                                 (uint8_t *)linebuffer_memory,
-                                                 sizeof linebuffer_memory);
-                                string_cat(&line, "PATH");
-                                string_cat(&line, "\t");
-                                string_cat(&line, filepath);
-                                if (string_terminate(&line)) {
-                                        trace_print(linebuffer_memory);
-                                }
+                                clear(traceg);
+                                push_back_cstr(traceg, "PATH");
+                                push_back_cstr(traceg, "\t");
+                                push_back_cstr(traceg, filepath);
+                                trace(traceg);
 
                                 if (0 == zoefile_errorcode) {
-                                        stream_on_memory(
-                                            &line, (uint8_t *)linebuffer_memory,
-                                            sizeof linebuffer_memory);
-                                        string_cat(&line, "UUID");
-                                        string_cat(&line, "\t");
+                                        clear(traceg);
+                                        push_back_cstr(traceg, "UUID");
+                                        push_back_cstr(traceg, "\t");
                                         for (size_t i = 0;
                                              i < NCOUNT(zoefile.uuid); i++) {
-                                                string_cat_formatted(
-                                                    &line, "%x",
+                                                push_back_formatted(
+                                                    traceg, "%x",
                                                     zoefile.uuid[i]);
                                         }
-                                        if (string_terminate(&line)) {
-                                                trace_print(linebuffer_memory);
-                                        }
+                                        trace(traceg);
 
-                                        stream_on_memory(
-                                            &line, (uint8_t *)linebuffer_memory,
-                                            sizeof linebuffer_memory);
-                                        string_cat(&line, "UNIX TIMESTAMP");
-                                        string_cat(&line, "\t");
-                                        string_cat_formatted(
-                                            &line, "%llu",
+                                        clear(traceg);
+                                        push_back_cstr(traceg,
+                                                       "UNIX TIMESTAMP");
+                                        push_back_cstr(traceg, "\t");
+                                        push_back_formatted(
+                                            traceg, "%llu",
                                             zoefile.unix_epoch_millis);
-                                        if (string_terminate(&line)) {
-                                                trace_print(linebuffer_memory);
-                                        }
+                                        trace(traceg);
                                 }
 
                                 do {

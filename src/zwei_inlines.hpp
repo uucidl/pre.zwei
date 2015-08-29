@@ -1,9 +1,11 @@
 #pragma once
 
+#include "algos.hpp"
 #include "algos_concepts.hpp"
 
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 
 #define EXPORT __attribute__((visibility("default")))
 
@@ -137,62 +139,36 @@ inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
 
 // <CSTRINGS
 
+inline bool is_cstr_char(char const &x) { return x; }
+
 inline bool cstr_equals(char const *s1, char const *s2)
 {
-        zw_assert(s1, "s1 should not be null");
-        zw_assert(s2, "s2 should not be null");
-        while (s1[0] != 0 && s1[0] == s2[0]) {
-                s1++;
-                s2++;
-        }
-
-        return s1[0] == 0 && s2[0] == 0;
+        auto result = algos::find_mismatch_unguarded(s1, s2, is_cstr_char,
+                                                     std::equal_to<char>());
+        return *result.first == 0 && *result.second == 0;
 }
 
 inline uint64_t cstr_len(char const *s)
 {
-        uint64_t size = 0;
-
-        while (s[size]) {
-                size++;
-        };
-
-        return size;
+        return algos::count_unguarded(s, is_cstr_char);
 }
 
-inline bool cstr_endswith(char const *s, char const *terminator)
+inline char const *cstr_find(char const *s, char character)
 {
-        auto terminator_len = cstr_len(terminator);
+        return algos::find_unguarded(s, is_cstr_char, character);
+}
 
-        if (terminator_len == 0) {
+inline char const *cstr_find_last(char const *s, char character)
+{
+        return algos::find_last_unguarded(s, is_cstr_char, character);
+}
+
+inline bool cstr_endswith(char const *s, char const *suffix)
+{
+        if (!is_cstr_char(*suffix)) {
                 return false;
         }
-
-        auto s_len = cstr_len(s);
-
-        if (s_len < terminator_len) {
-                return false;
-        }
-
-        return cstr_equals(&s[s_len - terminator_len], terminator);
-}
-
-inline char const *
-cstr_walk_backwards_until(char const *start, char const *end, char character)
-{
-        zw_assert(end >= start, "incorrect start/end order");
-
-        while (*end != character && end != start) {
-                end--;
-        }
-
-        return end;
-}
-
-inline char const *cstr_last_occurrence(char const *s, char character)
-{
-        auto len = cstr_len(s);
-        return cstr_walk_backwards_until(s, &s[len], character);
+        return cstr_equals(cstr_find_last(s, *suffix), suffix);
 }
 
 // ..CSTRINGS>
