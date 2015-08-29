@@ -58,7 +58,7 @@ void string_cat_formatted(struct BufferRange *range, char const *pattern, ...)
                 DEFER(va_end(args));
 
                 needed_size = vsnprintf(0, 0, pattern, args);
-                assert(needed_size > 0, "invalid format string");
+                zw_assert(needed_size > 0, "invalid format string");
         }
 
         char buffer[needed_size + 1];
@@ -101,21 +101,22 @@ MayFail<Sha1> sha1(struct BufferRange *range)
         };
 
         CC_SHA1_CTX ctx;
-        assert(1 == CC_SHA1_Init(&ctx), "CC_SHA1_Init");
+        zw_assert(1 == CC_SHA1_Init(&ctx), "CC_SHA1_Init");
 
         while (range->error == BR_NoError) {
                 while (range->cursor < range->end) {
                         auto size = chunk_size(range->end - range->cursor);
-                        assert(1 == CC_SHA1_Update(&ctx, range->cursor, size),
-                               "CC_SHA1_Update");
+                        zw_assert(1 ==
+                                      CC_SHA1_Update(&ctx, range->cursor, size),
+                                  "CC_SHA1_Update");
                         range->cursor += size;
                 }
                 range->next(range);
         }
 
         if (range->error == BR_ReadPastEnd) {
-                assert(1 == CC_SHA1_Final(result.value.digest, &ctx),
-                       "CC_SHA1_Final");
+                zw_assert(1 == CC_SHA1_Final(result.value.digest, &ctx),
+                          "CC_SHA1_Final");
         } else {
                 result.errorcode = 1;
         }
@@ -426,8 +427,8 @@ zw_internal struct FileList *directory_query_all_files(
                         string_cat(&path_buffer, dir_path);
                         string_cat(&path_buffer, "/");
                         string_cat(&path_buffer, name);
-                        assert(string_terminate(&path_buffer),
-                               "unexpected size");
+                        zw_assert(string_terminate(&path_buffer),
+                                  "unexpected size");
                 }
                 char *path_cstr = (char *)path;
 
@@ -505,7 +506,7 @@ zw_internal struct FileList *directory_query_all_files(
                                 // TODO(nicolas) check that we have
                                 // permissions to open that file
                                 // at all
-                                assert(fd >= 0, "open file");
+                                zw_assert(fd >= 0, "open file");
                                 DEFER(close(fd));
 
                                 if (entry->file_totalsize > 0) {
@@ -513,9 +514,9 @@ zw_internal struct FileList *directory_query_all_files(
                                         struct log2phys filephys;
                                         int fcntl_result =
                                             fcntl(fd, F_LOG2PHYS, &filephys);
-                                        assert(fcntl_result >= 0,
-                                               "could not get "
-                                               "phys");
+                                        zw_assert(fcntl_result >= 0,
+                                                  "could not get "
+                                                  "phys");
                                         if (fcntl_result < 0) {
                                                 error_print("could not "
                                                             "get phys");
@@ -602,7 +603,7 @@ zw_internal struct FileList *directory_query_all_files(
                 }
         }
 
-        assert(state->directories == nullptr, "no more directories");
+        zw_assert(state->directories == nullptr, "no more directories");
 
         size_t entry_array_count = 0;
         struct FSEntry *entry_array = nullptr;
@@ -695,8 +696,8 @@ zw_internal struct FileList *directory_query_all_files(
                 uint64_t previous_offset = 0;
                 for (size_t i = 0; i < entry_array_count; i++) {
                         uint64_t this_offset = entry_array[i].physical_offset;
-                        assert(this_offset >= previous_offset,
-                               "file entries should be monotonic");
+                        zw_assert(this_offset >= previous_offset,
+                                  "file entries should be monotonic");
                         previous_offset = this_offset;
                 }
 #endif
@@ -757,12 +758,12 @@ zw_internal bool refresh_library(struct LoadedLibrary *library)
         stat(library->file_path, &stats);
         if (stats.st_mtime > library->file_mtime) {
                 if (library->dlhandle) {
-                        assert(0 == dlclose(library->dlhandle),
-                               "could not close library");
+                        zw_assert(0 == dlclose(library->dlhandle),
+                                  "could not close library");
                 }
                 void *dlhandle =
                     dlopen(library->file_path, RTLD_NOW | RTLD_LOCAL);
-                assert(dlhandle, "could not open libzwei.dylib");
+                zw_assert(dlhandle, "could not open libzwei.dylib");
                 if (!dlhandle) {
                         error_print("fatal error, could not load library");
                         return false;
@@ -779,7 +780,7 @@ zw_internal bool refresh_library(struct LoadedLibrary *library)
 
 int main(int argc, char **argv)
 {
-        assert(argc > 0, "unexpected argc");
+        zw_assert(argc > 0, "unexpected argc");
         DEFER(trace_print("done"));
 
         AcceptMimeMessageFn *accept_mime_message;
@@ -813,14 +814,14 @@ int main(int argc, char **argv)
                         accept_mime_message =
                             reinterpret_cast<decltype(accept_mime_message)>(
                                 dlsym(lib->dlhandle, "accept_mime_message"));
-                        assert(accept_mime_message,
-                               "expected symbol check_mime_message");
+                        zw_assert(accept_mime_message,
+                                  "expected symbol check_mime_message");
 
                         parse_zoe_mailstore_path = reinterpret_cast<decltype(
                             parse_zoe_mailstore_path)>(
                             dlsym(lib->dlhandle, "parse_zoe_mailstore_path"));
-                        assert(parse_zoe_mailstore_path,
-                               "expected symbol parse_zoe_mailstore_path");
+                        zw_assert(parse_zoe_mailstore_path,
+                                  "expected symbol parse_zoe_mailstore_path");
 
                         return true;
                 }
@@ -968,8 +969,8 @@ int main(int argc, char **argv)
                         if (failed(sha1_result)) {
                                 string_cat(&line, "<failed to compute result>");
                         } else {
-                                assert(file_content.error == BR_ReadPastEnd,
-                                       "must read until end");
+                                zw_assert(file_content.error == BR_ReadPastEnd,
+                                          "must read until end");
 
                                 auto sha1_value = just(sha1_result);
                                 char byteToHexChar[] = {

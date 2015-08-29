@@ -73,8 +73,8 @@
                                 trace_print("TO");
                         }
 
-                        assert(state->field_content_arena.base[0] != ' ', "did not expect whitespace");
-                        assert(state->field_content_arena.base[0] != '\t', "did not expect whitespace");
+                        zw_assert(state->field_content_arena.base[0] != ' ', "did not expect whitespace");
+                        zw_assert(state->field_content_arena.base[0] != '\t', "did not expect whitespace");
 
                         trace_print_n((char*)state->field_content_arena.base, state->field_content_arena.used);
                         state->record_on = false;
@@ -174,11 +174,11 @@ bool parse_message_adhoc(struct AdhocParserState* state, char* block_start, size
         %% access state->;
         %% write exec;
         if (p < pe && state->cs < %%{ write first_final; }%%) {
-                assert(false, "debug this");
+                zw_assert(false, "debug this");
                 return false;
         }
         if (p < pe) {
-                assert(false, "debug this");
+                zw_assert(false, "debug this");
         }
 
         return true;

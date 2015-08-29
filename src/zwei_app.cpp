@@ -149,7 +149,7 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
         auto macintosh_encoding_result =
             ucs4_to_macintosh(macintosh_chars, state->ucs4_codepoints_block,
                               ucs4_codepoints_count);
-        assert(macintosh_encoding_result, "could not interpret as MacRoman");
+        zw_assert(macintosh_encoding_result, "could not interpret as MacRoman");
 
         if (!macintosh_encoding_result) {
                 return nullptr;
@@ -173,12 +173,12 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
                 for (size_t i = 0, di = 0; i < macintosh_chars_count; i++) {
                         uint8_t const byte = macintosh_chars[i];
                         if (byte < 0x0080) {
-                                assert(di < destination_maxcount,
-                                       "stepping out of destination");
+                                zw_assert(di < destination_maxcount,
+                                          "stepping out of destination");
                                 destination[di++] = byte;
                         } else /* NOTE(nicolas) < 0x7ff */ {
-                                assert(di + 1 < data_size,
-                                       "stepping out of destination");
+                                zw_assert(di + 1 < data_size,
+                                          "stepping out of destination");
                                 uint32_t mask = (1 << 6) - 1;
                                 destination[di++] = 0xc0 | ((byte >> 6) & mask);
                                 destination[di++] = 0x80 | ((byte >> 0) & mask);
@@ -188,9 +188,9 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
         } else {
                 for (size_t i = 0, di = 0; i < macintosh_chars_count; i++) {
                         uint8_t const byte = macintosh_chars[i];
-                        assert(di < data_size, "stepping out "
-                                               "of "
-                                               "destination");
+                        zw_assert(di < data_size, "stepping out "
+                                                  "of "
+                                                  "destination");
                         destination[di++] = byte;
                         destination_count = di;
                 }
@@ -310,8 +310,8 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                 error_print("adhoc failed");
         }
 
-        assert(adhoc.from_count >= 1, "unexpected From count");
-        assert(adhoc.sender_count <= 1, "unexpected Sender: count");
+        zw_assert(adhoc.from_count >= 1, "unexpected From count");
+        zw_assert(adhoc.sender_count <= 1, "unexpected Sender: count");
         if (adhoc.messageid_count != 1) {
                 // NOTE(nicolas) we have actually seen emails with 3x Message-Id
                 // tags!
@@ -383,7 +383,7 @@ extern "C" EXPORT PARSE_ZOE_MAILSTORE_PATH(parse_zoe_mailstore_path)
 
                                 auto nibble_index = cursor - uuid_start;
                                 auto byte_index = nibble_index / 2;
-                                assert(byte_index < 16, "check index");
+                                zw_assert(byte_index < 16, "check index");
                                 uuid_value[byte_index] |=
                                     nibble << (4 * (1 - (nibble_index & 1)));
                         }

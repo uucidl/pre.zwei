@@ -6,7 +6,7 @@
 #define EXPORT __attribute__((visibility("default")))
 
 #if ZWEI_SLOW
-#define assert(condition, message)                                             \
+#define zw_assert(condition, message)                                          \
         do {                                                                   \
                 if (!(condition)) {                                            \
                         fputs(message, stderr);                                \
@@ -14,7 +14,7 @@
                 }                                                              \
         } while (0)
 #else
-#define assert(condition, message) (void)(condition)
+#define zw_assert(condition, message) (void)(condition)
 #endif
 
 #define NCOUNT(array) (sizeof array) / (sizeof array[0])
@@ -52,7 +52,7 @@ template <typename ValueType> bool failed(MayFail<ValueType> const result)
 
 template <typename ValueType> ValueType just(MayFail<ValueType> const result)
 {
-        assert(result.errorcode == 0, "valid result");
+        zw_assert(result.errorcode == 0, "valid result");
         return result.value;
 }
 
@@ -99,7 +99,7 @@ struct MemoryArena memory_arena(void *base, size_t size)
 
 inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
 {
-        assert(arena->used + bytes <= arena->size, "overallocating");
+        zw_assert(arena->used + bytes <= arena->size, "overallocating");
         if (arena->used + bytes > arena->size) {
                 return nullptr;
         }
@@ -126,8 +126,8 @@ inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
 
 inline bool cstr_equals(char const *s1, char const *s2)
 {
-        assert(s1, "s1 should not be null");
-        assert(s2, "s2 should not be null");
+        zw_assert(s1, "s1 should not be null");
+        zw_assert(s2, "s2 should not be null");
         while (s1[0] != 0 && s1[0] == s2[0]) {
                 s1++;
                 s2++;
@@ -167,7 +167,7 @@ inline bool cstr_endswith(char const *s, char const *terminator)
 inline char const *
 cstr_walk_backwards_until(char const *start, char const *end, char character)
 {
-        assert(end >= start, "incorrect start/end order");
+        zw_assert(end >= start, "incorrect start/end order");
 
         while (*end != character && end != start) {
                 end--;
