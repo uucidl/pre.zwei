@@ -1,5 +1,4 @@
-struct AdhocParserState
-{
+struct AdhocParserState {
         struct MemoryArena field_content_arena;
         // TODO(nicolas) can be made an enum + flags
         bool record_from_on;
@@ -22,6 +21,8 @@ struct AdhocParserState
         int messageid_count;
 };
 
-void parse_message_adhoc_make(struct AdhocParserState* state);
-void parse_message_adhoc_destroy(struct AdhocParserState* state);
-bool parse_message_adhoc(struct AdhocParserState* state, char* block_start, size_t block_size);
+void parse_message_adhoc_make(struct AdhocParserState *state);
+void parse_message_adhoc_destroy(struct AdhocParserState *state);
+bool parse_message_adhoc(struct AdhocParserState *state,
+                         char *block_start,
+                         size_t block_size);

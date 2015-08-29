@@ -14,9 +14,8 @@ enum BufferRangeErrorCode {
         BR_IOError,
 };
 
-extern void stream_on_memory(struct BufferRange *range,
-                      uint8_t *mem,
-                             size_t const size);
+extern void
+stream_on_memory(struct BufferRange *range, uint8_t *mem, size_t const size);
 
 // NOTE(nicolas) a BufferRange shows the two aspect of processing data
 // for I/O in one datastructure. The points of memory between start

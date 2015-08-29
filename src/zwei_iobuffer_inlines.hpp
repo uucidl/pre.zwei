@@ -2,7 +2,8 @@
 
 #pragma once
 
-zw_internal inline enum BufferRangeErrorCode next_zeros(struct BufferRange *range)
+zw_internal inline enum BufferRangeErrorCode
+next_zeros(struct BufferRange *range)
 {
         zw_local_persist uint8_t const zeros[256] = {0};
 
@@ -13,8 +14,8 @@ zw_internal inline enum BufferRangeErrorCode next_zeros(struct BufferRange *rang
         return range->error;
 }
 
-zw_internal inline enum BufferRangeErrorCode fail(struct BufferRange *range,
-                                           enum BufferRangeErrorCode error)
+zw_internal inline enum BufferRangeErrorCode
+fail(struct BufferRange *range, enum BufferRangeErrorCode error)
 {
         range->error = error;
         range->next = next_zeros;

@@ -869,7 +869,8 @@ int main(int argc, char **argv)
                         current_arg++;
                 } else if (cstr_equals(argv[current_arg], "--ls")) {
                         current_arg++;
-                        // FEATURE(nicolas): Optionally prints all files in <root-dir> using `--ls`
+                        // FEATURE(nicolas): Optionally prints all files in
+                        // <root-dir> using `--ls`
                         directory_listing_on = true;
                 } else {
                         error_print("unexpected argument");

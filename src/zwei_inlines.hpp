@@ -100,9 +100,9 @@ struct MemoryArena memory_arena(void *base, size_t size)
 inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
 {
         assert(arena->used + bytes <= arena->size, "overallocating");
-	if (arena->used + bytes > arena->size) {
-	    return nullptr;
-	}
+        if (arena->used + bytes > arena->size) {
+                return nullptr;
+        }
         uint8_t *result = arena->base + arena->used;
 
         arena->used += bytes;
@@ -118,7 +118,7 @@ inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
 
 #define push_array_rvalue(arena_pointer, lvalue, count)                        \
         static_cast<decltype(lvalue)>(                                         \
-                                      push_bytes(arena_pointer, (count) * sizeof *lvalue))
+            push_bytes(arena_pointer, (count) * sizeof *lvalue))
 
 // ..MEMORY ARENAS>
 
@@ -164,7 +164,9 @@ inline bool cstr_endswith(char const *s, char const *terminator)
         return cstr_equals(&s[s_len - terminator_len], terminator);
 }
 
-inline char const *cstr_walk_backwards_until(char const *start, char const * end, char character) {
+inline char const *
+cstr_walk_backwards_until(char const *start, char const *end, char character)
+{
         assert(end >= start, "incorrect start/end order");
 
         while (*end != character && end != start) {
