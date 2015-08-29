@@ -179,7 +179,7 @@ void inputstream_on_filepath(struct MemoryArena *arena,
                 char const *path = nullptr;
                 bool32 is_opened = 0;
 
-                // TODO(nil) what about io advice received before?
+                // TODO(nicolas) what about io advice received before?
                 uint8_t buffer[4 * 4096] = {};
         };
 
@@ -343,7 +343,7 @@ zw_internal struct FileList *directory_query_all_files(
         struct FSEntry *entry = push_directory();
         entry->path = root_dir_path;
 
-        // TODO(nil) is this a thing? stdout is actually a stream so
+        // TODO(nicolas) is this a thing? stdout is actually a stream so
         // you should not have to build a line unless you're
         // converting from some other datatype (uint's etc...)  or
         // doing some type conversion/formatting (dec to hexa etc...)
@@ -544,7 +544,7 @@ zw_internal struct FileList *directory_query_all_files(
                                 }
 
                                 int const fd = open(path_cstr, O_RDONLY, 0);
-                                // TODO(nil) check that we have
+                                // TODO(nicolas) check that we have
                                 // permissions to open that file
                                 // at all
                                 assert(fd >= 0, "open file");
@@ -667,7 +667,7 @@ zw_internal struct FileList *directory_query_all_files(
                 }
         }
 
-        // NOTE(nil) we sort our files by physical offset to reduce
+        // NOTE(nicolas) we sort our files by physical offset to reduce
         // seeking and improve access times on HDD. It shouldn't
         // hurt for SSD.
         {
@@ -830,8 +830,7 @@ int main(int argc, char **argv)
         struct LoadedLibrary zwei_app_library = {};
         {
                 struct BufferRange buffer;
-                stream_on_memory(&buffer,
-                                 (uint8_t *)zwei_app_library.file_path,
+                stream_on_memory(&buffer, (uint8_t *)zwei_app_library.file_path,
                                  sizeof zwei_app_library.file_path);
                 string_cat(&buffer, argv[0],
                            cstr_last_occurrence(argv[0], '/'));
@@ -964,7 +963,7 @@ int main(int argc, char **argv)
                         }
                 }
 
-                // TODO(nil) always measure bytes/sec or sec/MB and
+                // TODO(nicolas) always measure bytes/sec or sec/MB and
                 // print out total bytes
                 char linebuffer_memory[256];
                 for (size_t i = 0; i < all_files->count; i++) {
@@ -1056,7 +1055,7 @@ int main(int argc, char **argv)
 
                         if (0 == zoefile_errorcode ||
                             cstr_endswith(filename, ".eml")) {
-                                // FEATURE(nicolas) print filing timestamp
+                                // FEATURE(nicolas): print filing timestamp
                                 struct BufferRange line;
 
                                 stream_on_memory(&line,
