@@ -118,7 +118,7 @@ inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
 
 #define push_array_rvalue(arena_pointer, lvalue, count)                        \
         static_cast<decltype(lvalue)>(                                         \
-            push_bytes(arena_pointer, count * sizeof *lvalue))
+                                      push_bytes(arena_pointer, (count) * sizeof *lvalue))
 
 // ..MEMORY ARENAS>
 
