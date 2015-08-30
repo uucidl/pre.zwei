@@ -2,10 +2,15 @@
 set -u
 
 HERE="$(dirname ${0})"
-BUILD="${HERE}/builds"
+AHERE="$(cd "${HERE}" ; pwd)"
 
+source "${HERE}"/scripts/lib/user.sh
+
+BUILD="${HERE}/builds"
+ABUILD="${AHERE}"/builds
 CONFIG=development
 CONFIG_LIST=(development release)
+PROFILING=false
 
 function validate_config () {
     local found_success=1;
@@ -31,8 +36,12 @@ while [ "$#" -gt 0 ]; do
             shift
             shift
             ;;
+        --profile-build)
+            PROFILING=true
+            shift
+            ;;
         --help|-h)
-            printf -- "Usage: %s [--config [%s]]\n" "${0}" "$(IFS="|" ; echo "${CONFIG_LIST[*]}")"
+            printf -- "Usage: %s [--profile-build][--config [%s]]\n" "${0}" "$(IFS="|" ; echo "${CONFIG_LIST[*]}")"
             unset IFS
             exit 1
             shift
@@ -64,7 +73,7 @@ function must_compile_osx()
     cxxflags=("${cxxflags[@]}" "-std=c++11")
 
     if [[ "${CONFIG}" == "development" ]]; then
-        cflags=("${cflags[@]}" -DZWEI_SLOW)
+        cflags=("${cflags[@]}" -DZWEI_SLOW -DZWEI_INTERNAL)
     fi
 
     if [[ "${CONFIG}" == "release" ]]; then
@@ -77,16 +86,41 @@ function must_compile_osx()
     fi
 }
 
+function must_compile_hammer()
+{
+    SCONS=${SCONS:-$(which scons)}
+    [ -x "${SCONS}" ] || die "missing scons or SCONS env variable"
+
+    "${SCONS}" -C "${HERE}"/modules/hammer \
+               prefix="/" DESTDIR="${ABUILD}" bindings=cpp \
+               install
+    if [[ "$?" -ne 0 ]]; then
+        exit 1
+    fi
+}
+
 [ -d "${BUILD}" ] || mkdir -p "${BUILD}"
 
 PROGRAM="${BUILD}"/zwei
 LIBRARY="${BUILD}"/libzwei.dylib
 
-must_compile_osx -fvisibility=hidden -shared "${HERE}"/src/zwei_lib_osx_unit.cpp -o "${LIBRARY}" \
+if ${PROFILING}; then
+    PS4='T $(date "+%s.%N")\011 '
+    set -x
+fi
+
+must_compile_hammer
+
+must_compile_osx -fvisibility=hidden -shared \
+                 "${HERE}"/src/zwei_lib_osx_unit.cpp \
+                 -L"${BUILD}"/lib -lhammer \
+                 -o "${LIBRARY}" \
     && printf "SHARED_LIBRARY\t%s\n" "${LIBRARY}"
 
-must_compile_osx "${HERE}"/src/zwei_main_osx_unit.cpp -o "${PROGRAM}" \
+must_compile_osx "${HERE}"/src/zwei_main_osx_unit.cpp \
+                 -o "${PROGRAM}" \
     && printf "PROGRAM\t%s\n" "${PROGRAM}"
 
 # beep
 printf "\a"
+set +x

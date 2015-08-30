@@ -21,6 +21,8 @@
 #define zw_assert(condition, message) (void)(condition)
 #endif
 
+#define ZWEI_UNIT_TESTS (ZWEI_SLOW && ZWEI_INTERNAL)
+
 #define NCOUNT(array) (sizeof array) / (sizeof array[0])
 
 #define TOKEN_PASTE_inner(x, y) x##y
@@ -40,6 +42,11 @@
 #define zw_global
 
 // <BASIC integer types
+
+// TODO(nicolas): uint8_t -> u8 etc... s8 ; float4/float8 ; etc.. but think
+// about semantic difference.  Marking the type with its size is nice
+// and cool but we should be able to tell at a quick glance that a
+// float is not an integer
 
 typedef uint32_t bool32;
 

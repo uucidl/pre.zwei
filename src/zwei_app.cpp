@@ -1,6 +1,15 @@
 /**
-  # MIME format
 
+  # Main project todo list
+
+  ## Input Parsing
+  ## Database
+  ## User Interface
+  ## Platform
+  TODO(nicolas): LINUX port.
+  TODO(nicolas): cross compilation to <powerpc e500 v2> (Synology NAS)
+
+  # MIME format
   ## References:
 
   ### Message Headers and Bodies
@@ -11,8 +20,11 @@
   RFC 2045 -- MIME part 1: Format of Internet Message Bodies
   https://tools.ietf.org/rfc/rfc2045.txt
 
-  RFC 2046 -- MIME part 2: Media Types
   RFC 2047 -- MIME part 3: Message Header Extensions for Non-ASCII text
+  http://tools.ietf.org/rfc/rfc2047.txt
+
+  RFC 2046 -- MIME part 2: Media Types
+
   RFC 2049 -- MIME part 5: Conformance Criteria and Examples
   RFC 2231 -- MIME Parameter Value and Encoded Word Extensions: Character Sets,
   Languages, and Continuations
@@ -31,28 +43,39 @@
 
   Quite a bit of my mails from my Sylpheed period are in that form!
 
-  TODO(nicolas) collect a list of encountered charsets
-
   TODO(nicolas) form a simple blacklist that would allow cleaning the
   database. (Charsets for instance?)
 
-  TODO(nicolas) charsets can be deducted from parties in a correspondance,
-  possibly by MUA.
+  TODO(nicolas) add user time line (technical counterpart: filing date
+  in UNIX_TIMESTAMP)
+
+  TODO(nicolas): fix weird files in my maildirs which have a mailbox
+  like prefix (From ...) at the top.
+  1999/10/28/1DE7CF6800DBABF02A931D3D98D5B0A7.eml
+
+  TODO(nicolas): my own mails sent by recognition sometimes put 8bit
+  in the headers. See "JavaMail.Nicolas@Recognition" and for example
+  2015/1/15/EF8AF508014AA7B30E7DB0475AB1742E.eml
 */
 
 #include "zwei_inlines.hpp"
 
 #include "zwei_app.hpp"
-#include "message_parsers.hpp"
 
+#include "algos.hpp"
+#include "base64.hpp"
+#include "rfc2047.hpp"
+#include "rfc5234.hpp"
+#include "rfc5322.hpp"
 #include "zoe.hpp"
 #include "zwei_iobuffer.hpp"
+#include "zwei_iobuffer_inlines.hpp"
 #include "zwei_logging.hpp"
 #include "zwei_nicolas.hpp"
+#include "zwei_types.hpp"
 
-#include "zwei_iobuffer_inlines.hpp"
-
-#include <cstddef>
+#include <cstddef>    // for offsetof
+#include <functional> // for std::cref (TODO(nicolas): can I write it myself?)
 
 zw_internal bool ucs4_to_macintosh(uint32_t const *codepoints_first,
                                    uint32_t const *codepoints_last,
@@ -266,11 +289,180 @@ macroman_workaround_stream(struct BufferRange *input, struct MemoryArena *arena)
         return range;
 }
 
-extern "C" EXPORT INIT_APP(init_app) { trace_print("Initializing app"); }
+struct RawHeaders {
+        ByteCountedRange message_id_bytes;
+        struct ByteCountedRange *in_reply_to_msg_ids;
+        size_t in_reply_to_msg_ids_count;
+        // TODO(nicolas) add references list
+
+        RawMailbox *from_mailboxes;
+        size_t from_mailboxes_count;
+        RawMailbox sender_mailbox;
+        RawMailbox *to_mailboxes;
+        size_t to_mailboxes_count;
+        RawMailbox *cc_mailboxes;
+        size_t cc_mailboxes_count;
+
+        struct ByteCountedRange subject_field_bytes;
+
+        // TODO(nicolas) add missing original date as a concrete type
+        struct ByteCountedRange content_transfer_encoding_bytes;
+        struct ByteCountedRange text_content_subtype_bytes;
+        struct ByteCountedRange text_content_charset_bytes;
+};
+
+struct MessageBeingParsed {
+        struct MemoryArena *arena;
+
+        bool is_rfc5322; /// true when the message is fully rfc5322 conformant
+
+        enum { UNPARSED,
+               RAW_HEADERS,
+        } content_state;
+        struct RawHeaders raw_content;
+};
+
+zw_global RFC5322 mail_parsers;
+zw_global bool global_debug_mode;
+
+extern "C" EXPORT INIT_APP(init_app)
+{
+        trace_print("Initializing app");
+        if (flags & ZWEI_DEBUG_MODE_FLAG) {
+                global_debug_mode = true;
+        }
+
+        extern void hammer_init();
+
+        hammer_init();
+        auto &rfc5234 = make_rfc5234();
+        auto &base64 = make_base64(rfc5234);
+        auto &rfc2045 = make_rfc2045(rfc5234);
+        auto &rfc2047 = make_rfc2047(rfc5234, rfc2045, base64);
+        mail_parsers = make_rfc5322(rfc5234, rfc2047);
+        zoe_support_init();
+}
+
+zw_internal void fill_raw_headers(RawHeaders *raw_headers,
+                                  const HParsedToken *ast,
+                                  MemoryArena *arena)
+{
+        *raw_headers = {};
+
+        auto collect = [&raw_headers, arena](HParsedToken const *token) {
+                enum { NONE,
+                       BYTES,
+                       BYTES_LIST,
+                       MAILBOX,
+                       MAILBOX_LIST } process = NONE;
+                ByteCountedRange *d_bytes_range = nullptr;
+                ByteCountedRange **d_bytes_ranges = nullptr;
+                size_t *d_bytes_ranges_count = nullptr;
+                RawMailbox *d_mailbox = nullptr;
+                RawMailbox **d_mailboxes = nullptr;
+                size_t *d_mailboxes_count = nullptr;
+
+                if (RFC5322TokenIs(token, MESSAGE_ID_FIELD)) {
+                        process = BYTES;
+                        d_bytes_range = &raw_headers->message_id_bytes;
+                } else if (RFC5322TokenIs(token, SUBJECT_FIELD)) {
+                        process = BYTES;
+                        d_bytes_range = &raw_headers->subject_field_bytes;
+                } else if (RFC5322TokenIs(token, FROM_FIELD)) {
+                        process = MAILBOX_LIST;
+                        d_mailboxes = &raw_headers->from_mailboxes;
+                        d_mailboxes_count = &raw_headers->from_mailboxes_count;
+                } else if (RFC5322TokenIs(token, TO_FIELD)) {
+                        process = MAILBOX_LIST;
+                        d_mailboxes = &raw_headers->to_mailboxes;
+                        d_mailboxes_count = &raw_headers->to_mailboxes_count;
+                } else if (RFC5322TokenIs(token, CC_FIELD)) {
+                        process = MAILBOX_LIST;
+                        d_mailboxes = &raw_headers->cc_mailboxes;
+                        d_mailboxes_count = &raw_headers->cc_mailboxes_count;
+                } else if (RFC5322TokenIs(token, SENDER_FIELD)) {
+                        process = MAILBOX;
+                        d_mailbox = &raw_headers->sender_mailbox;
+                } else if (RFC5322TokenIs(token, IN_REPLY_TO_FIELD)) {
+                        process = BYTES_LIST;
+                        d_bytes_ranges = &raw_headers->in_reply_to_msg_ids;
+                        d_bytes_ranges_count =
+                            &raw_headers->in_reply_to_msg_ids_count;
+                }
+
+                switch (process) {
+                case BYTES_LIST: {
+                        zw_assert(d_bytes_ranges, "d_bytes_ranges");
+                        zw_assert(d_bytes_ranges_count, "d_bytes_ranges_count");
+
+                        auto bytes_ranges_size =
+                            rfc5322_field_get_bytes_array_size(token);
+                        ByteCountedRange *ranges = push_array_rvalue(
+                            arena, ranges, bytes_ranges_size.count);
+                        uint8_t *bytes = push_array_rvalue(
+                            arena, bytes, bytes_ranges_size.extra_bytes_count);
+                        rfc5322_field_copy_bytes_array(token, ranges, bytes);
+                        *d_bytes_ranges = ranges;
+                        *d_bytes_ranges_count = bytes_ranges_size.count;
+                } break;
+                case BYTES: {
+                        zw_assert(d_bytes_range, "d_bytes_range");
+
+                        size_t bytes_count = rfc5322_field_bytes_count(token);
+                        uint8_t *arena_bytes =
+                            push_array_rvalue(arena, arena_bytes, bytes_count);
+                        uint8_t *last_bytes =
+                            rfc5322_field_copy_bytes(token, arena_bytes);
+                        zw_assert((size_t)(last_bytes - arena_bytes) ==
+                                      bytes_count,
+                                  "unexpected byte count");
+                        *d_bytes_range = {
+                            arena_bytes, bytes_count,
+                        };
+                } break;
+                case MAILBOX_LIST: {
+                        zw_assert(d_mailboxes, "d_mailboxes");
+                        zw_assert(d_mailboxes_count, "d_mailboxes_count");
+
+                        auto mailbox_list_size =
+                            rfc5322_field_get_mailbox_array_size(token);
+                        RawMailbox *mailboxes = push_array_rvalue(
+                            arena, mailboxes, mailbox_list_size.count);
+                        uint8_t *bytes = push_array_rvalue(
+                            arena, bytes, mailbox_list_size.extra_bytes_count);
+
+                        auto mailbox_end = rfc5322_field_copy_mailbox_array(
+                            token, mailboxes, bytes);
+                        zw_assert((size_t)(mailbox_end - mailboxes) ==
+                                      mailbox_list_size.count,
+                                  "unexpected number of copied "
+                                  "mailboxes");
+                        *d_mailboxes = mailboxes;
+                        *d_mailboxes_count = mailbox_list_size.count;
+                } break;
+                case MAILBOX: {
+                        zw_assert(d_mailbox, "d_mailbox");
+                        auto mailbox_list_size =
+                            rfc5322_field_get_mailbox_array_size(token);
+                        if (mailbox_list_size.count == 1) {
+                                uint8_t *bytes = push_array_rvalue(
+                                    arena, bytes,
+                                    mailbox_list_size.extra_bytes_count);
+                                rfc5322_field_copy_mailbox_array(
+                                    token, d_mailbox, bytes);
+                        }
+                } break;
+                case NONE:
+                        break;
+                }
+        };
+        algos::traverse_each(rfc5322_top(ast), std::cref(collect));
+}
 
 extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
 {
         struct BufferRange *message_range = range;
+        bool must_print_ast = global_debug_mode;
 
         // TODO(nicolas) refine when/how this workaround is applied It
         // really belongs to a per-user library of corpus
@@ -293,47 +485,180 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                 message_range = message_decoder;
         }
 
-        struct AdhocParserState adhoc;
-        bool continue_adhoc = true;
-        parse_message_adhoc_make(&adhoc);
-
-        if (message_range->error == BR_NoError &&
-            message_range->cursor == message_range->end) {
-                message_range->next(range);
-        }
+        uint8_t *full_message = (uint8_t *)push_bytes(message_arena, 0);
+        uint8_t *full_message_end = full_message;
 
         while (message_range->error == BR_NoError) {
-                if (continue_adhoc) {
-                        continue_adhoc = parse_message_adhoc(
-                            &adhoc, (char *)message_range->start,
-                            message_range->end - message_range->start);
-                }
+                zw_assert(full_message_end == push_bytes(message_arena, 0),
+                          "non contiguous");
+                full_message_end =
+                    algos::copy(message_range->start, message_range->end,
+                                (uint8_t *)push_bytes(
+                                    message_arena,
+                                    message_range->end - message_range->start));
 
                 message_range->next(message_range);
         }
 
-        if (message_range->error == BR_ReadPastEnd) {
-                if (continue_adhoc) {
-                        continue_adhoc = parse_message_adhoc(
-                            &adhoc, (char *)message_range->start, 0);
+        if (message_range->error != BR_ReadPastEnd) {
+                error_print("unknown I/O error while parsing message");
+                return;
+        }
+
+        struct MessageBeingParsed message_parsed = {
+            NULL /* was message_arena */,
+            true,
+            MessageBeingParsed::UNPARSED,
+            {},
+        };
+        // Hammer parsing
+        {
+                // NOTE(nicolas): we can use the "fields" parser if we
+                // want to be less strict.
+                auto result = h_parse(mail_parsers.fields, full_message,
+                                      full_message_end - full_message);
+                if (!result) {
+                        trace_print("PARSE ERROR");
+                        return;
                 }
+
+                zw_assert(result, "could not parse message with hammer");
+                if (result) {
+                        if (must_print_ast) {
+                                rfc5322_print_ast(stdout, result->ast, 0, 4);
+                        }
+                        message_parsed.is_rfc5322 =
+                            rfc5322_validate(result->ast);
+                        fill_raw_headers(&message_parsed.raw_content,
+                                         result->ast, message_arena);
+
+                        message_parsed.content_state =
+                            MessageBeingParsed::RAW_HEADERS;
+
+                        HArenaStats stats;
+                        h_allocator_stats(result->arena, &stats);
+                        h_parse_result_free(result);
+                }
+
+                // TODO(nicolas) detect if there was an error.. After all
+                // we just slurped the header or at least some part of
+                // the header.. what about reacting to that?
         }
 
-        if (!continue_adhoc) {
-                error_print("adhoc failed");
+        if (!message_parsed.is_rfc5322) {
+                trace_print("\tRFC5322: ERROR");
+        }
+        if (message_parsed.content_state == MessageBeingParsed::RAW_HEADERS) {
+                // FEATURE(nicolas): print raw content of From: To: CC
+                // Sender: Message-Id: In-Reply-To: Subject:
+                TextOutputGroup text_output_group = {};
+                allocate(text_output_group, message_arena, KILOBYTES(16));
+
+                // TODO(nicolas): having a delimited table printing abstraction
+                // would help with these (and the app)
+
+                auto raw = message_parsed.raw_content;
+                auto print_field = [&text_output_group](
+                    const char *name, struct ByteCountedRange value) {
+                        if (value.first) {
+                                push_back_cstr(text_output_group, "\t");
+                                push_back_cstr(text_output_group, name);
+                                push_back_cstr(text_output_group, "\t");
+                                push_back_extent(text_output_group, value.first,
+                                                 value.count);
+                                trace(text_output_group);
+                        }
+                };
+                auto print_bytes_list_field = [&text_output_group](
+                    const char *name, struct ByteCountedRange *values,
+                    size_t count) {
+                        if (count == 0) {
+                                return;
+                        }
+
+                        push_back_cstr(text_output_group, "\t");
+                        push_back_cstr(text_output_group, name);
+                        push_back_cstr(text_output_group, "\t");
+                        algos::for_each_n(
+                            values, count, [&](const ByteCountedRange &range) {
+                                    push_back_extent(text_output_group,
+                                                     range.first, range.count);
+                            });
+                        trace(text_output_group);
+                };
+                auto print_mailbox_list_field = [&text_output_group](
+                    const char *name, RawMailbox *mailboxes,
+                    size_t mailboxes_count) {
+                        if (mailboxes_count == 0) {
+                                return;
+                        }
+                        push_back_cstr(text_output_group, "\t");
+                        push_back_cstr(text_output_group, name);
+                        push_back_cstr(text_output_group, "\t");
+
+                        auto push_back_mailbox = [](
+                            TextOutputGroup &text_output_group,
+                            RawMailbox const &mailbox) {
+                                push_back_cstr(text_output_group, "<mailbox ");
+                                if (mailbox.display_name_bytes.count > 0) {
+                                        push_back_cstr(text_output_group, "\"");
+                                        push_back_extent(
+                                            text_output_group,
+                                            mailbox.display_name_bytes.first,
+                                            mailbox.display_name_bytes.count);
+                                        push_back_cstr(text_output_group,
+                                                       "\" ");
+                                }
+                                push_back_extent(
+                                    text_output_group,
+                                    mailbox.local_part_bytes.first,
+                                    mailbox.local_part_bytes.count);
+                                push_back_cstr(text_output_group, "@");
+                                push_back_extent(text_output_group,
+                                                 mailbox.domain_bytes.first,
+                                                 mailbox.domain_bytes.count);
+                                push_back_cstr(text_output_group, ">");
+                        };
+
+                        if (mailboxes_count > 0) {
+                                push_back_mailbox(text_output_group,
+                                                  *mailboxes);
+                                ++mailboxes;
+                                --mailboxes_count;
+                        }
+
+                        algos::for_each_n(
+                            mailboxes, mailboxes_count,
+                            [&](const RawMailbox &mailbox) {
+                                    push_back_cstr(text_output_group, ", ");
+                                    push_back_mailbox(text_output_group,
+                                                      mailbox);
+                            });
+                        trace(text_output_group);
+                };
+
+                // TODO(nicolas): @feature print the first line of the message.
+                print_field("MESSAGE-ID", raw.message_id_bytes);
+                print_mailbox_list_field(
+                    "SENDER", &raw.sender_mailbox,
+                    raw.sender_mailbox.domain_bytes.count > 0 ? 1 : 0);
+                print_mailbox_list_field("FROM", raw.from_mailboxes,
+                                         raw.from_mailboxes_count);
+                print_mailbox_list_field("TO", raw.to_mailboxes,
+                                         raw.to_mailboxes_count);
+                print_mailbox_list_field("CC", raw.cc_mailboxes,
+                                         raw.cc_mailboxes_count);
+                print_bytes_list_field("IN_REPLY_TO", raw.in_reply_to_msg_ids,
+                                       raw.in_reply_to_msg_ids_count);
+                print_field("SUBJECT", raw.subject_field_bytes);
+
+                print_field("CONTENT ENCODING",
+                            raw.content_transfer_encoding_bytes);
+                print_field("TEXT_SUBTYPE", raw.text_content_subtype_bytes);
+                print_field("TEXT CHARSET", raw.text_content_charset_bytes);
         }
 
-        zw_assert(adhoc.from_count >= 1, "unexpected From count");
-        zw_assert(adhoc.sender_count <= 1, "unexpected Sender: count");
-        if (adhoc.messageid_count != 1) {
-                // NOTE(nicolas) we have actually seen emails with 3x Message-Id
-                // tags!
-                // Of course only one of them was really valid!
-                // TODO(nicolas) reject invalid Message-Id headers
-                error_print("surprising messageid count");
-        }
-
-        parse_message_adhoc_destroy(&adhoc);
+        return;
 }
 
 extern "C" EXPORT PARSE_ZOE_MAILSTORE_PATH(parse_zoe_mailstore_path)

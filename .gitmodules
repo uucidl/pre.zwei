@@ -1,0 +1,3 @@
+[submodule "modules/hammer"]
+	path = modules/hammer
+	url = https://github.com/UpstandingHackers/hammer

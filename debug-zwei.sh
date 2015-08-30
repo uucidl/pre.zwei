@@ -11,4 +11,4 @@ fi
 LLDB=${LLDB:-$(which lldb)}
 [ -x "${LLDB}" ] || die "missing lldb or LLDB env variable"
 
-"${LLDB}" -o run "${HERE}"/builds/zwei -- "${ZWEI_ARGS[@]}"
+"${LLDB}" -o run "${HERE}"/builds/zwei -- --debug "${ZWEI_ARGS[@]}"

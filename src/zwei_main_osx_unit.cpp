@@ -282,6 +282,8 @@ zw_internal struct FileList *directory_query_all_files(
         auto print_dirlisting_line = [&dirlisting, trace_on]() {
                 if (trace_on) {
                         trace(dirlisting);
+                } else {
+                        clear(dirlisting);
                 }
         };
 
@@ -715,13 +717,13 @@ int main(int argc, char **argv)
 {
         zw_assert(argc > 0, "unexpected argc");
         DEFER(trace_print("done"));
-
         char const *root_dir_path = nullptr;
 
-        auto USAGE =
-            "<program> [--help|--ls|--can-ignore] --root-dir <root-dir>";
+        auto USAGE = "<program> [--help|--ls|--can-ignore|--debug] --root-dir "
+                     "<root-dir>";
 
         auto directory_listing_on = false;
+        auto debug_mode_on = false;
         auto current_arg = 1;
         while (current_arg < argc) {
                 if (cstr_equals(argv[current_arg], "--root-dir")) {
@@ -740,6 +742,9 @@ int main(int argc, char **argv)
                 } else if (cstr_equals(argv[current_arg], "--can-ignore")) {
                         current_arg++;
                         global_can_ignore_file = true;
+                } else if (cstr_equals(argv[current_arg], "--debug")) {
+                        current_arg++;
+                        debug_mode_on = true;
                 } else {
                         error_print("unexpected argument");
                         trace_print(USAGE);
@@ -796,7 +801,7 @@ int main(int argc, char **argv)
         }
 
         auto refresh_zwei_app = [&zwei_app_library, &accept_mime_message,
-                                 &parse_zoe_mailstore_path]() {
+                                 &parse_zoe_mailstore_path, debug_mode_on]() {
                 struct LoadedLibrary *lib = &zwei_app_library;
                 bool was_loaded = !!lib->dlhandle;
                 if (refresh_library(lib)) {
@@ -821,7 +826,7 @@ int main(int argc, char **argv)
                         zw_assert(parse_zoe_mailstore_path,
                                   "expected symbol parse_zoe_mailstore_path");
 
-                        init_app();
+                        init_app(debug_mode_on ? ZWEI_DEBUG_MODE_FLAG : 0);
 
                         return true;
                 }
