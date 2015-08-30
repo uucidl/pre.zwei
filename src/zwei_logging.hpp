@@ -34,8 +34,14 @@ TextOutputGroupEntry *
 push_back_formatted(TextOutputGroup &group, char const *fmt, ...);
 TextOutputGroupEntry *push_back_u32(TextOutputGroup &group, uint32_t x);
 TextOutputGroupEntry *push_back_u64(TextOutputGroup &group, uint64_t x);
-void trace(TextOutputGroup const &group);
-void error(TextOutputGroup const &group);
+
+/** traces and clears the group */
+void trace(TextOutputGroup &group);
+void trace_keep(TextOutputGroup const &group);
+
+/** traces and clears the group */
+void error(TextOutputGroup &group);
+void error_keep(TextOutputGroup const &group);
 
 void error_print(char const *message);
 void trace_print(char const *message);

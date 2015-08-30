@@ -340,8 +340,6 @@ zw_internal struct FileList *directory_query_all_files(
                 char *path_cstr = (char *)path;
                 bool ignore_file = false;
 
-                clear(dirlisting);
-
                 uint64_t physical_offset = 0;
                 {
                         push_back_cstr(dirlisting, name);
@@ -487,13 +485,11 @@ zw_internal struct FileList *directory_query_all_files(
                 }
                 DEFER({ close(dir_fd); });
 
-                clear(dirlisting);
                 push_back_cstr(dirlisting, "\nlisting directory: ");
                 push_back_cstr(dirlisting, dir_path);
                 print_dirlisting_line();
 
                 // TODO(nicolas): push sep by "\t"
-                clear(dirlisting);
                 push_back_cstr(dirlisting, "name");
                 push_back_cstr(dirlisting, "\t");
                 push_back_cstr(dirlisting, "type");
@@ -546,7 +542,6 @@ zw_internal struct FileList *directory_query_all_files(
                         file_count++;
                 }
 
-                clear(dirlisting);
                 push_back_cstr(dirlisting, "found ");
                 push_back_u64(dirlisting, file_count);
                 push_back_cstr(dirlisting, " files");
@@ -640,7 +635,6 @@ zw_internal struct FileList *directory_query_all_files(
 #endif
 
                 for (size_t i = 0; i < entry_array_count; i++) {
-                        clear(dirlisting);
                         push_back_cstr(dirlisting, "FILE");
                         push_back_u64(dirlisting, i);
                         push_back_cstr(dirlisting, "\t");
@@ -877,7 +871,6 @@ int main(int argc, char **argv)
                         TextOutputGroup traceg = {};
                         allocate(traceg, &temp_arena, KILOBYTES(1));
                         {
-                                clear(traceg);
                                 push_back_cstr(traceg, "FILE");
                                 push_back_formatted(traceg, "%lld", i);
                                 push_back_cstr(traceg, " ");
@@ -886,7 +879,6 @@ int main(int argc, char **argv)
                                 trace(traceg);
                         }
 
-                        clear(traceg);
                         push_back_cstr(traceg, "SHA1");
                         push_back_cstr(traceg, "\t");
 
@@ -960,13 +952,11 @@ int main(int argc, char **argv)
                         if (0 == zoefile_errorcode ||
                             cstr_endswith(filename, ".eml")) {
                                 // FEATURE(nicolas): print filing timestamp
-                                clear(traceg);
                                 push_back_cstr(traceg, "PATH");
                                 push_back_cstr(traceg, "\t");
                                 push_back_cstr(traceg, filepath);
                                 trace(traceg);
 
-                                clear(traceg);
                                 push_back_cstr(traceg, "ZOE_REL_URL");
                                 push_back_cstr(traceg, "\t");
                                 {
@@ -1001,7 +991,6 @@ int main(int argc, char **argv)
                                 trace(traceg);
 
                                 if (0 == zoefile_errorcode) {
-                                        clear(traceg);
                                         push_back_cstr(traceg, "UUID");
                                         push_back_cstr(traceg, "\t");
                                         for (size_t i = 0;
@@ -1012,7 +1001,6 @@ int main(int argc, char **argv)
                                         }
                                         trace(traceg);
 
-                                        clear(traceg);
                                         push_back_cstr(traceg,
                                                        "UNIX TIMESTAMP");
                                         push_back_cstr(traceg, "\t");

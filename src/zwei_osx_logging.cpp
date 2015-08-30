@@ -158,6 +158,21 @@ void trace_print_n(char const *message, size_t message_len)
         sync_print(1, message, message_len);
 }
 
-void trace(TextOutputGroup const &group) { text_output_group_print(1, group); }
-
-void error(TextOutputGroup const &group) { text_output_group_print(2, group); }
+void trace(TextOutputGroup &group)
+{
+        text_output_group_print(1, group);
+        clear(group);
+}
+void trace_keep(TextOutputGroup const &group)
+{
+        text_output_group_print(1, group);
+}
+void error(TextOutputGroup &group)
+{
+        text_output_group_print(2, group);
+        clear(group);
+}
+void error_keep(TextOutputGroup const &group)
+{
+        text_output_group_print(2, group);
+}
