@@ -518,3 +518,28 @@ Proc traverse_nonempty(const C &c, Proc proc)
         return proc;
 }
 }
+
+namespace algos
+{
+
+template <TreeCoordinate C, typename Proc> struct visit_element {
+        Proc proc;
+
+        visit_element(Proc proc) : proc(proc) {}
+        visit_element(visit_element const &) = default;
+        visit_element &operator=(visit_element const &) = default;
+
+        void operator()(VisitType visit, C c)
+        {
+                if (visit != PRE)
+                        return;
+                proc(source(c));
+        }
+};
+
+template <TreeCoordinate C, typename Proc>
+void traverse_each(C const &c, Proc proc)
+{
+        traverse_nonempty(c, visit_element<C, Proc>(proc));
+}
+};
