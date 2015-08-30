@@ -351,6 +351,27 @@ OutputIt apply_copy_if(
         return dest_first;
 }
 
+template <Iterator InputIt,
+          OutputIterator OutputIt,
+          UnaryFunction Fn,
+          UnaryPredicate Pred>
+std::pair<InputIt, OutputIt> apply_copy_bounded_if(InputIt first,
+                                                   InputIt last,
+                                                   OutputIt dest_first,
+                                                   OutputIt dest_last,
+                                                   Fn fn,
+                                                   Pred pred)
+{
+        while (first != last && dest_first != dest_last) {
+                if (pred(source(first))) {
+                        sink(dest_first) = fn(source(first));
+                        dest_first = successor(dest_first);
+                }
+                first = successor(first);
+        }
+        return std::make_pair(first, dest_first);
+}
+
 /**
 @requires Domain(Fn) = ValueType(InputIt)
 @requires CoDomain(Fn) = ValueType(OutputIt)

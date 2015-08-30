@@ -54,9 +54,9 @@
 
 #include <cstddef>
 
-zw_internal bool ucs4_to_macintosh(uint8_t *destination,
-                                   uint32_t const *codepoints,
-                                   size_t count);
+zw_internal bool ucs4_to_macintosh(uint32_t const *codepoints_first,
+                                   uint32_t const *codepoints_last,
+                                   uint8_t *destination);
 
 /// @see
 /// [economical-utf8.html](http://bjoern.hoehrmann.de/utf-8/decoder/dfa/index.html)
@@ -121,85 +121,95 @@ zw_internal uint32_t utf8_decode(uint32_t *state, uint32_t *codep, uint8_t byte)
 // OSX. Java used to default to the MacRoman
 // encoding.
 zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
-                                               uint8_t *start,
-                                               uint8_t *end)
+                                               uint8_t *block_first,
+                                               uint8_t *block_last)
 {
-        size_t data_size = end - start;
-        uint8_t *cursor = start;
-        uint8_t ucs4_codepoints_count = 0;
-        uint8_t ucs4_codepoints_maxcount = NCOUNT(state->ucs4_codepoints_block);
+        using algos::begin;
+        using algos::end;
 
-        for (; cursor < end && ucs4_codepoints_count < ucs4_codepoints_maxcount;
-             cursor++) {
-                uint8_t const byte = *cursor;
+        auto decoded_block_last = block_first;
+        auto codepoint_first = begin(state->ucs4_codepoints_block);
+        auto codepoint_buffer_last = end(state->ucs4_codepoints_block);
+        auto codepoint_last = codepoint_first;
 
-                if (UTF8_ACCEPT == utf8_decode(&state->utf8decoder_state,
-                                               &state->utf8decoder_codepoint,
-                                               byte)) {
-                        state->ucs4_codepoints_block[ucs4_codepoints_count++] =
-                            state->utf8decoder_codepoint;
+        {
+                auto decode_codepoint = [state](uint8_t x) {
+                        return UTF8_ACCEPT ==
+                               utf8_decode(&state->utf8decoder_state,
+                                           &state->utf8decoder_codepoint, x);
+                };
+                auto decode_result = algos::apply_copy_bounded_if(
+                    block_first, block_last, codepoint_first,
+                    codepoint_buffer_last, [state](const uint8_t) {
+                            return state->utf8decoder_codepoint;
+                    }, decode_codepoint);
+
+                if (UTF8_REJECT == state->utf8decoder_state) {
+                        return nullptr;
                 }
+                decoded_block_last = decode_result.first;
+                codepoint_last = decode_result.second;
         }
 
-        if (UTF8_REJECT == state->utf8decoder_state) {
-                return nullptr;
-        }
-
-        size_t macintosh_chars_count = ucs4_codepoints_count;
-        uint8_t *macintosh_chars = state->macintosh_chars;
-        auto macintosh_encoding_result =
-            ucs4_to_macintosh(macintosh_chars, state->ucs4_codepoints_block,
-                              ucs4_codepoints_count);
+        auto const macintosh_encoding_result = ucs4_to_macintosh(
+            codepoint_first, codepoint_last, state->macintosh_chars);
         zw_assert(macintosh_encoding_result, "could not interpret as MacRoman");
 
         if (!macintosh_encoding_result) {
                 return nullptr;
         }
 
-        // it may already be utf8 content
-        for (size_t i = 0; i < macintosh_chars_count; i++) {
-                uint8_t const byte = macintosh_chars[i];
-
+        // Test if it already is utf8 content
+        algos::for_each(codepoint_first, codepoint_last, [state](uint8_t x) {
                 utf8_decode(&state->macintosh_chars_utf8decoder_state,
-                            &state->macintosh_chars_utf8decoder_codepoint,
-                            byte);
-        }
+                            &state->macintosh_chars_utf8decoder_codepoint, x);
+        });
+        bool const is_already_utf8 =
+            UTF8_REJECT != state->macintosh_chars_utf8decoder_state;
 
-        uint8_t *destination = state->utf8_output_block;
-        uint8_t destination_maxcount = NCOUNT(state->utf8_output_block);
+        auto const destination_first = begin(state->utf8_output_block);
+        auto const destination_last = end(state->utf8_output_block);
+
         size_t destination_count = 0;
 
-        if (UTF8_REJECT == state->macintosh_chars_utf8decoder_state) {
-                // it's not, assume it's latin1
-                for (size_t i = 0, di = 0; i < macintosh_chars_count; i++) {
-                        uint8_t const byte = macintosh_chars[i];
-                        if (byte < 0x0080) {
-                                zw_assert(di < destination_maxcount,
-                                          "stepping out of destination");
-                                destination[di++] = byte;
-                        } else /* NOTE(nicolas) < 0x7ff */ {
-                                zw_assert(di + 1 < data_size,
-                                          "stepping out of destination");
-                                uint32_t mask = (1 << 6) - 1;
-                                destination[di++] = 0xc0 | ((byte >> 6) & mask);
-                                destination[di++] = 0x80 | ((byte >> 0) & mask);
-                        }
-                        destination_count = di;
-                }
+        if (is_already_utf8) {
+                auto result = algos::copy_bounded(
+                    begin(state->macintosh_chars), end(state->macintosh_chars),
+                    destination_first, destination_last);
+                zw_assert(result.first == end(state->macintosh_chars),
+                          "stepped out of destination");
+                destination_count = result.second - destination_first;
         } else {
-                for (size_t i = 0, di = 0; i < macintosh_chars_count; i++) {
-                        uint8_t const byte = macintosh_chars[i];
-                        zw_assert(di < data_size, "stepping out "
-                                                  "of "
-                                                  "destination");
-                        destination[di++] = byte;
-                        destination_count = di;
+                using algos::source;
+                using algos::sink;
+                using algos::successor;
+
+                // it's not, assume it's latin1
+                auto destination = destination_first;
+                auto macintosh_chars = begin(state->macintosh_chars);
+                auto macintosh_chars_last = end(state->macintosh_chars);
+                while (destination != destination_last &&
+                       macintosh_chars != macintosh_chars_last) {
+                        auto x = source(macintosh_chars);
+                        if (x < 0x0080) {
+                                sink(destination) = x;
+                        } else /* NOTE(nicolas) < 0x7ff */ {
+                                zw_assert(destination + 1 != destination_last,
+                                          "stepping out");
+                                uint32_t mask = (1 << 6) - 1;
+                                sink(destination) = 0xc0 | ((x >> 6) & mask);
+                                destination = successor(destination);
+                                sink(destination) = 0x80 | ((x >> 0) & mask);
+                        }
+                        destination = successor(destination);
+                        macintosh_chars = successor(macintosh_chars);
                 }
+                destination_count = destination - destination_first;
         }
 
         state->utf8_output_block_count = destination_count;
 
-        return cursor;
+        return decoded_block_last;
 }
 
 // wraps a stream and transcode using the MacRoman workaround
@@ -346,9 +356,9 @@ extern "C" EXPORT PARSE_ZOE_MAILSTORE_PATH(parse_zoe_mailstore_path)
    to indicate an incomplete encoding.
 
  */
-zw_internal bool ucs4_to_macintosh(uint8_t *destination,
-                                   uint32_t const *codepoints,
-                                   size_t count)
+zw_internal bool ucs4_to_macintosh(uint32_t const *codepoints_first,
+                                   uint32_t const *codepoints_last,
+                                   uint8_t *destination)
 {
         bool encoding_was_total = true;
 
@@ -619,16 +629,15 @@ zw_internal bool ucs4_to_macintosh(uint8_t *destination,
                 }
         };
 
-        for (size_t i = 0; i < count; i++) {
-                uint32_t result = encode(codepoints[i]);
-                uint8_t macintosh_char = result & 0xff;
-
-                destination[i] = macintosh_char;
-
-                if (result != macintosh_char) {
-                        encoding_was_total = false;
-                }
-        }
+        algos::apply_copy(codepoints_first, codepoints_last, destination,
+                          [&encoding_was_total, encode](uint32_t x) {
+                                  uint32_t result = encode(x);
+                                  uint8_t macintosh_char = result & 0xff;
+                                  if (result != macintosh_char) {
+                                          encoding_was_total = false;
+                                  }
+                                  return macintosh_char;
+                          });
 
         return encoding_was_total;
 }
