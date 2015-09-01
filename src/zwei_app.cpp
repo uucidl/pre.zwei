@@ -2,10 +2,18 @@
 
   # Main project todo list
 
+  ## Source Connectors
+  POP, IMAP, Twitter, Facebook etc...
+
   ## Input Parsing
+  TODO(nicolas): Parse First Line Of Content (RFC5322)
+
   ## Database
+  - Timeline indexing/querying
+
   ## User Interface
   ## Platform
+  TODO(nicolas): work task queue
   TODO(nicolas): LINUX port.
   TODO(nicolas): cross compilation to <powerpc e500 v2> (Synology NAS)
 
@@ -586,6 +594,12 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                             });
                         trace(text_output_group);
                 };
+                // TODO(nicolas): mailboxes could be stored sorted,
+                // since there is not a lot of semantic attached to them
+                // however, what about groups?
+                // The advantage of sorting mailboxes is that we could
+                // compare groups of recipients for instance and name
+                // them somehow
                 auto print_mailbox_list_field = [&text_output_group](
                     const char *name, RawMailbox *mailboxes,
                     size_t mailboxes_count) {
