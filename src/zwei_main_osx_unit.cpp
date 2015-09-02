@@ -866,7 +866,13 @@ int main(int argc, char **argv)
                 // TODO(nicolas) always measure bytes/sec or sec/MB and
                 // print out total bytes
                 SPDR_BEGIN(global_spdr, "main", "processing_files");
-                for (size_t i = 0; i < all_files->count; i++) {
+                for (size_t file_index = 0; file_index < all_files->count;
+                     file_index++) {
+                        auto const filename = all_files->filenames[file_index];
+                        auto const filepath = all_files->paths[file_index];
+                        auto const file_attributes =
+                            all_files->attributes[file_index];
+
                         MemoryArena message_arena_memory =
                             memory_arena(dc_arena.base + dc_arena.size,
                                          (uint8_t *)transient_storage +
@@ -877,14 +883,14 @@ int main(int argc, char **argv)
                         allocate(traceg, message_arena, KILOBYTES(1));
                         {
                                 push_back_cstr(traceg, "FILE");
-                                push_back_formatted(traceg, "%lld", i);
+                                push_back_formatted(traceg, "%lld", file_index);
                                 push_back_cstr(traceg, " ");
-                                push_back_cstr(traceg, all_files->paths[i]);
+                                push_back_cstr(traceg, filepath);
                                 push_back_cstr(traceg, ":");
                                 trace(traceg);
                         }
                         SPDR_SCOPE1(global_spdr, "main", "process_file",
-                                    SPDR_STR("filepath", all_files->paths[i]));
+                                    SPDR_STR("filepath", filepath));
                         SPDR_COUNTER1(
                             global_spdr, "variables", "message_arena",
                             SPDR_INT("used", int(message_arena->used)));
@@ -900,9 +906,8 @@ int main(int argc, char **argv)
                                 SPDR_SCOPE(global_spdr, "main",
                                            "read_entire_file");
                                 struct BufferRange file_content;
-                                inputstream_on_filepath(message_arena,
-                                                        &file_content,
-                                                        all_files->paths[i]);
+                                inputstream_on_filepath(
+                                    message_arena, &file_content, filepath);
 
                                 // TODO(nicolas): @copypaste
                                 // cfec80a4708df2e90e45023f0d87af7f4eb54a46
@@ -934,6 +939,10 @@ int main(int argc, char **argv)
 
                         push_back_cstr(traceg, "SHA1");
                         push_back_cstr(traceg, "\t");
+
+                        zw_assert(uint64_t(full_message_end - full_message) ==
+                                      file_attributes.size,
+                                  "surprising file size");
 
                         struct BufferRange file_content;
                         stream_on_memory(&file_content, full_message,
@@ -980,9 +989,6 @@ int main(int argc, char **argv)
                         }
                         trace(traceg);
 
-                        auto const filename = all_files->filenames[i];
-                        auto const filepath = all_files->paths[i];
-
                         struct ZoeMailStoreFile zoefile;
                         auto zoefile_errorcode =
                             parse_zoe_mailstore_path(&zoefile, filename);
@@ -993,6 +999,12 @@ int main(int argc, char **argv)
                                 push_back_cstr(traceg, "PATH");
                                 push_back_cstr(traceg, "\t");
                                 push_back_cstr(traceg, filepath);
+                                trace(traceg);
+
+                                push_back_cstr(traceg, "SIZE");
+                                push_back_cstr(traceg, "\t");
+                                push_back_u64(traceg, file_attributes.size);
+                                push_back_cstr(traceg, "\t");
                                 trace(traceg);
 
                                 push_back_cstr(traceg, "ZOE_REL_URL");
