@@ -149,6 +149,9 @@ struct FileList {
         size_t count;
         char const **paths;
         char const **filenames;
+        struct {
+                uint64_t size;
+        } * attributes;
 };
 
 #include <sys/attr.h>
@@ -196,7 +199,7 @@ zw_internal struct FileList *directory_query_all_files(
                 struct FSEntry *next;
                 char const *path;
                 uint64_t physical_offset; // for files
-                uint32_t size;
+                uint64_t size;
         };
 
         auto push_entry = [&state, arena]() {
@@ -426,6 +429,7 @@ zw_internal struct FileList *directory_query_all_files(
                         FSEntry *file_entry = push_file();
                         file_entry->path = path_cstr;
                         file_entry->physical_offset = physical_offset;
+                        file_entry->size = entry->file_totalsize;
                 } else if (entry->obj_type == VDIR) {
                         FSEntry *dir_entry = push_directory();
                         dir_entry->path = path_cstr;
@@ -525,7 +529,7 @@ zw_internal struct FileList *directory_query_all_files(
                     push_array_rvalue(arena, entry_array, entry_array_count);
 
                 for (FSEntry *fs_entry = state->files,
-                                    *dest_entry = entry_array;
+                             *dest_entry = entry_array;
                      fs_entry; fs_entry = fs_entry->next, dest_entry++) {
                         *dest_entry = *fs_entry;
                 }
@@ -628,10 +632,13 @@ zw_internal struct FileList *directory_query_all_files(
                 result->paths = push_array_rvalue(arena, result->paths, count);
                 result->filenames =
                     push_array_rvalue(arena, result->filenames, count);
+                result->attributes =
+                    push_array_rvalue(arena, result->attributes, count);
                 for (size_t i = 0; i < count; i++) {
                         result->paths[i] = entry_array[i].path;
                         result->filenames[i] =
                             1 + cstr_find_last(entry_array[i].path, '/');
+                        result->attributes[i].size = entry_array[i].size;
                 }
         }
 
