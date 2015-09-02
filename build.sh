@@ -54,7 +54,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-
+# @id 8413bd5dd3db97953791db977bac6bdd6d95852b
 function must_compile_osx()
 {
     local cflags
@@ -112,13 +112,16 @@ fi
 must_compile_hammer
 
 must_compile_osx -fvisibility=hidden -shared \
+                 "${HERE}"/src/spdr_unit.cpp \
                  "${HERE}"/src/zwei_lib_osx_unit.cpp \
                  -L"${BUILD}"/lib -lhammer \
                  -o "${LIBRARY}" \
     && printf "SHARED_LIBRARY\t%s\n" "${LIBRARY}"
 
-must_compile_osx "${HERE}"/src/zwei_main_osx_unit.cpp \
-                 -o "${PROGRAM}" \
+must_compile_osx \
+    "${HERE}"/src/spdr_unit.cpp \
+    "${HERE}"/src/zwei_main_osx_unit.cpp \
+    -o "${PROGRAM}" \
     && printf "PROGRAM\t%s\n" "${PROGRAM}"
 
 # beep

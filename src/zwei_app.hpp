@@ -8,7 +8,13 @@ enum ZweiAppFlags {
         ZWEI_DEBUG_MODE_FLAG = 1 << 0,
 };
 
-#define INIT_APP(name) void name(int flags)
+struct SPDR_Context;
+
+struct Platform {
+        SPDR_Context *spdr; // tracing services
+};
+
+#define INIT_APP(name) void name(Platform platform, int flags)
 typedef INIT_APP(InitAppFn);
 
 struct BufferRange;

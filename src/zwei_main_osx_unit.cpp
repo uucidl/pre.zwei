@@ -13,8 +13,12 @@
 
 #include "algos.hpp"
 
+#include "../modules/uu.spdr/include/spdr/spdr.hh"
+
 #include <cstdarg>
 #include <cstdio>
+
+zw_global SPDR_Context *global_spdr = nullptr;
 
 #include <CommonCrypto/CommonDigest.h>
 #include <limits>
@@ -93,8 +97,12 @@ void inputstream_on_filepath(struct MemoryArena *arena,
                         file->is_opened = true;
                 }
 
+                SPDR_BEGIN1(global_spdr, "io", "read",
+                            SPDR_INT("size", sizeof file->buffer));
                 ssize_t size_read =
                     read(file->filedesc, &file->buffer, sizeof file->buffer);
+                SPDR_END(global_spdr, "io", "read");
+
                 if (size_read < 0) {
                         close(file->filedesc);
                         return fail(range, BR_IOError);
@@ -740,6 +748,15 @@ int main(int argc, char **argv)
                 transient_storage = (void *)transient_storage_memory_address;
         }
 
+        struct MemoryArena permanent_arena =
+            memory_arena(permanent_storage, permanent_storage_memory_size);
+        if (spdr_init(&global_spdr, push_bytes(&permanent_arena, MEGABYTES(32)),
+                      MEGABYTES(32))) {
+                error_print("could not initialize memory for tracing");
+                return 1;
+        }
+        spdr_enable_trace(global_spdr, 1);
+
         AcceptMimeMessageFn *accept_mime_message;
         ParseZoeMailstorePathFn *parse_zoe_mailstore_path;
 
@@ -787,7 +804,11 @@ int main(int argc, char **argv)
                         zw_assert(parse_zoe_mailstore_path,
                                   "expected symbol parse_zoe_mailstore_path");
 
-                        init_app(debug_mode_on ? ZWEI_DEBUG_MODE_FLAG : 0);
+                        Platform platform;
+                        platform.spdr = global_spdr;
+
+                        init_app(platform,
+                                 debug_mode_on ? ZWEI_DEBUG_MODE_FLAG : 0);
 
                         return true;
                 }
@@ -832,6 +853,7 @@ int main(int argc, char **argv)
 
                 // TODO(nicolas) always measure bytes/sec or sec/MB and
                 // print out total bytes
+                SPDR_BEGIN(global_spdr, "main", "processing_files");
                 for (size_t i = 0; i < all_files->count; i++) {
                         MemoryArena temp_arena = dc_arena;
                         TextOutputGroup traceg = {};
@@ -993,11 +1015,15 @@ int main(int argc, char **argv)
                                         inputstream_on_filepath(&stream_arena,
                                                                 &file_content,
                                                                 filepath);
+                                        SPDR_BEGIN(global_spdr, "app",
+                                                   "accept_mime_message");
                                         accept_mime_message(
                                             &file_content,
                                             zoefile_errorcode == 0 ? &zoefile
                                                                    : nullptr,
                                             &message_arena);
+                                        SPDR_END(global_spdr, "app",
+                                                 "accept_mime_message");
                                         inputstream_finish(&file_content);
                                 } while (refresh_zwei_app());
                         } else {
@@ -1005,6 +1031,45 @@ int main(int argc, char **argv)
                         }
                 }
         }
+        SPDR_END(global_spdr, "main", "processing_files");
+
+        void text_output_group_print(int filedesc,
+                                     TextOutputGroup const &group);
+
+        auto program_path_first = argv[0];
+        auto program_path_last = cstr_find_last(argv[0], '/');
+        char trace_file[4096];
+        auto trace_file_last = algos::begin(trace_file);
+        cstr_cat(trace_file_last, algos::end(trace_file), program_path_first,
+                   program_path_last);
+        cstr_cat(trace_file_last, algos::end(trace_file), "/trace.json");
+        if (!cstr_terminate(trace_file_last, algos::end(trace_file))) {
+                zw_assert(false, "uh");
+                return 1;
+        }
+        {
+                MemoryArena temp_arena = permanent_arena;
+                auto tog = TextOutputGroup{};
+                allocate(tog, &temp_arena, 512);
+                push_back_cstr(tog, "reporting traces to file: ");
+                push_back_cstr(tog, (char *)trace_file);
+                push_back_cstr(tog, "\n");
+                trace(tog);
+        }
+        int fd = open((char *)trace_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        spdr_report(
+            global_spdr,
+            SPDR_CHROME_REPORT, [](char const *string, void *user_data) {
+                    char buffer[4096];
+                    MemoryArena stack = memory_arena(buffer, sizeof buffer);
+                    int *fd_ptr = static_cast<int *>(user_data);
+                    auto tog = TextOutputGroup{};
+                    allocate(tog, &stack, 64);
+                    push_back_cstr(tog, string);
+                    text_output_group_print(*fd_ptr, tog);
+            }, &fd);
+        close(fd);
+        spdr_deinit(&global_spdr);
 
         return 0;
 }

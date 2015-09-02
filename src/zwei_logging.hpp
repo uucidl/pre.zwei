@@ -1,5 +1,8 @@
 #pragma once
 
+// TODO(nicolas): whenever a segment of string is smaller than this 16
+// bytes, then it's worth actually storing it in place as bytes
+// directly
 struct TextOutputGroupEntry {
         uint8_t const *first;
         size_t count;

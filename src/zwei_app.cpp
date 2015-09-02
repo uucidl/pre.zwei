@@ -87,6 +87,8 @@
 
 zw_global RFC5322 mail_parsers;
 zw_global bool global_debug_mode;
+zw_global Platform global_platform;
+zw_global SPDR_Context *global_spdr;
 
 zw_internal bool ucs4_to_macintosh(uint32_t const *codepoints_first,
                                    uint32_t const *codepoints_last,
@@ -336,6 +338,10 @@ struct MessageBeingParsed {
 extern "C" EXPORT INIT_APP(init_app)
 {
         trace_print("Initializing app");
+        global_platform = platform;
+
+        global_spdr = global_platform.spdr;
+
         if (flags & ZWEI_DEBUG_MODE_FLAG) {
                 global_debug_mode = true;
         }
