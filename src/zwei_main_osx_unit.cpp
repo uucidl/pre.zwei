@@ -855,9 +855,14 @@ int main(int argc, char **argv)
                 // print out total bytes
                 SPDR_BEGIN(global_spdr, "main", "processing_files");
                 for (size_t i = 0; i < all_files->count; i++) {
-                        MemoryArena temp_arena = dc_arena;
+                        MemoryArena message_arena_memory =
+                            memory_arena(dc_arena.base + dc_arena.size,
+                                         (uint8_t *)transient_storage +
+                                             transient_storage_memory_size -
+                                             dc_arena.base + dc_arena.size);
+                        MemoryArena *message_arena = &message_arena_memory;
                         TextOutputGroup traceg = {};
-                        allocate(traceg, &temp_arena, KILOBYTES(1));
+                        allocate(traceg, message_arena, KILOBYTES(1));
                         {
                                 push_back_cstr(traceg, "FILE");
                                 push_back_formatted(traceg, "%lld", i);
@@ -867,27 +872,49 @@ int main(int argc, char **argv)
                                 trace(traceg);
                         }
 
+                        // Slurp entire file in memory
+                        // NOTE(nicolas): this ensure we don't do I/O in the
+                        // parsing
+                        // part of the application.
+                        // TODO(nicolas): what if the message is too large?
+                        uint8_t *full_message;
+                        uint8_t *full_message_end;
+                        {
+                                struct BufferRange file_content;
+                                inputstream_on_filepath(message_arena,
+                                                        &file_content,
+                                                        all_files->paths[i]);
+
+                                // TODO(nicolas): @copypaste
+                                // cfec80a4708df2e90e45023f0d87af7f4eb54a46
+                                full_message =
+                                    (uint8_t *)push_bytes(message_arena, 0);
+                                full_message_end = full_message;
+
+                                while (file_content.error == BR_NoError) {
+                                        zw_assert(
+                                            full_message_end ==
+                                                push_bytes(message_arena, 0),
+                                            "non contiguous");
+                                        full_message_end = algos::copy(
+                                            file_content.start,
+                                            file_content.end,
+                                            (uint8_t *)push_bytes(
+                                                message_arena,
+                                                file_content.end -
+                                                    file_content.start));
+
+                                        file_content.next(&file_content);
+                                }
+                                inputstream_finish(&file_content);
+                        }
+
                         push_back_cstr(traceg, "SHA1");
                         push_back_cstr(traceg, "\t");
 
-                        // arena for our file streaming
-
-                        // TODO(nicolas) a dedicated datastructure to
-                        // store all our streams, able to discard them
-                        // on exit, allocate more than one buffer at a
-                        // time, and reuse unused ones.
-                        //
-                        // TODO(nicolas) a task queue that goes with
-                        // it, to compute values on a series of
-                        // blocks.
                         struct BufferRange file_content;
-
-                        struct MemoryArena stream_arena = memory_arena(
-                            dc_arena.base + dc_arena.size, KILOBYTES(32));
-
-                        inputstream_on_filepath(&stream_arena, &file_content,
-                                                all_files->paths[i]);
-
+                        stream_on_memory(&file_content, full_message,
+                                         full_message_end - full_message);
                         auto sha1_result = sha1(&file_content);
                         inputstream_finish(&file_content);
 
@@ -999,32 +1026,15 @@ int main(int argc, char **argv)
                                 }
 
                                 do {
-                                        struct MemoryArena stream_arena =
-                                            memory_arena(dc_arena.base +
-                                                             dc_arena.size,
-                                                         KILOBYTES(32));
-                                        struct MemoryArena message_arena =
-                                            memory_arena(
-                                                stream_arena.base +
-                                                    stream_arena.size,
-                                                (uint8_t *)transient_storage +
-                                                    transient_storage_memory_size -
-                                                    stream_arena.base +
-                                                    stream_arena.size);
-
-                                        inputstream_on_filepath(&stream_arena,
-                                                                &file_content,
-                                                                filepath);
                                         SPDR_BEGIN(global_spdr, "app",
                                                    "accept_mime_message");
                                         accept_mime_message(
-                                            &file_content,
+                                            full_message, full_message_end,
                                             zoefile_errorcode == 0 ? &zoefile
                                                                    : nullptr,
-                                            &message_arena);
+                                            message_arena);
                                         SPDR_END(global_spdr, "app",
                                                  "accept_mime_message");
-                                        inputstream_finish(&file_content);
                                 } while (refresh_zwei_app());
                         } else {
                                 trace_print("ignored file");

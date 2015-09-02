@@ -20,7 +20,7 @@ typedef INIT_APP(InitAppFn);
 struct BufferRange;
 
 #define ACCEPT_MIME_MESSAGE(name)                                              \
-        void name(struct BufferRange *range,                                   \
+        void name(uint8_t *data_first, uint8_t *data_last,                     \
                   struct ZoeMailStoreFile *zoe_mailstore_file,                 \
                   struct MemoryArena *message_arena)
 typedef ACCEPT_MIME_MESSAGE(AcceptMimeMessageFn);
