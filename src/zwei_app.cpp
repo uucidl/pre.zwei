@@ -475,10 +475,8 @@ zw_internal void fill_raw_headers(RawHeaders *raw_headers,
 
 extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
 {
-        struct BufferRange range;
-        stream_on_memory(&range, data_first, data_last - data_first);
-
-        struct BufferRange *message_range = &range;
+        uint8_t *full_message = data_first;
+        uint8_t *full_message_end = data_last;
         bool must_print_ast = global_debug_mode;
 
         // TODO(nicolas) refine when/how this workaround is applied It
@@ -495,33 +493,43 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
 
         if (must_apply_macroman_workaround) {
                 trace_print("applying MacRoman workaround");
+
+                struct BufferRange message_range_memory;
+                struct BufferRange *message_range = &message_range_memory;
+                stream_on_memory(message_range, full_message,
+                                 full_message_end - full_message);
+
                 /* wrap message_range into a macroman decoder range */
                 struct BufferRange *message_decoder =
                     push_pointer_rvalue(message_arena, message_decoder);
                 *message_decoder =
                     macroman_workaround_stream(message_range, message_arena);
-                message_range = message_decoder;
-        }
 
-        // @id cfec80a4708df2e90e45023f0d87af7f4eb54a46
-        uint8_t *full_message = (uint8_t *)push_bytes(message_arena, 0);
-        uint8_t *full_message_end = full_message;
+                // @id cfec80a4708df2e90e45023f0d87af7f4eb54a46
+                uint8_t *decoded_message =
+                    (uint8_t *)push_bytes(message_arena, 0);
+                uint8_t *decoded_message_end = decoded_message;
 
-        while (message_range->error == BR_NoError) {
-                zw_assert(full_message_end == push_bytes(message_arena, 0),
-                          "non contiguous");
-                full_message_end =
-                    algos::copy(message_range->start, message_range->end,
-                                (uint8_t *)push_bytes(
-                                    message_arena,
-                                    message_range->end - message_range->start));
+                while (message_range->error == BR_NoError) {
+                        zw_assert(decoded_message_end ==
+                                      push_bytes(message_arena, 0),
+                                  "non contiguous");
+                        decoded_message_end = algos::copy(
+                            message_range->start, message_range->end,
+                            (uint8_t *)push_bytes(message_arena,
+                                                  message_range->end -
+                                                      message_range->start));
 
-                message_range->next(message_range);
-        }
+                        message_range->next(message_range);
+                }
 
-        if (message_range->error != BR_ReadPastEnd) {
-                error_print("unknown I/O error while parsing message");
-                return;
+                if (message_range->error != BR_ReadPastEnd) {
+                        error_print("unknown I/O error while parsing message");
+                        return;
+                }
+
+                full_message = decoded_message;
+                full_message_end = decoded_message_end;
         }
 
         struct MessageBeingParsed message_parsed = {

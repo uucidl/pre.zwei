@@ -77,7 +77,7 @@ void inputstream_on_filepath(struct MemoryArena *arena,
                 bool32 is_opened = 0;
 
                 // TODO(nicolas) what about io advice received before?
-                uint8_t buffer[4 * 4096] = {};
+                uint8_t buffer[4 * 4 * 4 * 4096] = {};
         };
 
         auto next_on_streamed_file = [](struct BufferRange *range) {
@@ -86,9 +86,10 @@ void inputstream_on_filepath(struct MemoryArena *arena,
                         range->start - offsetof(struct StreamedFile, buffer));
 
                 if (BR_NoError == range->error && !file->is_opened) {
+                        SPDR_SCOPE(global_spdr, "io", "open");
                         int filedesc = open(file->path, O_RDONLY, 0);
-                        fcntl(filedesc, F_NOCACHE, 1);
-                        fcntl(filedesc, F_RDAHEAD, 1);
+                        fcntl(filedesc, F_NOCACHE,
+                              1); // we only process the files once
 
                         file->filedesc = filedesc;
                         if (file->filedesc < 0) {
@@ -756,6 +757,7 @@ int main(int argc, char **argv)
                 return 1;
         }
         spdr_enable_trace(global_spdr, 1);
+        SPDR_METADATA1(global_spdr, "thread_name", SPDR_STR("name", "main"));
 
         AcceptMimeMessageFn *accept_mime_message;
         ParseZoeMailstorePathFn *parse_zoe_mailstore_path;
@@ -851,6 +853,8 @@ int main(int argc, char **argv)
                         trace(traceg);
                 }
 
+                size_t total_bytes_read =
+                    0; // TODO(nicolas) technically could be larger than size_t
                 // TODO(nicolas) always measure bytes/sec or sec/MB and
                 // print out total bytes
                 SPDR_BEGIN(global_spdr, "main", "processing_files");
@@ -871,6 +875,11 @@ int main(int argc, char **argv)
                                 push_back_cstr(traceg, ":");
                                 trace(traceg);
                         }
+                        SPDR_SCOPE1(global_spdr, "main", "process_file",
+                                    SPDR_STR("filepath", all_files->paths[i]));
+                        SPDR_COUNTER1(
+                            global_spdr, "variables", "message_arena",
+                            SPDR_INT("used", int(message_arena->used)));
 
                         // Slurp entire file in memory
                         // NOTE(nicolas): this ensure we don't do I/O in the
@@ -880,6 +889,8 @@ int main(int argc, char **argv)
                         uint8_t *full_message;
                         uint8_t *full_message_end;
                         {
+                                SPDR_SCOPE(global_spdr, "main",
+                                           "read_entire_file");
                                 struct BufferRange file_content;
                                 inputstream_on_filepath(message_arena,
                                                         &file_content,
@@ -907,6 +918,10 @@ int main(int argc, char **argv)
                                         file_content.next(&file_content);
                                 }
                                 inputstream_finish(&file_content);
+                                SPDR_EVENT1(
+                                    global_spdr, "main", "read_entire_file",
+                                    SPDR_INT("size", int(full_message_end -
+                                                         full_message)));
                         }
 
                         push_back_cstr(traceg, "SHA1");
@@ -1039,6 +1054,13 @@ int main(int argc, char **argv)
                         } else {
                                 trace_print("ignored file");
                         }
+                        total_bytes_read += full_message_end - full_message;
+                        SPDR_COUNTER1(
+                            global_spdr, "variables", "read",
+                            SPDR_INT("bytes", int(total_bytes_read / 1000)));
+                        SPDR_COUNTER1(
+                            global_spdr, "variables", "message_arena",
+                            SPDR_INT("used", int(message_arena->used)));
                 }
         }
         SPDR_END(global_spdr, "main", "processing_files");
