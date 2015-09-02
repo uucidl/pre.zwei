@@ -186,23 +186,24 @@ zw_internal struct FileList *directory_query_all_files(
         struct FSEntry;
 
         struct State {
-                struct FSEntry *free_entry = nullptr;
-                struct FSEntry *directories = nullptr;
-                struct FSEntry *files = nullptr;
+                FSEntry *free_entry = nullptr;
+                FSEntry *directories = nullptr;
+                FSEntry *files = nullptr;
         };
 
         struct State *state = push_struct(arena, struct State);
         struct FSEntry {
-                char const *path;
                 struct FSEntry *next;
+                char const *path;
                 uint64_t physical_offset; // for files
+                uint32_t size;
         };
 
         auto push_entry = [&state, arena]() {
-                struct FSEntry *result;
+                FSEntry *result;
 
                 if (!state->free_entry) {
-                        result = push_struct(arena, struct FSEntry);
+                        result = push_struct(arena, FSEntry);
                 } else {
                         result = state->free_entry;
                         state->free_entry = state->free_entry->next;
@@ -212,7 +213,7 @@ zw_internal struct FileList *directory_query_all_files(
         };
 
         auto push_directory = [&state, push_entry]() {
-                struct FSEntry *result = push_entry();
+                FSEntry *result = push_entry();
 
                 result->physical_offset = 0;
                 result->next = state->directories;
@@ -222,7 +223,7 @@ zw_internal struct FileList *directory_query_all_files(
         };
 
         auto pop_directory = [&state]() {
-                struct FSEntry *result = state->directories;
+                FSEntry *result = state->directories;
                 if (result) {
                         state->directories = result->next;
                 }
@@ -231,7 +232,7 @@ zw_internal struct FileList *directory_query_all_files(
         };
 
         auto push_file = [&state, push_entry]() {
-                struct FSEntry *result = push_entry();
+                FSEntry *result = push_entry();
 
                 result->next = state->files;
                 state->files = result;
@@ -239,12 +240,12 @@ zw_internal struct FileList *directory_query_all_files(
                 return result;
         };
 
-        auto discard_entry = [&state](struct FSEntry *entry) {
+        auto discard_entry = [&state](FSEntry *entry) {
                 entry->next = state->free_entry;
                 state->free_entry = entry;
         };
 
-        struct FSEntry *entry = push_directory();
+        FSEntry *entry = push_directory();
         entry->path = root_dir_path;
 
         TextOutputGroup dirlisting = {};
@@ -422,17 +423,17 @@ zw_internal struct FileList *directory_query_all_files(
                 }
 
                 if (entry->obj_type == VREG && !ignore_file) {
-                        struct FSEntry *file_entry = push_file();
+                        FSEntry *file_entry = push_file();
                         file_entry->path = path_cstr;
                         file_entry->physical_offset = physical_offset;
                 } else if (entry->obj_type == VDIR) {
-                        struct FSEntry *dir_entry = push_directory();
+                        FSEntry *dir_entry = push_directory();
                         dir_entry->path = path_cstr;
                 }
 
         };
 
-        struct FSEntry *dir_entry;
+        FSEntry *dir_entry;
         while ((dir_entry = pop_directory())) {
                 char const *dir_path;
                 {
@@ -506,10 +507,10 @@ zw_internal struct FileList *directory_query_all_files(
         zw_assert(state->directories == nullptr, "no more directories");
 
         size_t entry_array_count = 0;
-        struct FSEntry *entry_array = nullptr;
+        FSEntry *entry_array = nullptr;
         {
                 size_t file_count = 0;
-                for (struct FSEntry *fs_entry = state->files; fs_entry;
+                for (FSEntry *fs_entry = state->files; fs_entry;
                      fs_entry = fs_entry->next) {
                         file_count++;
                 }
@@ -523,7 +524,7 @@ zw_internal struct FileList *directory_query_all_files(
                 entry_array =
                     push_array_rvalue(arena, entry_array, entry_array_count);
 
-                for (struct FSEntry *fs_entry = state->files,
+                for (FSEntry *fs_entry = state->files,
                                     *dest_entry = entry_array;
                      fs_entry; fs_entry = fs_entry->next, dest_entry++) {
                         *dest_entry = *fs_entry;
@@ -538,17 +539,17 @@ zw_internal struct FileList *directory_query_all_files(
                 // 8-bit character
 
                 struct FSEntryInBucket {
-                        struct FSEntry fs_entry_value;
-                        struct FSEntryInBucket *next;
+                        FSEntry fs_entry_value;
+                        FSEntryInBucket *next;
                 };
 
-                struct FSEntryInBucket *bucket_entries =
+                FSEntryInBucket *bucket_entries =
                     push_array_rvalue(arena, bucket_entries, entry_array_count);
 
                 // circular linked-list per bucket, this bucket is pointing
                 // to the last element
                 struct {
-                        struct FSEntryInBucket *last;
+                        FSEntryInBucket *last;
                 } buckets[256] = {};
 
                 for (size_t passIndex = 0; passIndex < sizeof(uint64_t);
@@ -561,11 +562,11 @@ zw_internal struct FileList *directory_query_all_files(
                                                (8 * passIndex)) &
                                               0xFF;
 
-                                struct FSEntryInBucket *bucket_entry =
+                                FSEntryInBucket *bucket_entry =
                                     &bucket_entries[bucket_entry_index++];
                                 bucket_entry->fs_entry_value = *fs_entry;
 
-                                struct FSEntryInBucket *current_last_entry =
+                                FSEntryInBucket *current_last_entry =
                                     buckets[key].last;
                                 if (!current_last_entry) {
                                         bucket_entry->next = bucket_entry;
@@ -577,7 +578,7 @@ zw_internal struct FileList *directory_query_all_files(
                                 buckets[key].last = bucket_entry;
                         }
 
-                        struct FSEntry *fs_entry = entry_array;
+                        FSEntry *fs_entry = entry_array;
                         for (auto &bucket : buckets) {
                                 if (bucket.last == nullptr) {
                                         continue;
