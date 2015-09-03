@@ -69,6 +69,8 @@ template <typename ValueType> struct MayFail {
                 result.errorcode = errorcode;
                 return result;
         }
+
+        operator bool() const { return errorcode == 0; }
 };
 
 template <typename ValueType> bool failed(MayFail<ValueType> const result)
