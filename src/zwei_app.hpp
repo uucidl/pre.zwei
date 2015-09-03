@@ -1,5 +1,8 @@
 #pragma once
 
+#include "zwei_inlines.hpp"
+#include "zwei_types.hpp"
+
 #include <cstdint>
 
 struct SPDR_Context;
@@ -18,10 +21,14 @@ struct ZoeMailStoreFile;
 #define INIT_APP(name) void name(Platform platform, int flags)
 typedef INIT_APP(InitAppFn);
 
+/**
+   @return errorcode (!= 0) or a message summary in message_summary
+ */
 #define ACCEPT_MIME_MESSAGE(name)                                              \
-        void name(uint8_t *data_first, uint8_t *data_last,                     \
-                  ZoeMailStoreFile *zoe_mailstore_file,                        \
-                  MemoryArena *message_arena, MemoryArena *result_arena)
+        int name(uint8_t const *data_first, uint8_t const *data_last,          \
+                 ZoeMailStoreFile const *zoe_mailstore_file,                   \
+                 MemoryArena *message_arena, MemoryArena *result_arena,        \
+                 MessageSummary *message_summary)
 typedef ACCEPT_MIME_MESSAGE(AcceptMimeMessageFn);
 
 #define PARSE_ZOE_MAILSTORE_PATH(name)                                         \

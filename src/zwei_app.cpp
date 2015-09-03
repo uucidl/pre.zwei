@@ -302,32 +302,6 @@ macroman_workaround_stream(struct BufferRange *input, struct MemoryArena *arena)
         return range;
 }
 
-struct MessageSummary {
-        /// true when the message is fully rfc5322 conformant
-        bool valid_rfc5322;
-
-        ByteCountedRange message_id_bytes;
-
-        ByteCountedRange *in_reply_to_msg_ids;
-        size_t in_reply_to_msg_ids_count;
-
-        RawMailbox *from_mailboxes;
-        size_t from_mailboxes_count;
-
-        RawMailbox sender_mailbox;
-
-        RawMailbox *to_mailboxes;
-        size_t to_mailboxes_count;
-
-        RawMailbox *cc_mailboxes;
-        size_t cc_mailboxes_count;
-
-        ByteCountedRange subject_field_bytes;
-
-        // TODO(nicolas): add references list
-        // TODO(nicolas): add missing original date as a concrete type
-};
-
 struct MessageBeingParsed {
         enum { UNPARSED,
                MESSAGE_SUMMARY,
@@ -478,8 +452,8 @@ zw_internal void fill_message_summary(MessageSummary *message_summary,
 
 extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
 {
-        uint8_t *full_message = data_first;
-        uint8_t *full_message_end = data_last;
+        uint8_t const *full_message = data_first;
+        uint8_t const *full_message_end = data_last;
         bool must_print_ast = global_debug_mode;
 
         // TODO(nicolas) refine when/how this workaround is applied It
@@ -499,7 +473,8 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
 
                 struct BufferRange message_range_memory;
                 struct BufferRange *message_range = &message_range_memory;
-                stream_on_memory(message_range, full_message,
+                stream_on_memory(message_range,
+                                 const_cast<uint8_t *>(full_message),
                                  full_message_end - full_message);
 
                 /* wrap message_range into a macroman decoder range */
@@ -528,7 +503,7 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
 
                 if (message_range->error != BR_ReadPastEnd) {
                         error_print("unknown I/O error while parsing message");
-                        return;
+                        return 1;
                 }
 
                 full_message = decoded_message;
@@ -546,7 +521,7 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                                       full_message_end - full_message);
                 if (!result) {
                         trace_print("PARSE ERROR");
-                        return;
+                        return 2;
                 }
 
                 zw_assert(result, "could not parse message with hammer");
@@ -687,9 +662,12 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                                        raw.in_reply_to_msg_ids_count);
                 print_field("SUBJECT", raw.subject_field_bytes);
                 // TODO(nicolas): @feature print the first line of the message.
+
+                *message_summary = std::move(raw);
+                return 0;
         }
 
-        return;
+        return 3;
 }
 
 extern "C" EXPORT PARSE_ZOE_MAILSTORE_PATH(parse_zoe_mailstore_path)

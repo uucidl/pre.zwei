@@ -1066,11 +1066,15 @@ int main(int argc, char **argv)
                                 do {
                                         SPDR_BEGIN(global_spdr, "app",
                                                    "accept_mime_message");
-                                        accept_mime_message(
+                                        MessageSummary message_summary;
+                                        auto errorcode = accept_mime_message(
                                             full_message, full_message_end,
                                             zoefile_errorcode == 0 ? &zoefile
                                                                    : nullptr,
-                                            message_arena, &result_arena);
+                                            message_arena, &result_arena,
+                                            &message_summary);
+                                        zw_assert(errorcode == 0,
+                                                  "unexpected errorcode");
                                         SPDR_END(global_spdr, "app",
                                                  "accept_mime_message");
                                 } while (refresh_zwei_app());
