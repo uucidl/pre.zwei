@@ -692,6 +692,116 @@ zw_internal bool refresh_library(struct LoadedLibrary *library)
         return false;
 }
 
+zw_internal void print_message_summary(MessageSummary const &message_summary,
+                                       MemoryArena transient_arena)
+{
+        // FEATURE(nicolas): print raw content of From: To: CC
+        // Sender: Message-Id: In-Reply-To: Subject:
+        TextOutputGroup text_output_group = {};
+        allocate(text_output_group, &transient_arena, KILOBYTES(16));
+
+        // TODO(nicolas): having a delimited table printing abstraction
+        // would help with these (and the app)
+
+        auto print_field = [&text_output_group](const char *name,
+                                                struct ByteCountedRange value) {
+                if (value.first) {
+                        push_back_cstr(text_output_group, "\t");
+                        push_back_cstr(text_output_group, name);
+                        push_back_cstr(text_output_group, "\t");
+                        push_back_extent(text_output_group, value.first,
+                                         value.count);
+                        trace(text_output_group);
+                }
+        };
+        auto print_bytes_list_field = [&text_output_group](
+            const char *name, struct ByteCountedRange *values, size_t count) {
+                if (count == 0) {
+                        return;
+                }
+
+                push_back_cstr(text_output_group, "\t");
+                push_back_cstr(text_output_group, name);
+                push_back_cstr(text_output_group, "\t");
+                algos::for_each_n(
+                    values, count, [&](const ByteCountedRange &range) {
+                            push_back_extent(text_output_group, range.first,
+                                             range.count);
+                    });
+                trace(text_output_group);
+        };
+        // TODO(nicolas): mailboxes could be stored sorted,
+        // since there is not a lot of semantic attached to them
+        // however, what about groups?
+        // The advantage of sorting mailboxes is that we could
+        // compare groups of recipients for instance and name
+        // them somehow
+        auto print_mailbox_list_field = [&text_output_group](
+            const char *name, RawMailbox const *mailboxes,
+            size_t mailboxes_count) {
+                if (mailboxes_count == 0) {
+                        return;
+                }
+                push_back_cstr(text_output_group, "\t");
+                push_back_cstr(text_output_group, name);
+                push_back_cstr(text_output_group, "\t");
+
+                auto push_back_mailbox = [](TextOutputGroup &text_output_group,
+                                            RawMailbox const &mailbox) {
+                        push_back_cstr(text_output_group, "<mailbox ");
+                        if (mailbox.display_name_bytes.count > 0) {
+                                push_back_cstr(text_output_group, "\"");
+                                push_back_extent(
+                                    text_output_group,
+                                    mailbox.display_name_bytes.first,
+                                    mailbox.display_name_bytes.count);
+                                push_back_cstr(text_output_group, "\" ");
+                        }
+                        push_back_extent(text_output_group,
+                                         mailbox.local_part_bytes.first,
+                                         mailbox.local_part_bytes.count);
+                        push_back_cstr(text_output_group, "@");
+                        push_back_extent(text_output_group,
+                                         mailbox.domain_bytes.first,
+                                         mailbox.domain_bytes.count);
+                        push_back_cstr(text_output_group, ">");
+                };
+
+                if (mailboxes_count > 0) {
+                        push_back_mailbox(text_output_group, *mailboxes);
+                        ++mailboxes;
+                        --mailboxes_count;
+                }
+
+                algos::for_each_n(
+                    mailboxes, mailboxes_count, [&](const RawMailbox &mailbox) {
+                            push_back_cstr(text_output_group, ", ");
+                            push_back_mailbox(text_output_group, mailbox);
+                    });
+                trace(text_output_group);
+        };
+
+        if (!message_summary.valid_rfc5322) {
+                trace_print("\tRFC5322\tfalse");
+        }
+
+        print_field("MESSAGE-ID", message_summary.message_id_bytes);
+        print_mailbox_list_field(
+            "SENDER", &message_summary.sender_mailbox,
+            message_summary.sender_mailbox.domain_bytes.count > 0 ? 1 : 0);
+        print_mailbox_list_field("FROM", message_summary.from_mailboxes,
+                                 message_summary.from_mailboxes_count);
+        print_mailbox_list_field("TO", message_summary.to_mailboxes,
+                                 message_summary.to_mailboxes_count);
+        print_mailbox_list_field("CC", message_summary.cc_mailboxes,
+                                 message_summary.cc_mailboxes_count);
+        print_bytes_list_field("IN_REPLY_TO",
+                               message_summary.in_reply_to_msg_ids,
+                               message_summary.in_reply_to_msg_ids_count);
+        print_field("SUBJECT", message_summary.subject_field_bytes);
+        // TODO(nicolas): @feature print the first line of the message.
+}
+
 int main(int argc, char **argv)
 {
         zw_assert(argc > 0, "unexpected argc");
@@ -1073,6 +1183,8 @@ int main(int argc, char **argv)
                                                                    : nullptr,
                                             message_arena, &result_arena,
                                             &message_summary);
+                                        print_message_summary(message_summary,
+                                                              *message_arena);
                                         zw_assert(errorcode == 0,
                                                   "unexpected errorcode");
                                         SPDR_END(global_spdr, "app",
