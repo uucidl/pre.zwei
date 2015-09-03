@@ -2,7 +2,7 @@
 
 #include "zwei_inlines.hpp"
 
-#include "zoe_types.hpp"
+#include "zwei_types.hpp"
 
 /**
    @file Zoe specific code

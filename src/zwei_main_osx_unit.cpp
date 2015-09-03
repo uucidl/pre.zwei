@@ -8,6 +8,7 @@
 #include "zwei_iobuffer.hpp"
 #include "zwei_iobuffer_inlines.hpp"
 #include "zwei_logging.hpp"
+#include "zwei_types.hpp"
 
 #include "zwei_app.hpp"
 
