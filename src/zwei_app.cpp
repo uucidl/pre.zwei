@@ -304,24 +304,25 @@ macroman_workaround_stream(struct BufferRange *input, struct MemoryArena *arena)
 
 struct RawHeaders {
         ByteCountedRange message_id_bytes;
-        struct ByteCountedRange *in_reply_to_msg_ids;
+
+        ByteCountedRange *in_reply_to_msg_ids;
         size_t in_reply_to_msg_ids_count;
-        // TODO(nicolas) add references list
 
         RawMailbox *from_mailboxes;
         size_t from_mailboxes_count;
+
         RawMailbox sender_mailbox;
+
         RawMailbox *to_mailboxes;
         size_t to_mailboxes_count;
+
         RawMailbox *cc_mailboxes;
         size_t cc_mailboxes_count;
 
-        struct ByteCountedRange subject_field_bytes;
+        ByteCountedRange subject_field_bytes;
 
-        // TODO(nicolas) add missing original date as a concrete type
-        struct ByteCountedRange content_transfer_encoding_bytes;
-        struct ByteCountedRange text_content_subtype_bytes;
-        struct ByteCountedRange text_content_charset_bytes;
+        // TODO(nicolas): add references list
+        // TODO(nicolas): add missing original date as a concrete type
 };
 
 struct MessageBeingParsed {
@@ -684,11 +685,6 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                 print_bytes_list_field("IN_REPLY_TO", raw.in_reply_to_msg_ids,
                                        raw.in_reply_to_msg_ids_count);
                 print_field("SUBJECT", raw.subject_field_bytes);
-
-                print_field("CONTENT ENCODING",
-                            raw.content_transfer_encoding_bytes);
-                print_field("TEXT_SUBTYPE", raw.text_content_subtype_bytes);
-                print_field("TEXT CHARSET", raw.text_content_charset_bytes);
         }
 
         return;
