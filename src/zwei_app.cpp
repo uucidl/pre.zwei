@@ -302,7 +302,10 @@ macroman_workaround_stream(struct BufferRange *input, struct MemoryArena *arena)
         return range;
 }
 
-struct RawHeaders {
+struct MessageSummary {
+        /// true when the message is fully rfc5322 conformant
+        bool valid_rfc5322;
+
         ByteCountedRange message_id_bytes;
 
         ByteCountedRange *in_reply_to_msg_ids;
@@ -326,14 +329,10 @@ struct RawHeaders {
 };
 
 struct MessageBeingParsed {
-        struct MemoryArena *arena;
-
-        bool is_rfc5322; /// true when the message is fully rfc5322 conformant
-
         enum { UNPARSED,
-               RAW_HEADERS,
+               MESSAGE_SUMMARY,
         } content_state;
-        struct RawHeaders raw_content;
+        struct MessageSummary message_summary;
 };
 
 extern "C" EXPORT INIT_APP(init_app)
@@ -358,13 +357,13 @@ extern "C" EXPORT INIT_APP(init_app)
         zoe_support_init();
 }
 
-zw_internal void fill_raw_headers(RawHeaders *raw_headers,
-                                  const HParsedToken *ast,
-                                  MemoryArena *arena)
+zw_internal void fill_message_summary(MessageSummary *message_summary,
+                                      const HParsedToken *ast,
+                                      MemoryArena *arena)
 {
-        *raw_headers = {};
+        *message_summary = {};
 
-        auto collect = [&raw_headers, arena](HParsedToken const *token) {
+        auto collect = [&message_summary, arena](HParsedToken const *token) {
                 enum { NONE,
                        BYTES,
                        BYTES_LIST,
@@ -379,30 +378,33 @@ zw_internal void fill_raw_headers(RawHeaders *raw_headers,
 
                 if (RFC5322TokenIs(token, MESSAGE_ID_FIELD)) {
                         process = BYTES;
-                        d_bytes_range = &raw_headers->message_id_bytes;
+                        d_bytes_range = &message_summary->message_id_bytes;
                 } else if (RFC5322TokenIs(token, SUBJECT_FIELD)) {
                         process = BYTES;
-                        d_bytes_range = &raw_headers->subject_field_bytes;
+                        d_bytes_range = &message_summary->subject_field_bytes;
                 } else if (RFC5322TokenIs(token, FROM_FIELD)) {
                         process = MAILBOX_LIST;
-                        d_mailboxes = &raw_headers->from_mailboxes;
-                        d_mailboxes_count = &raw_headers->from_mailboxes_count;
+                        d_mailboxes = &message_summary->from_mailboxes;
+                        d_mailboxes_count =
+                            &message_summary->from_mailboxes_count;
                 } else if (RFC5322TokenIs(token, TO_FIELD)) {
                         process = MAILBOX_LIST;
-                        d_mailboxes = &raw_headers->to_mailboxes;
-                        d_mailboxes_count = &raw_headers->to_mailboxes_count;
+                        d_mailboxes = &message_summary->to_mailboxes;
+                        d_mailboxes_count =
+                            &message_summary->to_mailboxes_count;
                 } else if (RFC5322TokenIs(token, CC_FIELD)) {
                         process = MAILBOX_LIST;
-                        d_mailboxes = &raw_headers->cc_mailboxes;
-                        d_mailboxes_count = &raw_headers->cc_mailboxes_count;
+                        d_mailboxes = &message_summary->cc_mailboxes;
+                        d_mailboxes_count =
+                            &message_summary->cc_mailboxes_count;
                 } else if (RFC5322TokenIs(token, SENDER_FIELD)) {
                         process = MAILBOX;
-                        d_mailbox = &raw_headers->sender_mailbox;
+                        d_mailbox = &message_summary->sender_mailbox;
                 } else if (RFC5322TokenIs(token, IN_REPLY_TO_FIELD)) {
                         process = BYTES_LIST;
-                        d_bytes_ranges = &raw_headers->in_reply_to_msg_ids;
+                        d_bytes_ranges = &message_summary->in_reply_to_msg_ids;
                         d_bytes_ranges_count =
-                            &raw_headers->in_reply_to_msg_ids_count;
+                            &message_summary->in_reply_to_msg_ids_count;
                 }
 
                 switch (process) {
@@ -534,10 +536,7 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
         }
 
         struct MessageBeingParsed message_parsed = {
-            NULL /* was message_arena */,
-            true,
-            MessageBeingParsed::UNPARSED,
-            {},
+            MessageBeingParsed::UNPARSED, {},
         };
         // Hammer parsing
         {
@@ -555,13 +554,14 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                         if (must_print_ast) {
                                 rfc5322_print_ast(stdout, result->ast, 0, 4);
                         }
-                        message_parsed.is_rfc5322 =
+                        message_parsed.message_summary.valid_rfc5322 =
                             rfc5322_validate(result->ast);
-                        fill_raw_headers(&message_parsed.raw_content,
-                                         result->ast, result_arena);
+
+                        fill_message_summary(&message_parsed.message_summary,
+                                             result->ast, result_arena);
 
                         message_parsed.content_state =
-                            MessageBeingParsed::RAW_HEADERS;
+                            MessageBeingParsed::MESSAGE_SUMMARY;
 
                         HArenaStats stats;
                         h_allocator_stats(result->arena, &stats);
@@ -573,10 +573,8 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                 // the header.. what about reacting to that?
         }
 
-        if (!message_parsed.is_rfc5322) {
-                trace_print("\tRFC5322: ERROR");
-        }
-        if (message_parsed.content_state == MessageBeingParsed::RAW_HEADERS) {
+        if (message_parsed.content_state ==
+            MessageBeingParsed::MESSAGE_SUMMARY) {
                 // FEATURE(nicolas): print raw content of From: To: CC
                 // Sender: Message-Id: In-Reply-To: Subject:
                 TextOutputGroup text_output_group = {};
@@ -585,7 +583,7 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                 // TODO(nicolas): having a delimited table printing abstraction
                 // would help with these (and the app)
 
-                auto raw = message_parsed.raw_content;
+                auto raw = message_parsed.message_summary;
                 auto print_field = [&text_output_group](
                     const char *name, struct ByteCountedRange value) {
                         if (value.first) {
@@ -671,7 +669,10 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                         trace(text_output_group);
                 };
 
-                // TODO(nicolas): @feature print the first line of the message.
+                if (!raw.valid_rfc5322) {
+                        trace_print("\tRFC5322\tfalse");
+                }
+
                 print_field("MESSAGE-ID", raw.message_id_bytes);
                 print_mailbox_list_field(
                     "SENDER", &raw.sender_mailbox,
@@ -685,6 +686,7 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                 print_bytes_list_field("IN_REPLY_TO", raw.in_reply_to_msg_ids,
                                        raw.in_reply_to_msg_ids_count);
                 print_field("SUBJECT", raw.subject_field_bytes);
+                // TODO(nicolas): @feature print the first line of the message.
         }
 
         return;
