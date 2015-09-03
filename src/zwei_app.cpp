@@ -557,7 +557,7 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                         message_parsed.is_rfc5322 =
                             rfc5322_validate(result->ast);
                         fill_raw_headers(&message_parsed.raw_content,
-                                         result->ast, message_arena);
+                                         result->ast, result_arena);
 
                         message_parsed.content_state =
                             MessageBeingParsed::RAW_HEADERS;

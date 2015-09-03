@@ -115,7 +115,7 @@ struct MemoryArena {
         size_t size;
 };
 
-struct MemoryArena memory_arena(void *base, size_t size)
+MemoryArena memory_arena(void *base, size_t size)
 {
         return {(uint8_t *)base, 0, size};
 }
@@ -133,6 +133,12 @@ inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
         arena->used += bytes;
 
         return result;
+}
+
+MemoryArena push_sub_arena(MemoryArena &arena, size_t size)
+{
+        void *bytes = push_bytes(&arena, size);
+        return memory_arena(bytes, size);
 }
 
 #define push_struct(arena_pointer, type)                                       \

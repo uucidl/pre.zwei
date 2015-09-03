@@ -21,8 +21,8 @@ struct BufferRange;
 
 #define ACCEPT_MIME_MESSAGE(name)                                              \
         void name(uint8_t *data_first, uint8_t *data_last,                     \
-                  struct ZoeMailStoreFile *zoe_mailstore_file,                 \
-                  struct MemoryArena *message_arena)
+                  ZoeMailStoreFile *zoe_mailstore_file,                        \
+                  MemoryArena *message_arena, MemoryArena *result_arena)
 typedef ACCEPT_MIME_MESSAGE(AcceptMimeMessageFn);
 
 #define PARSE_ZOE_MAILSTORE_PATH(name)                                         \

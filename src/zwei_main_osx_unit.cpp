@@ -861,6 +861,8 @@ int main(int argc, char **argv)
                         trace(traceg);
                 }
 
+                MemoryArena result_arena =
+                    push_sub_arena(permanent_arena, MEGABYTES(512));
                 size_t total_bytes_read =
                     0; // TODO(nicolas) technically could be larger than size_t
                 // TODO(nicolas) always measure bytes/sec or sec/MB and
@@ -1067,7 +1069,7 @@ int main(int argc, char **argv)
                                             full_message, full_message_end,
                                             zoefile_errorcode == 0 ? &zoefile
                                                                    : nullptr,
-                                            message_arena);
+                                            message_arena, &result_arena);
                                         SPDR_END(global_spdr, "app",
                                                  "accept_mime_message");
                                 } while (refresh_zwei_app());
@@ -1076,8 +1078,11 @@ int main(int argc, char **argv)
                         }
                         total_bytes_read += full_message_end - full_message;
                         SPDR_COUNTER1(
-                            global_spdr, "variables", "read",
-                            SPDR_INT("bytes", int(total_bytes_read / 1000)));
+                            global_spdr, "variables", "result_arena",
+                            SPDR_INT("bytes", int(result_arena.used)));
+                        SPDR_COUNTER1(global_spdr, "variables", "read",
+                                      SPDR_INT("kilobytes",
+                                               int(total_bytes_read / 1000)));
                         SPDR_COUNTER1(
                             global_spdr, "variables", "message_arena",
                             SPDR_INT("used", int(message_arena->used)));
