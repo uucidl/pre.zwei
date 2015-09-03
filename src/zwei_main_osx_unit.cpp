@@ -30,8 +30,8 @@ struct Sha1 {
 
 MayFail<Sha1> sha1(struct BufferRange *range)
 {
-        MayFail<Sha1> result;
-        using algos::sink;
+        using Result = MayFail<Sha1>;
+        Sha1 result;
 
         size_t const MAX_CHUNK_SIZE = std::numeric_limits<CC_LONG>::max();
         auto chunk_size = [MAX_CHUNK_SIZE](size_t size) {
@@ -54,10 +54,10 @@ MayFail<Sha1> sha1(struct BufferRange *range)
         }
 
         if (range->error == BR_ReadPastEnd) {
-                zw_assert(1 == CC_SHA1_Final(sink(result).digest, &ctx),
+                zw_assert(1 == CC_SHA1_Final(result.digest, &ctx),
                           "CC_SHA1_Final");
         } else {
-                result.errorcode = 1;
+                return Result::failure(1);
         }
 
         return result;

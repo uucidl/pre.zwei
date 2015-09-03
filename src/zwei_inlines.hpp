@@ -55,17 +55,20 @@ typedef uint32_t bool32;
 
 // <Error handling
 
+// TODO(nicolas): look at std::optional and model some of it after it
 template <typename ValueType> struct MayFail {
         ValueType value;
-        uint32_t errorcode = 0;
+        uint32_t errorcode;
 
-        using WritableMe = MayFail;
-        friend ValueType &sink(WritableMe &self) { return self.value; }
-};
+        MayFail() {}
+        MayFail(ValueType x) : value(std::move(x)), errorcode(0) {}
 
-template <typename ValueType>
-struct algos::WritableConcept<MayFail<ValueType>> {
-        using value_type = ValueType;
+        static MayFail failure(uint32_t errorcode)
+        {
+                MayFail result;
+                result.errorcode = errorcode;
+                return result;
+        }
 };
 
 template <typename ValueType> bool failed(MayFail<ValueType> const result)
