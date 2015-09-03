@@ -70,15 +70,20 @@ MayFail<Sha1> sha1(struct BufferRange *range)
 /// fully and only once
 void inputstream_on_filepath(struct MemoryArena *arena,
                              struct BufferRange *result,
-                             char const *path)
+                             char const *path,
+                             size_t limit)
 {
         struct StreamedFile {
                 int filedesc = 0;
                 char const *path = nullptr;
                 bool32 is_opened = 0;
+                size_t total_read = 0;
+                size_t limit_read = 0;
 
                 // TODO(nicolas) what about io advice received before?
-                uint8_t buffer[4 * 4 * 4 * 4096] = {};
+                // NOTE(nicolas): this was tuned so that we get in average a
+                // single read per file
+                uint8_t buffer[2 * 4 * 4 * 4 * 4096] = {};
         };
 
         auto next_on_streamed_file = [](struct BufferRange *range) {
@@ -97,6 +102,11 @@ void inputstream_on_filepath(struct MemoryArena *arena,
                                 return fail(range, BR_IOError);
                         }
                         file->is_opened = true;
+                } else if (file->total_read >= file->limit_read) {
+                        if (file->is_opened) {
+                                close(file->filedesc);
+                        }
+                        return fail(range, BR_ReadPastEnd);
                 }
 
                 SPDR_BEGIN1(global_spdr, "io", "read",
@@ -113,9 +123,14 @@ void inputstream_on_filepath(struct MemoryArena *arena,
                         return fail(range, BR_ReadPastEnd);
                 }
 
+                if (file->total_read + size_read >= file->limit_read) {
+                        size_read = file->limit_read - file->total_read;
+                }
+
                 range->start = file->buffer;
                 range->cursor = range->start;
                 range->end = range->start + size_read;
+                file->total_read += size_read;
 
                 return BR_NoError;
         };
@@ -132,6 +147,7 @@ void inputstream_on_filepath(struct MemoryArena *arena,
         struct StreamedFile *file = push_pointer_rvalue(arena, file);
         *file = StreamedFile{};
         file->path = path;
+        file->limit_read = limit;
 
         stream_on_file(result, file);
 }
@@ -870,8 +886,8 @@ int main(int argc, char **argv)
 
         struct MemoryArena permanent_arena =
             memory_arena(permanent_storage, permanent_storage_memory_size);
-        if (spdr_init(&global_spdr, push_bytes(&permanent_arena, MEGABYTES(32)),
-                      MEGABYTES(32))) {
+        if (spdr_init(&global_spdr, push_bytes(&permanent_arena, MEGABYTES(96)),
+                      MEGABYTES(96))) {
                 error_print("could not initialize memory for tracing");
                 return 1;
         }
@@ -948,8 +964,10 @@ int main(int argc, char **argv)
         if (!root_dir_path) {
                 error_print("you must pass a root directory with --root-dir");
         } else {
-                struct MemoryArena dc_arena = memory_arena(
-                    transient_storage, transient_storage_memory_size / 2);
+                MemoryArena transient_arena = memory_arena(
+                    transient_storage, transient_storage_memory_size);
+                struct MemoryArena dc_arena = push_sub_arena(
+                    transient_arena, transient_storage_memory_size / 2);
 
                 // NOTE(nicolas) we could process files in parallel
                 // .. but how much parallelism can a HDD/SDD/Raid
@@ -986,14 +1004,11 @@ int main(int argc, char **argv)
                         auto const file_attributes =
                             all_files->attributes[file_index];
 
-                        MemoryArena message_arena_memory =
-                            memory_arena(dc_arena.base + dc_arena.size,
-                                         (uint8_t *)transient_storage +
-                                             transient_storage_memory_size -
-                                             dc_arena.base + dc_arena.size);
-                        MemoryArena *message_arena = &message_arena_memory;
+                        MemoryArena temp_arena = transient_arena;
+                        MemoryArena message_arena = push_sub_arena(
+                            temp_arena, temp_arena.size - temp_arena.used);
                         TextOutputGroup traceg = {};
-                        allocate(traceg, message_arena, KILOBYTES(1));
+                        allocate(traceg, &message_arena, KILOBYTES(1));
                         {
                                 push_back_cstr(traceg, "FILE");
                                 push_back_formatted(traceg, "%lld", file_index);
@@ -1006,7 +1021,7 @@ int main(int argc, char **argv)
                                     SPDR_STR("filepath", filepath));
                         SPDR_COUNTER1(
                             global_spdr, "variables", "message_arena",
-                            SPDR_INT("used", int(message_arena->used)));
+                            SPDR_INT("used", int(message_arena.used)));
 
                         // Slurp entire file in memory
                         // NOTE(nicolas): this ensure we don't do I/O in the
@@ -1019,25 +1034,26 @@ int main(int argc, char **argv)
                                 SPDR_SCOPE(global_spdr, "main",
                                            "read_entire_file");
                                 struct BufferRange file_content;
-                                inputstream_on_filepath(
-                                    message_arena, &file_content, filepath);
+                                inputstream_on_filepath(&message_arena,
+                                                        &file_content, filepath,
+                                                        file_attributes.size);
 
                                 // TODO(nicolas): @copypaste
                                 // cfec80a4708df2e90e45023f0d87af7f4eb54a46
                                 full_message =
-                                    (uint8_t *)push_bytes(message_arena, 0);
+                                    (uint8_t *)push_bytes(&message_arena, 0);
                                 full_message_end = full_message;
 
                                 while (file_content.error == BR_NoError) {
                                         zw_assert(
                                             full_message_end ==
-                                                push_bytes(message_arena, 0),
+                                                push_bytes(&message_arena, 0),
                                             "non contiguous");
                                         full_message_end = algos::copy(
                                             file_content.start,
                                             file_content.end,
                                             (uint8_t *)push_bytes(
-                                                message_arena,
+                                                &message_arena,
                                                 file_content.end -
                                                     file_content.start));
 
@@ -1181,10 +1197,10 @@ int main(int argc, char **argv)
                                             full_message, full_message_end,
                                             zoefile_errorcode == 0 ? &zoefile
                                                                    : nullptr,
-                                            message_arena, &result_arena,
+                                            &message_arena, &result_arena,
                                             &message_summary);
                                         print_message_summary(message_summary,
-                                                              *message_arena);
+                                                              *&message_arena);
                                         zw_assert(errorcode == 0,
                                                   "unexpected errorcode");
                                         SPDR_END(global_spdr, "app",
@@ -1202,7 +1218,7 @@ int main(int argc, char **argv)
                                                int(total_bytes_read / 1000)));
                         SPDR_COUNTER1(
                             global_spdr, "variables", "message_arena",
-                            SPDR_INT("used", int(message_arena->used)));
+                            SPDR_INT("used", int(message_arena.used)));
                 }
         }
         SPDR_END(global_spdr, "main", "processing_files");
