@@ -16,6 +16,8 @@
 
 #include "../modules/uu.spdr/include/spdr/spdr.hh"
 
+#include <dispatch/dispatch.h>
+
 #include <cstdarg>
 #include <cstdio>
 
@@ -818,6 +820,172 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
         // TODO(nicolas): @feature print the first line of the message.
 }
 
+struct ProcessedMessage {
+        bool success;
+        Sha1 sha1;
+        size_t fileindex;
+        char const *filepath;
+        char const *filename;
+        uint64_t filesize;
+        ZoeMailStoreFile zoefile;
+        ByteCountedRange zoe_rel_url;
+        MessageSummary message_summary;
+};
+
+struct Zwei {
+        AcceptMimeMessageFn *accept_mime_message;
+        ParseZoeMailstorePathFn *parse_zoe_mailstore_path;
+};
+
+zw_internal void process_message(Zwei const &zwei,
+                                 char const *filename,
+                                 char const *filepath,
+                                 uint8_t const *full_message,
+                                 uint8_t const *full_message_last,
+                                 MemoryArena &message_arena,
+                                 MemoryArena &result_arena,
+                                 ProcessedMessage &destination)
+{
+        struct BufferRange file_content;
+        stream_on_memory(&file_content, const_cast<uint8_t *>(full_message),
+                         full_message_last - full_message);
+        auto sha1_result = sha1(&file_content);
+        inputstream_finish(&file_content);
+
+        if (!sha1_result) {
+                return;
+        }
+
+        destination.sha1 = just(sha1_result);
+
+        auto zoefile_errorcode =
+            zwei.parse_zoe_mailstore_path(&destination.zoefile, filename);
+        if (0 != zoefile_errorcode && !cstr_endswith(filename, ".eml")) {
+                return;
+        }
+
+        if (0 == zoefile_errorcode) {
+                // find predecessor, until you reach
+                // boundary
+                auto pred = [](char const *const first, char const *const pos) {
+                        if (pos != first) {
+                                return algos::predecessor(pos);
+                        }
+                        return pos;
+                };
+                // skip day, month, year
+                auto first = cstr_find_last(filepath, '/');
+                first =
+                    algos::find_backward(filepath, pred(filepath, first), '/');
+                first =
+                    algos::find_backward(filepath, pred(filepath, first), '/');
+                first =
+                    algos::find_backward(filepath, pred(filepath, first), '/');
+                first = algos::successor(first);
+                auto last = cstr_find_last(first, '.');
+                destination.zoe_rel_url = {(uint8_t *)first,
+                                           size_t(last - first)};
+        }
+
+        SPDR_BEGIN(global_spdr, "app", "accept_mime_message");
+        auto errorcode = zwei.accept_mime_message(
+            full_message, full_message_last,
+            zoefile_errorcode == 0 ? &destination.zoefile : nullptr,
+            &message_arena, &result_arena, &destination.message_summary);
+        zw_assert(errorcode == 0, "unexpected errorcode");
+        SPDR_END(global_spdr, "app", "accept_mime_message");
+
+        destination.success = true;
+}
+
+zw_internal void
+print_processed_message(ProcessedMessage const &processed_message,
+                        MemoryArena &transient_arena)
+{
+        char const *filepath = processed_message.filepath;
+        TextOutputGroup traceg = {};
+        allocate(traceg, &transient_arena, KILOBYTES(1));
+        {
+                push_back_cstr(traceg, "FILE");
+                push_back_formatted(traceg, "%lld",
+                                    processed_message.fileindex);
+                push_back_cstr(traceg, " ");
+                push_back_cstr(traceg, filepath);
+                push_back_cstr(traceg, ":");
+                trace(traceg);
+        }
+        push_back_cstr(traceg, "SHA1");
+        push_back_cstr(traceg, "\t");
+
+        auto sha1_value = processed_message.sha1;
+        char byteToHexChar[] = {
+            '0',
+            '1',
+            '2',
+            '3',
+            '4',
+            '5',
+            '6',
+            '7',
+            '8',
+            '9',
+            'a',
+            'b',
+            'c',
+            'd',
+            'e',
+            'f',
+        };
+        for (size_t byteIndex = 0; byteIndex < NCOUNT(sha1_value.digest);
+             byteIndex++) {
+                uint8_t const byte = sha1_value.digest[byteIndex];
+                push_back_formatted(traceg, "%c%c", byteToHexChar[byte >> 4],
+                                    byteToHexChar[byte & 0xF]);
+        }
+        trace(traceg);
+
+        if (processed_message.success) {
+                // FEATURE(nicolas): print filing timestamp
+                push_back_cstr(traceg, "PATH");
+                push_back_cstr(traceg, "\t");
+                push_back_cstr(traceg, filepath);
+                trace(traceg);
+
+                push_back_cstr(traceg, "SIZE");
+                push_back_cstr(traceg, "\t");
+                push_back_u64(traceg, processed_message.filesize);
+                push_back_cstr(traceg, "\t");
+                trace(traceg);
+
+                push_back_cstr(traceg, "ZOE_REL_URL");
+                push_back_cstr(traceg, "\t");
+                push_back_extent(traceg, processed_message.zoe_rel_url.first,
+                                 processed_message.zoe_rel_url.count);
+                trace(traceg);
+
+                push_back_cstr(traceg, "UUID");
+                push_back_cstr(traceg, "\t");
+                for (size_t i = 0; i < NCOUNT(processed_message.zoefile.uuid);
+                     i++) {
+                        push_back_formatted(traceg, "%x",
+                                            processed_message.zoefile.uuid[i]);
+                }
+                trace(traceg);
+
+                push_back_cstr(traceg, "UNIX TIMESTAMP");
+                push_back_cstr(traceg, "\t");
+                push_back_formatted(
+                    traceg, "%llu",
+                    processed_message.zoefile.unix_epoch_millis);
+                trace(traceg);
+
+                print_message_summary(processed_message.message_summary,
+                                      transient_arena);
+        } else {
+                trace_print("ignored file");
+        }
+}
+
 int main(int argc, char **argv)
 {
         zw_assert(argc > 0, "unexpected argc");
@@ -861,7 +1029,7 @@ int main(int argc, char **argv)
         void *permanent_storage = nullptr;
         auto permanent_storage_memory_size = GIGABYTES(1);
         void *transient_storage = nullptr;
-        auto transient_storage_memory_size = MEGABYTES(64);
+        auto transient_storage_memory_size = MEGABYTES(512);
         {
                 vm_address_t transient_storage_memory_address = 0x1000000000;
                 vm_address_t permanent_storage_memory_address = 0x2000000000;
@@ -894,8 +1062,23 @@ int main(int argc, char **argv)
         spdr_enable_trace(global_spdr, 1);
         SPDR_METADATA1(global_spdr, "thread_name", SPDR_STR("name", "main"));
 
-        AcceptMimeMessageFn *accept_mime_message;
-        ParseZoeMailstorePathFn *parse_zoe_mailstore_path;
+#if ZWEI_DISABLED
+        // testing libdispatch
+        {
+                dispatch_queue_t queue = dispatch_get_global_queue(
+                    DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+                size_t iteration_count = 9;
+                dispatch_apply_f(
+                    iteration_count, queue, nullptr, [](void *, size_t idx) {
+                            SPDR_BEGIN1(global_spdr, "dispatch", "queue",
+                                        SPDR_INT("idx", int(idx)));
+                            printf("hello %zu world\n", idx);
+                            SPDR_END(global_spdr, "dispatch", "queue");
+                    });
+        }
+#endif
+
+        Zwei zwei = {};
 
         struct LoadedLibrary zwei_app_library = {};
         {
@@ -915,8 +1098,7 @@ int main(int argc, char **argv)
                 lib->file_mtime = 0;
         }
 
-        auto refresh_zwei_app = [&zwei_app_library, &accept_mime_message,
-                                 &parse_zoe_mailstore_path, debug_mode_on]() {
+        auto refresh_zwei_app = [&zwei_app_library, &zwei, debug_mode_on]() {
                 struct LoadedLibrary *lib = &zwei_app_library;
                 bool was_loaded = !!lib->dlhandle;
                 if (refresh_library(lib)) {
@@ -929,16 +1111,16 @@ int main(int argc, char **argv)
                             dlsym(lib->dlhandle, "init_app"));
                         zw_assert(init_app, "expected symbol init_app");
 
-                        accept_mime_message =
-                            reinterpret_cast<decltype(accept_mime_message)>(
-                                dlsym(lib->dlhandle, "accept_mime_message"));
-                        zw_assert(accept_mime_message,
+                        zwei.accept_mime_message = reinterpret_cast<decltype(
+                            zwei.accept_mime_message)>(
+                            dlsym(lib->dlhandle, "accept_mime_message"));
+                        zw_assert(zwei.accept_mime_message,
                                   "expected symbol check_mime_message");
 
-                        parse_zoe_mailstore_path = reinterpret_cast<decltype(
-                            parse_zoe_mailstore_path)>(
+                        zwei.parse_zoe_mailstore_path = reinterpret_cast<
+                            decltype(zwei.parse_zoe_mailstore_path)>(
                             dlsym(lib->dlhandle, "parse_zoe_mailstore_path"));
-                        zw_assert(parse_zoe_mailstore_path,
+                        zw_assert(zwei.parse_zoe_mailstore_path,
                                   "expected symbol parse_zoe_mailstore_path");
 
                         Platform platform;
@@ -997,6 +1179,72 @@ int main(int argc, char **argv)
                 // TODO(nicolas) always measure bytes/sec or sec/MB and
                 // print out total bytes
                 SPDR_BEGIN(global_spdr, "main", "processing_files");
+
+                struct FileWorkTaskInput {
+                        Zwei zwei;
+                        char const *filename;
+                        char const *filepath;
+                        uint8_t const *full_message;
+                        uint8_t const *full_message_end;
+                };
+
+                struct FileWorkTask {
+                        FileWorkTaskInput input;
+                        MemoryArena arena;
+                        ProcessedMessage result;
+                };
+
+                FileWorkTask tasks[8];
+                size_t tasks_capacity = NCOUNT(tasks);
+                size_t tasks_count = 0;
+                MemoryArena const tasks_arena_init = push_sub_arena(
+                    transient_arena, tasks_capacity * MEGABYTES(5));
+                MemoryArena tasks_arena = tasks_arena_init;
+
+                auto dispatch_all_app_tasks = [](FileWorkTask *tasks,
+                                                 size_t tasks_count) {
+                        dispatch_queue_t queue = dispatch_get_global_queue(
+                            DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+
+                        dispatch_apply_f(
+                            tasks_count, queue, tasks,
+                            [](void *tasks_ptr, size_t task_index) {
+                                    FileWorkTask *tasks =
+                                        static_cast<FileWorkTask *>(tasks_ptr);
+                                    FileWorkTask &task = tasks[task_index];
+
+                                    size_t transient_memory_size =
+                                        KILOBYTES(512);
+                                    MemoryArena transient_arena = memory_arena(
+                                        malloc(transient_memory_size),
+                                        transient_memory_size);
+                                    process_message(task.input.zwei,
+                                                    task.input.filename,
+                                                    task.input.filepath,
+                                                    task.input.full_message,
+                                                    task.input.full_message_end,
+                                                    transient_arena, task.arena,
+                                                    task.result);
+                                    free(transient_arena.base);
+                                    transient_arena = {};
+
+                            });
+
+                };
+
+                auto run_app_tasks = [&tasks, &tasks_count, &tasks_arena,
+                                      tasks_arena_init, dispatch_all_app_tasks](
+                    MemoryArena arena) {
+                        dispatch_all_app_tasks(tasks, tasks_count);
+                        algos::for_each_n(tasks, tasks_count,
+                                          [&arena](FileWorkTask const &task) {
+                                                  print_processed_message(
+                                                      task.result, arena);
+                                          });
+                        tasks_count = 0;
+                        tasks_arena = tasks_arena_init;
+                };
+
                 for (size_t file_index = 0; file_index < all_files->count;
                      file_index++) {
                         auto const filename = all_files->filenames[file_index];
@@ -1007,21 +1255,18 @@ int main(int argc, char **argv)
                         MemoryArena temp_arena = transient_arena;
                         MemoryArena message_arena = push_sub_arena(
                             temp_arena, temp_arena.size - temp_arena.used);
-                        TextOutputGroup traceg = {};
-                        allocate(traceg, &message_arena, KILOBYTES(1));
-                        {
-                                push_back_cstr(traceg, "FILE");
-                                push_back_formatted(traceg, "%lld", file_index);
-                                push_back_cstr(traceg, " ");
-                                push_back_cstr(traceg, filepath);
-                                push_back_cstr(traceg, ":");
-                                trace(traceg);
+
+                        if (tasks_count == tasks_capacity) {
+                                run_app_tasks(message_arena);
                         }
+
+                        FileWorkTask &task = tasks[tasks_count];
+                        task = {};
+
                         SPDR_SCOPE1(global_spdr, "main", "process_file",
                                     SPDR_STR("filepath", filepath));
-                        SPDR_COUNTER1(
-                            global_spdr, "variables", "message_arena",
-                            SPDR_INT("used", int(message_arena.used)));
+                        SPDR_COUNTER1(global_spdr, "variables", "tasks_arena",
+                                      SPDR_INT("used", int(tasks_arena.used)));
 
                         // Slurp entire file in memory
                         // NOTE(nicolas): this ensure we don't do I/O in the
@@ -1041,19 +1286,19 @@ int main(int argc, char **argv)
                                 // TODO(nicolas): @copypaste
                                 // cfec80a4708df2e90e45023f0d87af7f4eb54a46
                                 full_message =
-                                    (uint8_t *)push_bytes(&message_arena, 0);
+                                    (uint8_t *)push_bytes(&tasks_arena, 0);
                                 full_message_end = full_message;
 
                                 while (file_content.error == BR_NoError) {
                                         zw_assert(
                                             full_message_end ==
-                                                push_bytes(&message_arena, 0),
+                                                push_bytes(&tasks_arena, 0),
                                             "non contiguous");
                                         full_message_end = algos::copy(
                                             file_content.start,
                                             file_content.end,
                                             (uint8_t *)push_bytes(
-                                                &message_arena,
+                                                &tasks_arena,
                                                 file_content.end -
                                                     file_content.start));
 
@@ -1064,151 +1309,24 @@ int main(int argc, char **argv)
                                     global_spdr, "main", "read_entire_file",
                                     SPDR_INT("size", int(full_message_end -
                                                          full_message)));
+                                zw_assert(
+                                    uint64_t(full_message_end - full_message) ==
+                                        file_attributes.size,
+                                    "surprising file size");
                         }
 
-                        push_back_cstr(traceg, "SHA1");
-                        push_back_cstr(traceg, "\t");
+                        ++tasks_count;
+                        task.input.zwei = zwei;
+                        task.input.filename = filename;
+                        task.input.filepath = filepath;
+                        task.result.filename = filename;
+                        task.result.filepath = filepath;
+                        task.result.fileindex = file_index;
+                        task.result.filesize = file_attributes.size;
+                        task.input.full_message = full_message;
+                        task.input.full_message_end = full_message_end;
+                        task.arena = push_sub_arena(result_arena, KILOBYTES(4));
 
-                        zw_assert(uint64_t(full_message_end - full_message) ==
-                                      file_attributes.size,
-                                  "surprising file size");
-
-                        struct BufferRange file_content;
-                        stream_on_memory(&file_content, full_message,
-                                         full_message_end - full_message);
-                        auto sha1_result = sha1(&file_content);
-                        inputstream_finish(&file_content);
-
-                        if (failed(sha1_result)) {
-                                push_back_cstr(traceg,
-                                               "<failed to compute result>");
-                        } else {
-                                zw_assert(file_content.error == BR_ReadPastEnd,
-                                          "must read until end");
-
-                                auto sha1_value = just(sha1_result);
-                                char byteToHexChar[] = {
-                                    '0',
-                                    '1',
-                                    '2',
-                                    '3',
-                                    '4',
-                                    '5',
-                                    '6',
-                                    '7',
-                                    '8',
-                                    '9',
-                                    'a',
-                                    'b',
-                                    'c',
-                                    'd',
-                                    'e',
-                                    'f',
-                                };
-                                for (size_t byteIndex = 0;
-                                     byteIndex < NCOUNT(sha1_value.digest);
-                                     byteIndex++) {
-                                        uint8_t const byte =
-                                            sha1_value.digest[byteIndex];
-                                        push_back_formatted(
-                                            traceg, "%c%c",
-                                            byteToHexChar[byte >> 4],
-                                            byteToHexChar[byte & 0xF]);
-                                }
-                        }
-                        trace(traceg);
-
-                        struct ZoeMailStoreFile zoefile;
-                        auto zoefile_errorcode =
-                            parse_zoe_mailstore_path(&zoefile, filename);
-
-                        if (0 == zoefile_errorcode ||
-                            cstr_endswith(filename, ".eml")) {
-                                // FEATURE(nicolas): print filing timestamp
-                                push_back_cstr(traceg, "PATH");
-                                push_back_cstr(traceg, "\t");
-                                push_back_cstr(traceg, filepath);
-                                trace(traceg);
-
-                                push_back_cstr(traceg, "SIZE");
-                                push_back_cstr(traceg, "\t");
-                                push_back_u64(traceg, file_attributes.size);
-                                push_back_cstr(traceg, "\t");
-                                trace(traceg);
-
-                                push_back_cstr(traceg, "ZOE_REL_URL");
-                                push_back_cstr(traceg, "\t");
-                                {
-                                        // find predecessor, until you reach
-                                        // boundary
-                                        auto pred = [](char const *const first,
-                                                       char const *const pos) {
-                                                if (pos != first) {
-                                                        return algos::
-                                                            predecessor(pos);
-                                                }
-                                                return pos;
-                                        };
-                                        // skip day, month, year
-                                        auto first =
-                                            cstr_find_last(filepath, '/');
-                                        first = algos::find_backward(
-                                            filepath, pred(filepath, first),
-                                            '/');
-                                        first = algos::find_backward(
-                                            filepath, pred(filepath, first),
-                                            '/');
-                                        first = algos::find_backward(
-                                            filepath, pred(filepath, first),
-                                            '/');
-                                        first = algos::successor(first);
-                                        auto last = cstr_find_last(first, '.');
-                                        push_back_extent(traceg,
-                                                         (uint8_t *)first,
-                                                         size_t(last - first));
-                                }
-                                trace(traceg);
-
-                                if (0 == zoefile_errorcode) {
-                                        push_back_cstr(traceg, "UUID");
-                                        push_back_cstr(traceg, "\t");
-                                        for (size_t i = 0;
-                                             i < NCOUNT(zoefile.uuid); i++) {
-                                                push_back_formatted(
-                                                    traceg, "%x",
-                                                    zoefile.uuid[i]);
-                                        }
-                                        trace(traceg);
-
-                                        push_back_cstr(traceg,
-                                                       "UNIX TIMESTAMP");
-                                        push_back_cstr(traceg, "\t");
-                                        push_back_formatted(
-                                            traceg, "%llu",
-                                            zoefile.unix_epoch_millis);
-                                        trace(traceg);
-                                }
-
-                                do {
-                                        SPDR_BEGIN(global_spdr, "app",
-                                                   "accept_mime_message");
-                                        MessageSummary message_summary;
-                                        auto errorcode = accept_mime_message(
-                                            full_message, full_message_end,
-                                            zoefile_errorcode == 0 ? &zoefile
-                                                                   : nullptr,
-                                            &message_arena, &result_arena,
-                                            &message_summary);
-                                        print_message_summary(message_summary,
-                                                              *&message_arena);
-                                        zw_assert(errorcode == 0,
-                                                  "unexpected errorcode");
-                                        SPDR_END(global_spdr, "app",
-                                                 "accept_mime_message");
-                                } while (refresh_zwei_app());
-                        } else {
-                                trace_print("ignored file");
-                        }
                         total_bytes_read += full_message_end - full_message;
                         SPDR_COUNTER1(
                             global_spdr, "variables", "result_arena",
@@ -1216,11 +1334,12 @@ int main(int argc, char **argv)
                         SPDR_COUNTER1(global_spdr, "variables", "read",
                                       SPDR_INT("kilobytes",
                                                int(total_bytes_read / 1000)));
-                        SPDR_COUNTER1(
-                            global_spdr, "variables", "message_arena",
-                            SPDR_INT("used", int(message_arena.used)));
+                        SPDR_COUNTER1(global_spdr, "variables", "tasks_arena",
+                                      SPDR_INT("used", int(tasks_arena.used)));
                 }
+                run_app_tasks(transient_arena);
         }
+
         SPDR_END(global_spdr, "main", "processing_files");
 
         void text_output_group_print(int filedesc,
