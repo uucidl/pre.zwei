@@ -184,8 +184,11 @@ zw_global bool global_can_ignore_file = false;
 
    @return null or a valid file list allocated in the given arena
 */
-zw_internal struct FileList *directory_query_all_files(
-    struct MemoryArena *arena, char const *root_dir_path, bool trace_on)
+zw_internal struct FileList *
+directory_query_all_files(char const *root_dir_path,
+                          bool trace_on,
+                          MemoryArena work_arena,
+                          MemoryArena *result_arena)
 {
         // NOTE(nicolas)
         //
@@ -213,7 +216,7 @@ zw_internal struct FileList *directory_query_all_files(
                 FSEntry *files = nullptr;
         };
 
-        struct State *state = push_struct(arena, struct State);
+        struct State *state = push_typed(&work_arena, State);
         struct FSEntry {
                 struct FSEntry *next;
                 char const *path;
@@ -221,11 +224,11 @@ zw_internal struct FileList *directory_query_all_files(
                 uint64_t size;
         };
 
-        auto push_entry = [&state, arena]() {
+        auto push_entry = [&state, &work_arena]() {
                 FSEntry *result;
 
                 if (!state->free_entry) {
-                        result = push_struct(arena, FSEntry);
+                        result = push_typed(&work_arena, FSEntry);
                 } else {
                         result = state->free_entry;
                         state->free_entry = state->free_entry->next;
@@ -270,14 +273,14 @@ zw_internal struct FileList *directory_query_all_files(
         FSEntry *entry = push_directory();
         entry->path = root_dir_path;
 
-        TextOutputGroup dirlisting = {};
-        allocate(dirlisting, arena, KILOBYTES(1));
+        TextOutputGroup trace_output = {};
+        allocate(trace_output, &work_arena, KILOBYTES(1));
 
-        auto print_dirlisting_line = [&dirlisting, trace_on]() {
+        auto trace_optionally = [&trace_output, trace_on]() {
                 if (trace_on) {
-                        trace(dirlisting);
+                        trace(trace_output);
                 } else {
-                        clear(dirlisting);
+                        clear(trace_output);
                 }
         };
 
@@ -314,15 +317,15 @@ zw_internal struct FileList *directory_query_all_files(
 
         // record a directory entry, depending if it's a file
         // or another directory
-        auto record_directory_entry = [&dirlisting, print_dirlisting_line,
-                                       arena, push_file, push_directory,
+        auto record_directory_entry = [&trace_output, trace_optionally,
+                                       &work_arena, push_file, push_directory,
                                        trace_on](
-            char const *dir_path, struct DirEntryAttributes const *entry) {
+            char const *dir_path, DirEntryAttributes const *entry) {
                 char const *name = (char *)((uint8_t *)&entry->nameinfo) +
                                    entry->nameinfo.attr_dataoffset;
 
                 auto path_size = cstr_len(dir_path) + 1 + cstr_len(name) + 1;
-                char *path = push_array_rvalue(arena, path, path_size);
+                char *path = push_array_rvalue(&work_arena, path, path_size);
                 {
                         auto const buffer_last = path + path_size;
                         char *string_last = path;
@@ -337,17 +340,17 @@ zw_internal struct FileList *directory_query_all_files(
 
                 uint64_t physical_offset = 0;
                 {
-                        push_back_cstr(dirlisting, name);
+                        push_back_cstr(trace_output, name);
                         if (entry->obj_type == VREG) {
-                                push_back_cstr(dirlisting, "\t[f]");
+                                push_back_cstr(trace_output, "\t[f]");
                         } else if (entry->obj_type == VDIR) {
-                                push_back_cstr(dirlisting, "\t[d]");
+                                push_back_cstr(trace_output, "\t[d]");
                         } else {
                                 // not a file, not a directory
-                                push_back_formatted(dirlisting, "\t[%d]",
+                                push_back_formatted(trace_output, "\t[%d]",
                                                     entry->obj_type);
                         }
-                        push_back_cstr(dirlisting, "\t");
+                        push_back_cstr(trace_output, "\t");
 
                         // NOTE(nicolas) non native file systems
                         // (AFP/CIFS) are problematic not only for
@@ -360,23 +363,23 @@ zw_internal struct FileList *directory_query_all_files(
                         bool mounted_share = false;
                         bool supports_semicolon = false;
                         if (entry->obj_tag == VT_NFS) {
-                                push_back_cstr(dirlisting, "NFS");
+                                push_back_cstr(trace_output, "NFS");
                                 supports_semicolon = true;
                         } else if (entry->obj_tag == VT_HFS) {
-                                push_back_cstr(dirlisting, "HFS");
+                                push_back_cstr(trace_output, "HFS");
                                 supports_semicolon = true;
                         } else if (entry->obj_tag == VT_AFP) {
-                                push_back_cstr(dirlisting, "AFP");
+                                push_back_cstr(trace_output, "AFP");
                                 mounted_share = true;
                         } else if (entry->obj_tag == VT_CIFS) {
-                                push_back_cstr(dirlisting, "CIFS");
+                                push_back_cstr(trace_output, "CIFS");
                                 mounted_share = true;
                         } else {
-                                push_back_u32(dirlisting, entry->obj_tag);
+                                push_back_u32(trace_output, entry->obj_tag);
                         }
 
                         if (mounted_share) {
-                                MemoryArena temp_arena = *arena;
+                                MemoryArena temp_arena = work_arena;
                                 auto errorg = TextOutputGroup{};
                                 allocate(errorg, &temp_arena, KILOBYTES(1));
                                 push_back_cstr(errorg, "path '");
@@ -386,17 +389,18 @@ zw_internal struct FileList *directory_query_all_files(
                         }
 
                         if (entry->obj_type == VREG) {
-                                push_back_cstr(dirlisting, "\t");
-                                push_back_u32(dirlisting,
+                                push_back_cstr(trace_output, "\t");
+                                push_back_u32(trace_output,
                                               entry->file_ioblocksize);
-                                push_back_cstr(dirlisting, "\t");
-                                push_back_u64(dirlisting,
+                                push_back_cstr(trace_output, "\t");
+                                push_back_u64(trace_output,
                                               entry->file_totalsize);
 
                                 if (!supports_semicolon &&
                                     global_can_ignore_file) {
                                         if (':' == *cstr_find(path_cstr, ':')) {
-                                                MemoryArena temp_arena = *arena;
+                                                MemoryArena temp_arena =
+                                                    work_arena;
                                                 auto errorg = TextOutputGroup{};
                                                 allocate(errorg, &temp_arena,
                                                          KILOBYTES(1));
@@ -433,15 +437,15 @@ zw_internal struct FileList *directory_query_all_files(
                                         } else {
                                                 physical_offset =
                                                     filephys.l2p_devoffset;
-                                                push_back_cstr(dirlisting,
+                                                push_back_cstr(trace_output,
                                                                "\t");
                                                 push_back_u64(
-                                                    dirlisting,
+                                                    trace_output,
                                                     filephys.l2p_devoffset);
                                         }
                                 }
                         }
-                        print_dirlisting_line();
+                        trace_optionally();
                 }
 
                 if (entry->obj_type == VREG && !ignore_file) {
@@ -469,7 +473,7 @@ zw_internal struct FileList *directory_query_all_files(
                 {
                         dir_fd = open(dir_path, O_RDONLY, 0);
                         if (dir_fd < 0) {
-                                MemoryArena temp_arena = *arena;
+                                MemoryArena temp_arena = work_arena;
                                 TextOutputGroup errorg = {};
                                 allocate(errorg, &temp_arena, KILOBYTES(1));
                                 push_back_cstr(errorg,
@@ -481,23 +485,23 @@ zw_internal struct FileList *directory_query_all_files(
                 }
                 DEFER({ close(dir_fd); });
 
-                push_back_cstr(dirlisting, "\nlisting directory: ");
-                push_back_cstr(dirlisting, dir_path);
-                print_dirlisting_line();
+                push_back_cstr(trace_output, "\nlisting directory: ");
+                push_back_cstr(trace_output, dir_path);
+                trace_optionally();
 
                 // TODO(nicolas): push sep by "\t"
-                push_back_cstr(dirlisting, "name");
-                push_back_cstr(dirlisting, "\t");
-                push_back_cstr(dirlisting, "type");
-                push_back_cstr(dirlisting, "\t");
-                push_back_cstr(dirlisting, "tag");
-                push_back_cstr(dirlisting, "\t");
-                push_back_cstr(dirlisting, "ioblocksize");
-                push_back_cstr(dirlisting, "\t");
-                push_back_cstr(dirlisting, "size");
-                push_back_cstr(dirlisting, "\t");
-                push_back_cstr(dirlisting, "physical location");
-                print_dirlisting_line();
+                push_back_cstr(trace_output, "name");
+                push_back_cstr(trace_output, "\t");
+                push_back_cstr(trace_output, "type");
+                push_back_cstr(trace_output, "\t");
+                push_back_cstr(trace_output, "tag");
+                push_back_cstr(trace_output, "\t");
+                push_back_cstr(trace_output, "ioblocksize");
+                push_back_cstr(trace_output, "\t");
+                push_back_cstr(trace_output, "size");
+                push_back_cstr(trace_output, "\t");
+                push_back_cstr(trace_output, "physical location");
+                trace_optionally();
 
                 uint32_t entrycount = 0;
                 uint32_t result_batch[16 * 256];
@@ -538,14 +542,14 @@ zw_internal struct FileList *directory_query_all_files(
                         file_count++;
                 }
 
-                push_back_cstr(dirlisting, "found ");
-                push_back_u64(dirlisting, file_count);
-                push_back_cstr(dirlisting, " files");
-                print_dirlisting_line();
+                push_back_cstr(trace_output, "found ");
+                push_back_u64(trace_output, file_count);
+                push_back_cstr(trace_output, " files");
+                trace_optionally();
 
                 entry_array_count = file_count;
-                entry_array =
-                    push_array_rvalue(arena, entry_array, entry_array_count);
+                entry_array = push_array_rvalue(&work_arena, entry_array,
+                                                entry_array_count);
 
                 for (FSEntry *fs_entry = state->files,
                              *dest_entry = entry_array;
@@ -566,8 +570,8 @@ zw_internal struct FileList *directory_query_all_files(
                         FSEntryInBucket *next;
                 };
 
-                FSEntryInBucket *bucket_entries =
-                    push_array_rvalue(arena, bucket_entries, entry_array_count);
+                FSEntryInBucket *bucket_entries = push_array_rvalue(
+                    &work_arena, bucket_entries, entry_array_count);
 
                 // circular linked-list per bucket, this bucket is pointing
                 // to the last element
@@ -629,34 +633,50 @@ zw_internal struct FileList *directory_query_all_files(
                         previous_offset = this_offset;
                 }
 #endif
+        }
 
-                for (size_t i = 0; i < entry_array_count; i++) {
-                        push_back_cstr(dirlisting, "FILE");
-                        push_back_u64(dirlisting, i);
-                        push_back_cstr(dirlisting, "\t");
-                        push_back_u64(dirlisting,
-                                      entry_array[i].physical_offset);
-                        push_back_cstr(dirlisting, entry_array[i].path);
-                        print_dirlisting_line();
-                }
+        for (size_t i = 0; i < entry_array_count; i++) {
+                push_back_cstr(trace_output, "FILE");
+                push_back_u64(trace_output, i);
+                push_back_cstr(trace_output, "\t");
+                push_back_u64(trace_output, entry_array[i].physical_offset);
+                push_back_cstr(trace_output, "\t");
+                push_back_cstr(trace_output, entry_array[i].path);
+                trace_optionally();
         }
 
         // construct file list from array
-        struct FileList *result;
-        result = push_struct(arena, struct FileList);
+        FileList *result = push_pointer_rvalue(result_arena, result);
+        *result = {};
         result->count = entry_array_count;
 
         if (result->count) {
                 size_t count = result->count;
-                result->paths = push_array_rvalue(arena, result->paths, count);
+                result->paths =
+                    push_array_rvalue(result_arena, result->paths, count);
                 result->filenames =
-                    push_array_rvalue(arena, result->filenames, count);
+                    push_array_rvalue(result_arena, result->filenames, count);
                 result->attributes =
-                    push_array_rvalue(arena, result->attributes, count);
+                    push_array_rvalue(result_arena, result->attributes, count);
                 for (size_t i = 0; i < count; i++) {
-                        result->paths[i] = entry_array[i].path;
-                        result->filenames[i] =
-                            1 + cstr_find_last(entry_array[i].path, '/');
+                        char const *input_path = entry_array[i].path;
+                        size_t input_path_n = cstr_len(input_path);
+
+                        ByteCountedRange path = {
+                            (uint8_t *)push_bytes(result_arena,
+                                                  1 + input_path_n),
+                            input_path_n,
+                        };
+                        *algos::copy_n(input_path, input_path_n, path.first) =
+                            0;
+
+                        uint8_t *filename = algos::find_backward(
+                            path.first, path.first + path.count, '/');
+                        // TODO(nicolas): is this skipping a pattern?
+                        filename = *filename == '/' ? filename + 1 : filename;
+
+                        result->paths[i] = (char const *)path.first;
+                        result->filenames[i] = (char const *)filename;
                         result->attributes[i].size = entry_array[i].size;
                 }
         }
@@ -846,6 +866,7 @@ zw_internal void process_message(Zwei const &zwei,
                                  MemoryArena &result_arena,
                                  ProcessedMessage &destination)
 {
+        SPDR_SCOPE(global_spdr, "app", "process_message");
         struct BufferRange file_content;
         stream_on_memory(&file_content, const_cast<uint8_t *>(full_message),
                          full_message_last - full_message);
@@ -1148,28 +1169,36 @@ int main(int argc, char **argv)
         } else {
                 MemoryArena transient_arena = memory_arena(
                     transient_storage, transient_storage_memory_size);
-                struct MemoryArena dc_arena = push_sub_arena(
-                    transient_arena, transient_storage_memory_size / 2);
 
                 // NOTE(nicolas) we could process files in parallel
                 // .. but how much parallelism can a HDD/SDD/Raid
                 // device support?
 
-                struct FileList *all_files = directory_query_all_files(
-                    &dc_arena, root_dir_path, directory_listing_on);
+                struct FileList *all_files;
+                {
+                        MemoryArena dc_arena = push_sub_arena(
+                            transient_arena, transient_storage_memory_size / 2);
+                        all_files = directory_query_all_files(
+                            root_dir_path, directory_listing_on,
+                            transient_arena, &dc_arena);
+
+                        // resize down to just what we have actually used
+                        transient_arena.used -= (dc_arena.size - dc_arena.used);
+                        {
+                                MemoryArena temp_arena = transient_arena;
+                                TextOutputGroup traceg = {};
+                                allocate(traceg, &temp_arena, KILOBYTES(1));
+                                push_back_cstr(traceg,
+                                               "Bytes used after query: ");
+                                push_back_formatted(traceg, "%lld",
+                                                    transient_arena.used);
+                                trace(traceg);
+                        }
+                }
 
                 if (!all_files) {
                         error_print("could not query all files");
                         return 1;
-                }
-
-                {
-                        MemoryArena temp_arena = dc_arena;
-                        TextOutputGroup traceg = {};
-                        allocate(traceg, &temp_arena, KILOBYTES(1));
-                        push_back_cstr(traceg, "bytes used after query: ");
-                        push_back_formatted(traceg, "%lld", (&dc_arena)->used);
-                        trace(traceg);
                 }
 
                 MemoryArena result_arena =

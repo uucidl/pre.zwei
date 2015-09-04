@@ -146,7 +146,7 @@ MemoryArena push_sub_arena(MemoryArena &arena, size_t size)
         return memory_arena(bytes, size);
 }
 
-#define push_struct(arena_pointer, type)                                       \
+#define push_typed(arena_pointer, type)                                        \
         (type *) push_bytes(arena_pointer, sizeof(type))
 
 #define push_pointer_rvalue(arena_pointer, lvalue)                             \
