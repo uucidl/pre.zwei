@@ -175,7 +175,7 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
                                            &state->utf8decoder_codepoint, x);
                 };
                 auto decode_result = algos::apply_copy_bounded_if(
-                    block_first, block_last, codepoint_first,
+                    block_first, block_last, codepoint_last,
                     codepoint_buffer_last, [state](const uint8_t) {
                             return state->utf8decoder_codepoint;
                     }, decode_codepoint);
