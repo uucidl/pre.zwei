@@ -146,6 +146,16 @@ MemoryArena push_sub_arena(MemoryArena &arena, size_t size)
         return memory_arena(bytes, size);
 }
 
+void pop_unused(MemoryArena &parent, MemoryArena &sub_arena)
+{
+        zw_assert(parent.base + parent.used == sub_arena.base + sub_arena.size,
+                  "pop should follow push");
+
+        auto unused = sub_arena.size - sub_arena.used;
+        parent.used -= unused;
+        sub_arena.size -= unused;
+}
+
 #define push_typed(arena_pointer, type)                                        \
         (type *) push_bytes(arena_pointer, sizeof(type))
 

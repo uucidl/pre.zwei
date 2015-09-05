@@ -1179,9 +1179,7 @@ int main(int argc, char **argv)
                         all_files = directory_query_all_files(
                             root_dir_path, directory_listing_on,
                             transient_arena, &dc_arena);
-
-                        // resize down to just what we have actually used
-                        transient_arena.used -= (dc_arena.size - dc_arena.used);
+                        pop_unused(transient_arena, dc_arena);
                         {
                                 MemoryArena temp_arena = transient_arena;
                                 TextOutputGroup traceg = {};
