@@ -335,7 +335,6 @@ directory_query_all_files(char const *root_dir_path,
                         zw_assert(cstr_terminate(string_last, buffer_last),
                                   "unexpected size");
                 }
-                char *path_cstr = (char *)path;
                 bool ignore_file = false;
 
                 uint64_t physical_offset = 0;
@@ -383,7 +382,7 @@ directory_query_all_files(char const *root_dir_path,
                                 auto errorg = TextOutputGroup{};
                                 allocate(errorg, &temp_arena, KILOBYTES(1));
                                 push_back_cstr(errorg, "path '");
-                                push_back_cstr(errorg, path_cstr);
+                                push_back_cstr(errorg, path);
                                 push_back_cstr(errorg, "' is a mounted share.");
                                 error(errorg);
                         }
@@ -398,7 +397,7 @@ directory_query_all_files(char const *root_dir_path,
 
                                 if (!supports_semicolon &&
                                     global_can_ignore_file) {
-                                        if (':' == *cstr_find(path_cstr, ':')) {
+                                        if (':' == *cstr_find(path, ':')) {
                                                 MemoryArena temp_arena =
                                                     work_arena;
                                                 auto errorg = TextOutputGroup{};
@@ -406,8 +405,7 @@ directory_query_all_files(char const *root_dir_path,
                                                          KILOBYTES(1));
                                                 push_back_cstr(errorg,
                                                                "path: '");
-                                                push_back_cstr(errorg,
-                                                               path_cstr);
+                                                push_back_cstr(errorg, path);
                                                 push_back_cstr(
                                                     errorg,
                                                     "'  contains a colon, "
@@ -418,7 +416,7 @@ directory_query_all_files(char const *root_dir_path,
                                         }
                                 }
 
-                                int const fd = open(path_cstr, O_RDONLY, 0);
+                                int const fd = open(path, O_RDONLY, 0);
                                 // TODO(nicolas) permissions to open
                                 // that file at all?
                                 zw_assert(ignore_file || fd >= 0, "open file");
@@ -450,12 +448,12 @@ directory_query_all_files(char const *root_dir_path,
 
                 if (entry->obj_type == VREG && !ignore_file) {
                         FSEntry *file_entry = push_file();
-                        file_entry->path = path_cstr;
+                        file_entry->path = path;
                         file_entry->physical_offset = physical_offset;
                         file_entry->size = entry->file_totalsize;
                 } else if (entry->obj_type == VDIR) {
                         FSEntry *dir_entry = push_directory();
-                        dir_entry->path = path_cstr;
+                        dir_entry->path = path;
                 }
 
         };
@@ -1390,11 +1388,11 @@ int main(int argc, char **argv)
                 auto tog = TextOutputGroup{};
                 allocate(tog, &temp_arena, 512);
                 push_back_cstr(tog, "reporting traces to file: ");
-                push_back_cstr(tog, (char *)trace_file);
+                push_back_cstr(tog, trace_file);
                 push_back_cstr(tog, "\n");
                 trace(tog);
         }
-        int fd = open((char *)trace_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        int fd = open(trace_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
         spdr_report(
             global_spdr,
             SPDR_CHROME_REPORT, [](char const *string, void *user_data) {
