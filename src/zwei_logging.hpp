@@ -38,6 +38,8 @@ push_back_formatted(TextOutputGroup &group, char const *fmt, ...);
 TextOutputGroupEntry *push_back_u32(TextOutputGroup &group, uint32_t x);
 TextOutputGroupEntry *push_back_u64(TextOutputGroup &group, uint64_t x);
 
+void text_output_group_print(int filedesc, TextOutputGroup const &group);
+
 /** traces and clears the group */
 void trace(TextOutputGroup &group);
 void trace_keep(TextOutputGroup const &group);
