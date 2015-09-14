@@ -5,8 +5,8 @@
 #include "algos.hpp"
 #include "hammer_fwd.hpp"
 
-/* HParsedToken as container */
-template <> class algos::ContainerConcept<HParsedToken>
+/* Some HParsedToken are a sequence of HParsedToken */
+template <> class algos::SequenceConcept<HParsedToken>
 {
         using value_type = HParsedToken *;
         using iterator_type = HParsedToken *const *;
