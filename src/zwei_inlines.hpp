@@ -125,6 +125,11 @@ MemoryArena memory_arena(void *base, size_t size)
         return {(uint8_t *)base, 0, size};
 }
 
+inline bool can_push_bytes(MemoryArena const &arena, size_t bytes)
+{
+        return arena.used + bytes < arena.size;
+}
+
 inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
 {
         zw_assert(arena->used + bytes <= arena->size, "overallocating");
