@@ -547,7 +547,7 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
                                        h_optional(CFWS)),
                               word)));
 
-        // NOTE(nil): from RFC2047:
+        // NOTE(nicolas): from RFC2047:
         // (1) An 'encoded-word' may replace a 'text' token (as defined by RFC
         // 822)
         //     in any Subject or Comments header field, any extension message
