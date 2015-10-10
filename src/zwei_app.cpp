@@ -248,8 +248,8 @@ zw_internal struct BufferRange
 macroman_workaround_stream(struct BufferRange *input, struct MemoryArena *arena)
 {
         struct Stream {
-                struct BufferRange *input;
-                struct MacRomanWorkaround state;
+                BufferRange *input;
+                MacRomanWorkaround state;
         } *stream = push_pointer_rvalue(arena, stream);
 
         *stream = (struct Stream){
