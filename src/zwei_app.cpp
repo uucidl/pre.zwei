@@ -85,6 +85,9 @@
 #include <cstddef>    // for offsetof
 #include <functional> // for std::cref (TODO(nicolas): can I write it myself?)
 
+zw_global RFC5322 mail_parsers;
+zw_global bool global_debug_mode;
+
 zw_internal bool ucs4_to_macintosh(uint32_t const *codepoints_first,
                                    uint32_t const *codepoints_last,
                                    uint8_t *destination);
@@ -329,9 +332,6 @@ struct MessageBeingParsed {
         } content_state;
         struct RawHeaders raw_content;
 };
-
-zw_global RFC5322 mail_parsers;
-zw_global bool global_debug_mode;
 
 extern "C" EXPORT INIT_APP(init_app)
 {
