@@ -14,6 +14,7 @@
         do {                                                                   \
                 if (!(condition)) {                                            \
                         fputs(message, stderr);                                \
+                        fputs("\n", stderr);                                   \
                         asm("int3");                                           \
                 }                                                              \
         } while (0)
@@ -54,17 +55,22 @@ typedef uint32_t bool32;
 
 // <Error handling
 
+// TODO(nicolas): look at std::optional and model some of it after it
 template <typename ValueType> struct MayFail {
         ValueType value;
-        uint32_t errorcode = 0;
+        uint32_t errorcode;
 
-        using WritableMe = MayFail;
-        friend ValueType &sink(WritableMe &self) { return self.value; }
-};
+        MayFail() {}
+        MayFail(ValueType x) : value(std::move(x)), errorcode(0) {}
 
-template <typename ValueType>
-struct algos::WritableConcept<MayFail<ValueType>> {
-        using value_type = ValueType;
+        static MayFail failure(uint32_t errorcode)
+        {
+                MayFail result;
+                result.errorcode = errorcode;
+                return result;
+        }
+
+        operator bool() const { return errorcode == 0; }
 };
 
 template <typename ValueType> bool failed(MayFail<ValueType> const result)
@@ -114,15 +120,22 @@ struct MemoryArena {
         size_t size;
 };
 
-struct MemoryArena memory_arena(void *base, size_t size)
+MemoryArena memory_arena(void *base, size_t size)
 {
         return {(uint8_t *)base, 0, size};
+}
+
+inline bool can_push_bytes(MemoryArena const &arena, size_t bytes)
+{
+        return arena.used + bytes < arena.size;
 }
 
 inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
 {
         zw_assert(arena->used + bytes <= arena->size, "overallocating");
         if (arena->used + bytes > arena->size) {
+                // TODO(nicolas) @security this basically is meant to be fatal
+                // in every build
                 return nullptr;
         }
         uint8_t *result = arena->base + arena->used;
@@ -132,7 +145,23 @@ inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
         return result;
 }
 
-#define push_struct(arena_pointer, type)                                       \
+MemoryArena push_sub_arena(MemoryArena &arena, size_t size)
+{
+        void *bytes = push_bytes(&arena, size);
+        return memory_arena(bytes, size);
+}
+
+void pop_unused(MemoryArena &parent, MemoryArena &sub_arena)
+{
+        zw_assert(parent.base + parent.used == sub_arena.base + sub_arena.size,
+                  "pop should follow push");
+
+        auto unused = sub_arena.size - sub_arena.used;
+        parent.used -= unused;
+        sub_arena.size -= unused;
+}
+
+#define push_typed(arena_pointer, type)                                        \
         (type *) push_bytes(arena_pointer, sizeof(type))
 
 #define push_pointer_rvalue(arena_pointer, lvalue)                             \
@@ -176,6 +205,38 @@ inline bool cstr_endswith(char const *s, char const *suffix)
                 return false;
         }
         return cstr_equals(cstr_find_last(s, *suffix), suffix);
+}
+
+/// try to concatenate the given c string when possible, always truncate
+void cstr_cat(char *&string_last, char *buffer_last, char const *cstring)
+{
+        string_last =
+            algos::copy_bounded_unguarded(cstring, is_cstr_char, string_last,
+                                          buffer_last).second;
+}
+
+/// try to concatenate the given c string region when possible, always truncate
+void cstr_cat(char *&string_last,
+              char *buffer_last,
+              char const *cstring,
+              char const *cstring_end)
+{
+        string_last = algos::copy_bounded(cstring, cstring_end, string_last,
+                                          buffer_last).second;
+}
+
+bool cstr_terminate(char *&string_last, char *buffer_last)
+{
+        using algos::sink;
+        using algos::successor;
+
+        if (string_last != buffer_last) {
+                sink(string_last) = 0;
+                string_last = successor(string_last);
+                return true;
+        }
+
+        return false;
 }
 
 // ..CSTRINGS>

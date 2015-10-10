@@ -2,15 +2,17 @@
 
 #include "algos.hpp"
 
+#include "../modules/uu.spdr/include/spdr/spdr.hh"
+
 #include <cstdarg>
 
 void allocate(TextOutputGroup &group, MemoryArena *arena, size_t reference_size)
 {
         size_t memory_size =
-            reference_size * sizeof(TextOutputGroupEntry) + reference_size;
+            (9 * reference_size + 1) * (sizeof(TextOutputGroupEntry)) / 10;
         uint8_t *memory =
             static_cast<uint8_t *>(push_bytes(arena, memory_size));
-        size_t entries_size = memory_size / 10;
+        size_t entries_size = 9 * memory_size / 10;
 
         group.first = reinterpret_cast<TextOutputGroupEntry *>(memory);
         group.last = group.first;
@@ -30,7 +32,7 @@ void clear(TextOutputGroup &group)
 TextOutputGroupEntry *
 push_back_extent(TextOutputGroup &group, uint8_t const *first, size_t n)
 {
-        if (group.first + group.entries_capacity == group.last) {
+        if (group.last == group.first + group.entries_capacity) {
                 group.truncated = true;
                 return nullptr;
         }
@@ -95,8 +97,18 @@ inline void sync_print(int filedesc, char const *message, size_t message_size)
         writev(filedesc, iovecs, NCOUNT(iovecs));
 }
 
+extern zw_global SPDR_Context *global_spdr;
+
 void text_output_group_print(int filedesc, TextOutputGroup const &group)
 {
+        SPDR_SCOPE1(global_spdr, "logging", __FUNCTION__,
+                    SPDR_INT("filedesc", filedesc));
+        SPDR_EVENT3(global_spdr, "variables", "TextOutputGroup",
+                    SPDR_INT("entries-count", int(group.last - group.first)),
+                    SPDR_INT("entries-bytes", int(sizeof *group.first *
+                                                  (group.last - group.first))),
+                    SPDR_INT("bytes", int(group.bytes_arena.used)));
+
 #define IOVECS_CAPACITY 64
         struct iovec iovecs[IOVECS_CAPACITY];
         uint8_t iovecs_n = 0;
@@ -138,7 +150,9 @@ void text_output_group_print(int filedesc, TextOutputGroup const &group)
         auto &iovec = next_iovec();
         iovec.iov_base = (void *)"\n";
         iovec.iov_len = 1;
+        SPDR_BEGIN(global_spdr, "logging", "writev");
         writev(filedesc, iovecs, iovecs_n);
+        SPDR_END(global_spdr, "logging", "writev");
 }
 
 void error_print(char const *message)

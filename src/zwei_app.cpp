@@ -85,6 +85,11 @@
 #include <cstddef>    // for offsetof
 #include <functional> // for std::cref (TODO(nicolas): can I write it myself?)
 
+zw_global RFC5322 mail_parsers;
+zw_global bool global_debug_mode;
+zw_global Platform global_platform;
+zw_global SPDR_Context *global_spdr;
+
 zw_internal bool ucs4_to_macintosh(uint32_t const *codepoints_first,
                                    uint32_t const *codepoints_last,
                                    uint8_t *destination);
@@ -170,7 +175,7 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
                                            &state->utf8decoder_codepoint, x);
                 };
                 auto decode_result = algos::apply_copy_bounded_if(
-                    block_first, block_last, codepoint_first,
+                    block_first, block_last, codepoint_last,
                     codepoint_buffer_last, [state](const uint8_t) {
                             return state->utf8decoder_codepoint;
                     }, decode_codepoint);
@@ -248,13 +253,13 @@ zw_internal struct BufferRange
 macroman_workaround_stream(struct BufferRange *input, struct MemoryArena *arena)
 {
         struct Stream {
-                struct BufferRange *input;
-                struct MacRomanWorkaround state;
+                BufferRange *input;
+                MacRomanWorkaround state;
         } *stream = push_pointer_rvalue(arena, stream);
 
-        *stream = (struct Stream){
-            input, {UTF8_ACCEPT, 0, 0, {}, {}, UTF8_ACCEPT, 0, {}, 0},
-        };
+        stream->input = input;
+        stream->state.utf8decoder_state = UTF8_ACCEPT;
+        stream->state.macintosh_chars_utf8decoder_state = UTF8_ACCEPT;
 
         auto next = [](struct BufferRange *range) {
                 struct Stream *stream = reinterpret_cast<struct Stream *>(
@@ -297,45 +302,20 @@ macroman_workaround_stream(struct BufferRange *input, struct MemoryArena *arena)
         return range;
 }
 
-struct RawHeaders {
-        ByteCountedRange message_id_bytes;
-        struct ByteCountedRange *in_reply_to_msg_ids;
-        size_t in_reply_to_msg_ids_count;
-        // TODO(nicolas) add references list
-
-        RawMailbox *from_mailboxes;
-        size_t from_mailboxes_count;
-        RawMailbox sender_mailbox;
-        RawMailbox *to_mailboxes;
-        size_t to_mailboxes_count;
-        RawMailbox *cc_mailboxes;
-        size_t cc_mailboxes_count;
-
-        struct ByteCountedRange subject_field_bytes;
-
-        // TODO(nicolas) add missing original date as a concrete type
-        struct ByteCountedRange content_transfer_encoding_bytes;
-        struct ByteCountedRange text_content_subtype_bytes;
-        struct ByteCountedRange text_content_charset_bytes;
-};
-
 struct MessageBeingParsed {
-        struct MemoryArena *arena;
-
-        bool is_rfc5322; /// true when the message is fully rfc5322 conformant
-
         enum { UNPARSED,
-               RAW_HEADERS,
+               MESSAGE_SUMMARY,
         } content_state;
-        struct RawHeaders raw_content;
+        struct MessageSummary message_summary;
 };
-
-zw_global RFC5322 mail_parsers;
-zw_global bool global_debug_mode;
 
 extern "C" EXPORT INIT_APP(init_app)
 {
         trace_print("Initializing app");
+        global_platform = platform;
+
+        global_spdr = global_platform.spdr;
+
         if (flags & ZWEI_DEBUG_MODE_FLAG) {
                 global_debug_mode = true;
         }
@@ -351,13 +331,13 @@ extern "C" EXPORT INIT_APP(init_app)
         zoe_support_init();
 }
 
-zw_internal void fill_raw_headers(RawHeaders *raw_headers,
-                                  const HParsedToken *ast,
-                                  MemoryArena *arena)
+zw_internal void fill_message_summary(MessageSummary *message_summary,
+                                      const HParsedToken *ast,
+                                      MemoryArena *arena)
 {
-        *raw_headers = {};
+        *message_summary = {};
 
-        auto collect = [&raw_headers, arena](HParsedToken const *token) {
+        auto collect = [&message_summary, arena](HParsedToken const *token) {
                 enum { NONE,
                        BYTES,
                        BYTES_LIST,
@@ -372,30 +352,33 @@ zw_internal void fill_raw_headers(RawHeaders *raw_headers,
 
                 if (RFC5322TokenIs(token, MESSAGE_ID_FIELD)) {
                         process = BYTES;
-                        d_bytes_range = &raw_headers->message_id_bytes;
+                        d_bytes_range = &message_summary->message_id_bytes;
                 } else if (RFC5322TokenIs(token, SUBJECT_FIELD)) {
                         process = BYTES;
-                        d_bytes_range = &raw_headers->subject_field_bytes;
+                        d_bytes_range = &message_summary->subject_field_bytes;
                 } else if (RFC5322TokenIs(token, FROM_FIELD)) {
                         process = MAILBOX_LIST;
-                        d_mailboxes = &raw_headers->from_mailboxes;
-                        d_mailboxes_count = &raw_headers->from_mailboxes_count;
+                        d_mailboxes = &message_summary->from_mailboxes;
+                        d_mailboxes_count =
+                            &message_summary->from_mailboxes_count;
                 } else if (RFC5322TokenIs(token, TO_FIELD)) {
                         process = MAILBOX_LIST;
-                        d_mailboxes = &raw_headers->to_mailboxes;
-                        d_mailboxes_count = &raw_headers->to_mailboxes_count;
+                        d_mailboxes = &message_summary->to_mailboxes;
+                        d_mailboxes_count =
+                            &message_summary->to_mailboxes_count;
                 } else if (RFC5322TokenIs(token, CC_FIELD)) {
                         process = MAILBOX_LIST;
-                        d_mailboxes = &raw_headers->cc_mailboxes;
-                        d_mailboxes_count = &raw_headers->cc_mailboxes_count;
+                        d_mailboxes = &message_summary->cc_mailboxes;
+                        d_mailboxes_count =
+                            &message_summary->cc_mailboxes_count;
                 } else if (RFC5322TokenIs(token, SENDER_FIELD)) {
                         process = MAILBOX;
-                        d_mailbox = &raw_headers->sender_mailbox;
+                        d_mailbox = &message_summary->sender_mailbox;
                 } else if (RFC5322TokenIs(token, IN_REPLY_TO_FIELD)) {
                         process = BYTES_LIST;
-                        d_bytes_ranges = &raw_headers->in_reply_to_msg_ids;
+                        d_bytes_ranges = &message_summary->in_reply_to_msg_ids;
                         d_bytes_ranges_count =
-                            &raw_headers->in_reply_to_msg_ids_count;
+                            &message_summary->in_reply_to_msg_ids_count;
                 }
 
                 switch (process) {
@@ -469,7 +452,8 @@ zw_internal void fill_raw_headers(RawHeaders *raw_headers,
 
 extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
 {
-        struct BufferRange *message_range = range;
+        uint8_t const *full_message = data_first;
+        uint8_t const *full_message_end = data_last;
         bool must_print_ast = global_debug_mode;
 
         // TODO(nicolas) refine when/how this workaround is applied It
@@ -486,38 +470,48 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
 
         if (must_apply_macroman_workaround) {
                 trace_print("applying MacRoman workaround");
+
+                struct BufferRange message_range_memory;
+                struct BufferRange *message_range = &message_range_memory;
+                stream_on_memory(message_range,
+                                 const_cast<uint8_t *>(full_message),
+                                 full_message_end - full_message);
+
+                /* wrap message_range into a macroman decoder range */
                 struct BufferRange *message_decoder =
                     push_pointer_rvalue(message_arena, message_decoder);
                 *message_decoder =
-                    macroman_workaround_stream(range, message_arena);
-                message_range = message_decoder;
-        }
+                    macroman_workaround_stream(message_range, message_arena);
 
-        uint8_t *full_message = (uint8_t *)push_bytes(message_arena, 0);
-        uint8_t *full_message_end = full_message;
+                // @id cfec80a4708df2e90e45023f0d87af7f4eb54a46
+                uint8_t *decoded_message =
+                    (uint8_t *)push_bytes(message_arena, 0);
+                uint8_t *decoded_message_end = decoded_message;
 
-        while (message_range->error == BR_NoError) {
-                zw_assert(full_message_end == push_bytes(message_arena, 0),
-                          "non contiguous");
-                full_message_end =
-                    algos::copy(message_range->start, message_range->end,
-                                (uint8_t *)push_bytes(
-                                    message_arena,
-                                    message_range->end - message_range->start));
+                while (message_range->error == BR_NoError) {
+                        zw_assert(decoded_message_end ==
+                                      push_bytes(message_arena, 0),
+                                  "non contiguous");
+                        decoded_message_end = algos::copy(
+                            message_range->start, message_range->end,
+                            (uint8_t *)push_bytes(message_arena,
+                                                  message_range->end -
+                                                      message_range->start));
 
-                message_range->next(message_range);
-        }
+                        message_range->next(message_range);
+                }
 
-        if (message_range->error != BR_ReadPastEnd) {
-                error_print("unknown I/O error while parsing message");
-                return;
+                if (message_range->error != BR_ReadPastEnd) {
+                        error_print("unknown I/O error while parsing message");
+                        return 1;
+                }
+
+                full_message = decoded_message;
+                full_message_end = decoded_message_end;
         }
 
         struct MessageBeingParsed message_parsed = {
-            NULL /* was message_arena */,
-            true,
-            MessageBeingParsed::UNPARSED,
-            {},
+            MessageBeingParsed::UNPARSED, {},
         };
         // Hammer parsing
         {
@@ -527,7 +521,7 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                                       full_message_end - full_message);
                 if (!result) {
                         trace_print("PARSE ERROR");
-                        return;
+                        return 2;
                 }
 
                 zw_assert(result, "could not parse message with hammer");
@@ -535,13 +529,14 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                         if (must_print_ast) {
                                 rfc5322_print_ast(stdout, result->ast, 0, 4);
                         }
-                        message_parsed.is_rfc5322 =
+                        message_parsed.message_summary.valid_rfc5322 =
                             rfc5322_validate(result->ast);
-                        fill_raw_headers(&message_parsed.raw_content,
-                                         result->ast, message_arena);
+
+                        fill_message_summary(&message_parsed.message_summary,
+                                             result->ast, result_arena);
 
                         message_parsed.content_state =
-                            MessageBeingParsed::RAW_HEADERS;
+                            MessageBeingParsed::MESSAGE_SUMMARY;
 
                         HArenaStats stats;
                         h_allocator_stats(result->arena, &stats);
@@ -553,129 +548,17 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                 // the header.. what about reacting to that?
         }
 
-        if (!message_parsed.is_rfc5322) {
-                trace_print("\tRFC5322: ERROR");
-        }
-        if (message_parsed.content_state == MessageBeingParsed::RAW_HEADERS) {
-                // FEATURE(nicolas): print raw content of From: To: CC
-                // Sender: Message-Id: In-Reply-To: Subject:
-                TextOutputGroup text_output_group = {};
-                allocate(text_output_group, message_arena, KILOBYTES(16));
-
-                // TODO(nicolas): having a delimited table printing abstraction
-                // would help with these (and the app)
-
-                auto raw = message_parsed.raw_content;
-                auto print_field = [&text_output_group](
-                    const char *name, struct ByteCountedRange value) {
-                        if (value.first) {
-                                push_back_cstr(text_output_group, "\t");
-                                push_back_cstr(text_output_group, name);
-                                push_back_cstr(text_output_group, "\t");
-                                push_back_extent(text_output_group, value.first,
-                                                 value.count);
-                                trace(text_output_group);
-                        }
-                };
-                auto print_bytes_list_field = [&text_output_group](
-                    const char *name, struct ByteCountedRange *values,
-                    size_t count) {
-                        if (count == 0) {
-                                return;
-                        }
-
-                        push_back_cstr(text_output_group, "\t");
-                        push_back_cstr(text_output_group, name);
-                        push_back_cstr(text_output_group, "\t");
-                        algos::for_each_n(
-                            values, count, [&](const ByteCountedRange &range) {
-                                    push_back_extent(text_output_group,
-                                                     range.first, range.count);
-                            });
-                        trace(text_output_group);
-                };
-                // TODO(nicolas): mailboxes could be stored sorted,
-                // since there is not a lot of semantic attached to them
-                // however, what about groups?
-                // The advantage of sorting mailboxes is that we could
-                // compare groups of recipients for instance and name
-                // them somehow
-                auto print_mailbox_list_field = [&text_output_group](
-                    const char *name, RawMailbox *mailboxes,
-                    size_t mailboxes_count) {
-                        if (mailboxes_count == 0) {
-                                return;
-                        }
-                        push_back_cstr(text_output_group, "\t");
-                        push_back_cstr(text_output_group, name);
-                        push_back_cstr(text_output_group, "\t");
-
-                        auto push_back_mailbox = [](
-                            TextOutputGroup &text_output_group,
-                            RawMailbox const &mailbox) {
-                                push_back_cstr(text_output_group, "<mailbox ");
-                                if (mailbox.display_name_bytes.count > 0) {
-                                        push_back_cstr(text_output_group, "\"");
-                                        push_back_extent(
-                                            text_output_group,
-                                            mailbox.display_name_bytes.first,
-                                            mailbox.display_name_bytes.count);
-                                        push_back_cstr(text_output_group,
-                                                       "\" ");
-                                }
-                                push_back_extent(
-                                    text_output_group,
-                                    mailbox.local_part_bytes.first,
-                                    mailbox.local_part_bytes.count);
-                                push_back_cstr(text_output_group, "@");
-                                push_back_extent(text_output_group,
-                                                 mailbox.domain_bytes.first,
-                                                 mailbox.domain_bytes.count);
-                                push_back_cstr(text_output_group, ">");
-                        };
-
-                        if (mailboxes_count > 0) {
-                                push_back_mailbox(text_output_group,
-                                                  *mailboxes);
-                                ++mailboxes;
-                                --mailboxes_count;
-                        }
-
-                        algos::for_each_n(
-                            mailboxes, mailboxes_count,
-                            [&](const RawMailbox &mailbox) {
-                                    push_back_cstr(text_output_group, ", ");
-                                    push_back_mailbox(text_output_group,
-                                                      mailbox);
-                            });
-                        trace(text_output_group);
-                };
-
-                // TODO(nicolas): @feature print the first line of the message.
-                print_field("MESSAGE-ID", raw.message_id_bytes);
-                print_mailbox_list_field(
-                    "SENDER", &raw.sender_mailbox,
-                    raw.sender_mailbox.domain_bytes.count > 0 ? 1 : 0);
-                print_mailbox_list_field("FROM", raw.from_mailboxes,
-                                         raw.from_mailboxes_count);
-                print_mailbox_list_field("TO", raw.to_mailboxes,
-                                         raw.to_mailboxes_count);
-                print_mailbox_list_field("CC", raw.cc_mailboxes,
-                                         raw.cc_mailboxes_count);
-                print_bytes_list_field("IN_REPLY_TO", raw.in_reply_to_msg_ids,
-                                       raw.in_reply_to_msg_ids_count);
-                print_field("SUBJECT", raw.subject_field_bytes);
-
-                print_field("CONTENT ENCODING",
-                            raw.content_transfer_encoding_bytes);
-                print_field("TEXT_SUBTYPE", raw.text_content_subtype_bytes);
-                print_field("TEXT CHARSET", raw.text_content_charset_bytes);
+        if (message_parsed.content_state ==
+            MessageBeingParsed::MESSAGE_SUMMARY) {
+                auto raw = message_parsed.message_summary;
+                *message_summary = std::move(raw);
+                return 0;
         }
 
-        return;
+        return 3;
 }
 
-extern "C" EXPORT PARSE_ZOE_MAILSTORE_PATH(parse_zoe_mailstore_path)
+extern "C" EXPORT PARSE_ZOE_MAILSTORE_FILENAME(parse_zoe_mailstore_filename)
 {
         auto zr = zoe_parse_uuid_filename(filename, cstr_len(filename));
         if (failed(zr)) {

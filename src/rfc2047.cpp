@@ -21,11 +21,15 @@
 
 namespace
 {
+// NOTE(nicolas): from
+// http://www.iana.org/assignments/character-sets/character-sets.xhtml
+
 enum CharsetEnum {
         CHARSET_UNSUPPORTED = 0,
         US_ASCII = 3,
         ISO_8859_1 = 4,
         UTF_8 = 106,
+        ISO_8859_15 = 111,
 } charset;
 
 CharsetEnum parse_charset_name_n(uint8_t const *charset_name,
@@ -44,6 +48,7 @@ CharsetEnum parse_charset_name_n(uint8_t const *charset_name,
         } assoc_table[] = {
             {LITE("us-ascii"), US_ASCII},
             {LITE("iso-8859-1"), ISO_8859_1},
+            {LITE("iso-8859-15"), ISO_8859_15},
             {LITE("utf-8"), UTF_8},
         };
 
@@ -204,6 +209,21 @@ const RFC2047 &make_rfc2047(const RFC5234 &rfc5234,
         CHECK_PARSER(encoded_word,
                      "=?US-ASCII?B?bXkgZ2FyZGVuIGlzIHNvIHNwZWNpYWw=?=");
         CHECK_PARSER(encoded_word, "=?UTF-8?B?T2lhIFBhcmZ1bXMg4oCTICBETQ==?=");
+        CHECK_PARSER(encoded_word,
+                     "=?iso-8859-15?Q?Euro:_=A4,=A6,=A8,=B4,=B8,=BC,=BD,=BE?=");
+        {
+                uint8_t data[] =
+                    "=?iso-8859-15?Q?Euro:_=A4,=A6,=A8,=B4,=B8,=BC,=BD,=BE?=";
+                HParseResult *result =
+                    h_parse(encoded_word, data, sizeof data - 1);
+                size_t size = rfc2047_get_encoded_word_size(result->ast);
+                uint8_t str[1 + size];
+                char *str_last =
+                    (char *)rfc2047_copy_encoded_word(result->ast, str);
+                if (cstr_terminate(str_last, (char *)str + 1 + size)) {
+                        printf("result: %s\n", str);
+                }
+        }
 #endif
 
         return global_rfc2047_parsers;
@@ -243,7 +263,52 @@ O transcode_to_utf8_n(CharsetEnum charset,
                         first = successor(first);
                         --n;
                 }
+        } else if (charset == ISO_8859_15) {
+                while (n) {
+                        uint8_t byte = source(first);
+                        uint32_t codepoint = 0;
+                        if (byte == 0xA4) {
+                                codepoint = 0x20AC;
+                        } else if (byte == 0xA6) {
+                                codepoint = 0x0160;
+                        } else if (byte == 0xA8) {
+                                codepoint = 0x0161;
+                        } else if (byte == 0xB4) {
+                                codepoint = 0x017D;
+                        } else if (byte == 0xB8) {
+                                codepoint = 0x017E;
+                        } else if (byte == 0xBC) {
+                                codepoint = 0x0152;
+                        } else if (byte == 0xBD) {
+                                codepoint = 0x0153;
+                        } else if (byte == 0xBE) {
+                                codepoint = 0x0178;
+                        } else {
+                                codepoint = byte;
+                        }
 
+#define MASK(a, bits) ((a) & ((1 << bits) - 1))
+
+                        if (codepoint < 0x0080) {
+                                sink(d_first) = MASK(codepoint, 7);
+                                d_first = successor(d_first);
+                        } else if (codepoint < 0x800) {
+                                sink(d_first) = 0xc0 | MASK(codepoint >> 6, 5);
+                                d_first = successor(d_first);
+                                sink(d_first) = 0x80 | MASK(codepoint >> 0, 6);
+                                d_first = successor(d_first);
+                        } else if (codepoint < 0x10000) {
+                                sink(d_first) = 0xE0 | MASK(codepoint >> 12, 4);
+                                d_first = successor(d_first);
+                                sink(d_first) = 0x80 | MASK(codepoint >> 6, 6);
+                                d_first = successor(d_first);
+                                sink(d_first) = 0x80 | MASK(codepoint >> 0, 6);
+                                d_first = successor(d_first);
+                        }
+#undef MASK
+                        first = successor(first);
+                        --n;
+                }
         } else {
                 // don't know how to deal with this charset
         }

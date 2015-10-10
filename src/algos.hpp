@@ -72,7 +72,7 @@ template <typename T> T &sink(T *x) { return *x; }
 // Array types
 namespace algos
 {
-template <typename T, size_t N> struct ContainerConcept<T(&)[N]> {
+template <typename T, size_t N> struct SequenceConcept<T(&)[N]> {
         using iterator_type = T *;
         using const_iterator_type = T const *;
 };
@@ -86,6 +86,12 @@ template <typename T, size_t N> constexpr T *end(T(&array)[N])
 {
         return array + N;
 }
+}
+
+namespace algos
+{
+template <Iterator I> bool empty(I x, I y) { return x == y; }
+template <Sequence S> bool empty(S s) { return empty(begin(s), end(s)); }
 }
 
 // # algorithms

@@ -69,18 +69,15 @@ zw_internal void zoe_support_init()
 zw_internal MayFail<ZoeMailStoreFile>
 zoe_parse_uuid_filename(const char *filename, size_t filename_size)
 {
-        MayFail<ZoeMailStoreFile> result;
-
+        using Result = MayFail<ZoeMailStoreFile>;
         auto parse_result = h_parse(zoe_support.uuid_eml_file,
                                     (uint8_t *)filename, filename_size);
         if (!parse_result) {
-                result.errorcode = 1;
-                return result;
+                return Result::failure(1);
         }
 
-        sink(result) = {};
+        ZoeMailStoreFile result = {};
 
-        using algos::sink;
         using algos::source;
         using algos::begin;
         using algos::end;
@@ -88,11 +85,11 @@ zoe_parse_uuid_filename(const char *filename, size_t filename_size)
         auto const &uuid_token = source(begin(parse_result->ast));
         zw_assert(uuid_token->token_type == TT_BYTES, "unexpected token");
         algos::copy_n(uuid_token->bytes.token, uuid_token->bytes.len,
-                      sink(result).uuid);
+                      result.uuid);
 
         h_parse_result_free(parse_result);
 
-        uint8_t *uuid_value = sink(result).uuid;
+        uint8_t *uuid_value = result.uuid;
         uint64_t unix_epoch_millis = 0;
         uint64_t unique = 0;
         uint64_t sequence = 0;
@@ -124,6 +121,7 @@ zoe_parse_uuid_filename(const char *filename, size_t filename_size)
         }
 
         // TODO(nicolas): it is probably worth having when filing a mail
-        sink(result).unix_epoch_millis = unix_epoch_millis;
+        result.unix_epoch_millis = unix_epoch_millis;
+
         return result;
 }

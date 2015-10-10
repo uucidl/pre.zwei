@@ -6,13 +6,13 @@ namespace algos
 #define BidirectionalIterator typename
 #define BinaryOperation typename
 #define BinaryPredicate typename
-#define Container typename
 #define ForwardIterator typename
 #define InputIterator typename
 #define Integral typename
 #define Iterator typename
 #define OutputIterator typename
 #define Readable typename
+#define Sequence typename
 #define UnaryFunction typename
 #define UnaryPredicate typename
 #define UnaryPredicate typename
@@ -32,20 +32,20 @@ template <Iterator It> struct IteratorConcept {
         using difference_type = void;
 };
 
-// # Container concept
-template <Container C> struct ContainerConcept {
+// # Sequence concept
+template <Sequence C> struct SequenceConcept {
         using iterator_type = void;
         using const_iterator_type = void;
 };
 
-template <Iterator It, Container C>
-typename ContainerConcept<C>::iterator_type begin(C &x);
-template <Iterator It, Container C>
-typename ContainerConcept<C>::const_iterator_type begin(C &x);
-template <Iterator It, Container C>
-typename ContainerConcept<C>::iterator_type end(C &x);
-template <Iterator It, Container C>
-typename ContainerConcept<C>::const_iterator_type end(C &x);
+template <Iterator It, Sequence C>
+typename SequenceConcept<C>::iterator_type begin(C &x);
+template <Iterator It, Sequence C>
+typename SequenceConcept<C>::const_iterator_type begin(C &x);
+template <Iterator It, Sequence C>
+typename SequenceConcept<C>::iterator_type end(C &x);
+template <Iterator It, Sequence C>
+typename SequenceConcept<C>::const_iterator_type end(C &x);
 
 // # Writable concept
 template <Writable W> struct WritableConcept {

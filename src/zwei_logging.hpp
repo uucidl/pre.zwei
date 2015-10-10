@@ -1,5 +1,12 @@
 #pragma once
 
+// TODO(nicolas): traces should feature a timestamp for
+// performance and auditing. i.e. the platform layer should
+// offer a logging service.
+
+// TODO(nicolas): whenever a segment of string is smaller than this 16
+// bytes, then it's worth actually storing it in place as bytes
+// directly
 struct TextOutputGroupEntry {
         uint8_t const *first;
         size_t count;
@@ -34,6 +41,8 @@ TextOutputGroupEntry *
 push_back_formatted(TextOutputGroup &group, char const *fmt, ...);
 TextOutputGroupEntry *push_back_u32(TextOutputGroup &group, uint32_t x);
 TextOutputGroupEntry *push_back_u64(TextOutputGroup &group, uint64_t x);
+
+void text_output_group_print(int filedesc, TextOutputGroup const &group);
 
 /** traces and clears the group */
 void trace(TextOutputGroup &group);
