@@ -14,6 +14,7 @@
         do {                                                                   \
                 if (!(condition)) {                                            \
                         fputs(message, stderr);                                \
+                        fputs("\n", stderr);                                   \
                         asm("int3");                                           \
                 }                                                              \
         } while (0)
