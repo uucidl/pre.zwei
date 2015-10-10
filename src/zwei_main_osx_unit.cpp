@@ -16,44 +16,6 @@
 #include <cstdarg>
 #include <cstdio>
 
-/// try to concatenate the given c string when possible, always truncate
-void string_cat(uint8_t *&string_last,
-                uint8_t *buffer_last,
-                char const *cstring)
-{
-        uint8_t *byte = (uint8_t *)cstring;
-        string_last = algos::copy_bounded_unguarded(
-                          byte, is_cstr_char, string_last, buffer_last).second;
-}
-
-/// try to concatenate the given c string region when possible, always truncate
-void string_cat(uint8_t *&string_last,
-                uint8_t *buffer_last,
-                char const *cstring,
-                char const *cstring_end)
-{
-        uint8_t *byte_first = (uint8_t *)cstring;
-        uint8_t *byte_last = (uint8_t *)cstring_end;
-        string_last = algos::copy_bounded(byte_first, byte_last, string_last,
-                                          buffer_last).second;
-}
-
-bool string_terminate(uint8_t *&string_last, uint8_t *buffer_last)
-{
-        using algos::sink;
-        using algos::successor;
-
-        if (string_last != buffer_last) {
-                sink(string_last) = 0;
-                string_last = successor(string_last);
-                return true;
-        }
-
-        return false;
-}
-
-// ..STRING CONSTRUCTION W/ BUFFERS>
-
 #include <CommonCrypto/CommonDigest.h>
 #include <limits>
 
@@ -328,15 +290,14 @@ zw_internal struct FileList *directory_query_all_files(
                                    entry->nameinfo.attr_dataoffset;
 
                 auto path_size = cstr_len(dir_path) + 1 + cstr_len(name) + 1;
-                uint8_t *path = push_array_rvalue(arena, path, path_size);
+                char *path = push_array_rvalue(arena, path, path_size);
                 {
-                        auto const buffer_first = path;
-                        auto const buffer_last = buffer_first + path_size;
-                        auto string_last = buffer_first;
-                        string_cat(string_last, buffer_last, dir_path);
-                        string_cat(string_last, buffer_last, "/");
-                        string_cat(string_last, buffer_last, name);
-                        zw_assert(string_terminate(string_last, buffer_last),
+                        auto const buffer_last = path + path_size;
+                        char *string_last = path;
+                        cstr_cat(string_last, buffer_last, dir_path);
+                        cstr_cat(string_last, buffer_last, "/");
+                        cstr_cat(string_last, buffer_last, name);
+                        zw_assert(cstr_terminate(string_last, buffer_last),
                                   "unexpected size");
                 }
                 char *path_cstr = (char *)path;
@@ -784,14 +745,14 @@ int main(int argc, char **argv)
 
         struct LoadedLibrary zwei_app_library = {};
         {
-                auto const buffer_first = (uint8_t *)zwei_app_library.file_path;
+                auto const buffer_first = zwei_app_library.file_path;
                 auto const buffer_last =
                     buffer_first + sizeof zwei_app_library.file_path;
-                auto string_last = buffer_first;
-                string_cat(string_last, buffer_last, argv[0],
-                           cstr_find_last(argv[0], '/'));
-                string_cat(string_last, buffer_last, "/libzwei.dylib");
-                if (!string_terminate(string_last, buffer_last)) {
+                char *string_last = buffer_first;
+                cstr_cat(string_last, buffer_last, argv[0],
+                         cstr_find_last(argv[0], '/'));
+                cstr_cat(string_last, buffer_last, "/libzwei.dylib");
+                if (!cstr_terminate(string_last, buffer_last)) {
                         return 1;
                 }
 
