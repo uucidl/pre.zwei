@@ -1,7 +1,18 @@
 /**
+   NOTE(nicolas)
+
+   We want to read from a root directory a series of small files in
+   the fastest possible way.
+
+   These files may either be stored locally or on a remote drive.
+
+   We extract features from these files in memory.
+
    TODO(nicolas): FEATURE search timeline ranges [date-start,date-end)
    TODO(nicolas): FEATURE on OSX, use open command or similar to open a mail in
    Mail.app
+   TODO(nicolas): control parallelism using sysctl to obtain
+   informations about local machine.
 */
 
 #include "zwei_inlines.hpp"
