@@ -101,6 +101,8 @@ extern zw_global SPDR_Context *global_spdr;
 
 void text_output_group_print(int filedesc, TextOutputGroup const &group)
 {
+        SPDR_SCOPE1(global_spdr, "logging", __FUNCTION__,
+                    SPDR_INT("filedesc", filedesc));
         SPDR_EVENT3(global_spdr, "variables", "TextOutputGroup",
                     SPDR_INT("entries-count", int(group.last - group.first)),
                     SPDR_INT("entries-bytes", int(sizeof *group.first *
@@ -148,7 +150,9 @@ void text_output_group_print(int filedesc, TextOutputGroup const &group)
         auto &iovec = next_iovec();
         iovec.iov_base = (void *)"\n";
         iovec.iov_len = 1;
+        SPDR_BEGIN(global_spdr, "logging", "writev");
         writev(filedesc, iovecs, iovecs_n);
+        SPDR_END(global_spdr, "logging", "writev");
 }
 
 void error_print(char const *message)

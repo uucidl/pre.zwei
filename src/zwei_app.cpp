@@ -257,9 +257,9 @@ macroman_workaround_stream(struct BufferRange *input, struct MemoryArena *arena)
                 MacRomanWorkaround state;
         } *stream = push_pointer_rvalue(arena, stream);
 
-        *stream = (struct Stream){
-            input, {UTF8_ACCEPT, 0, 0, {}, {}, UTF8_ACCEPT, 0, {}, 0},
-        };
+        stream->input = input;
+        stream->state.utf8decoder_state = UTF8_ACCEPT;
+        stream->state.macintosh_chars_utf8decoder_state = UTF8_ACCEPT;
 
         auto next = [](struct BufferRange *range) {
                 struct Stream *stream = reinterpret_cast<struct Stream *>(
@@ -558,7 +558,7 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
         return 3;
 }
 
-extern "C" EXPORT PARSE_ZOE_MAILSTORE_PATH(parse_zoe_mailstore_path)
+extern "C" EXPORT PARSE_ZOE_MAILSTORE_FILENAME(parse_zoe_mailstore_filename)
 {
         auto zr = zoe_parse_uuid_filename(filename, cstr_len(filename));
         if (failed(zr)) {

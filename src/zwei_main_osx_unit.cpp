@@ -16,6 +16,8 @@
 */
 
 #include "zwei_inlines.hpp"
+
+#include "zwei_files.hpp"
 #include "zwei_iobuffer.hpp"
 #include "zwei_iobuffer_inlines.hpp"
 #include "zwei_logging.hpp"
@@ -29,10 +31,12 @@
 
 #include <dispatch/dispatch.h>
 
+#include <algorithm>
 #include <cstdarg>
 #include <cstdio>
 
 zw_global SPDR_Context *global_spdr = nullptr;
+zw_global bool global_can_ignore_file = false;
 
 #include <CommonCrypto/CommonDigest.h>
 #include <limits>
@@ -76,102 +80,6 @@ MayFail<Sha1> sha1(struct BufferRange *range)
         return result;
 }
 
-#include <fcntl.h>
-#include <unistd.h>
-
-/// open an input stream on a path, with the intent of reading it
-/// fully and only once
-void inputstream_on_filepath(struct MemoryArena *arena,
-                             struct BufferRange *result,
-                             char const *path,
-                             size_t limit)
-{
-        struct StreamedFile {
-                int filedesc = 0;
-                char const *path = nullptr;
-                bool32 is_opened = 0;
-                size_t total_read = 0;
-                size_t limit_read = 0;
-
-                // TODO(nicolas) what about io advice received before?
-                // NOTE(nicolas): this was tuned so that we get in average a
-                // single read per file
-                uint8_t buffer[2 * 4 * 4 * 4 * 4096] = {};
-        };
-
-        auto next_on_streamed_file = [](struct BufferRange *range) {
-                struct StreamedFile *file =
-                    reinterpret_cast<struct StreamedFile *>(
-                        range->start - offsetof(struct StreamedFile, buffer));
-
-                if (BR_NoError == range->error && !file->is_opened) {
-                        SPDR_SCOPE(global_spdr, "io", "open");
-                        int filedesc = open(file->path, O_RDONLY, 0);
-                        fcntl(filedesc, F_NOCACHE,
-                              1); // we only process the files once
-
-                        file->filedesc = filedesc;
-                        if (file->filedesc < 0) {
-                                return fail(range, BR_IOError);
-                        }
-                        file->is_opened = true;
-                } else if (file->total_read >= file->limit_read) {
-                        if (file->is_opened) {
-                                close(file->filedesc);
-                        }
-                        return fail(range, BR_ReadPastEnd);
-                }
-
-                SPDR_BEGIN1(global_spdr, "io", "read",
-                            SPDR_INT("size", sizeof file->buffer));
-                ssize_t size_read =
-                    read(file->filedesc, &file->buffer, sizeof file->buffer);
-                SPDR_END(global_spdr, "io", "read");
-
-                if (size_read < 0) {
-                        close(file->filedesc);
-                        return fail(range, BR_IOError);
-                } else if (size_read == 0) {
-                        close(file->filedesc);
-                        return fail(range, BR_ReadPastEnd);
-                }
-
-                if (file->total_read + size_read >= file->limit_read) {
-                        size_read = file->limit_read - file->total_read;
-                }
-
-                range->start = file->buffer;
-                range->cursor = range->start;
-                range->end = range->start + size_read;
-                file->total_read += size_read;
-
-                return BR_NoError;
-        };
-
-        auto stream_on_file = [next_on_streamed_file](
-            struct BufferRange *range, struct StreamedFile *file) {
-                range->start = file->buffer;
-                range->cursor = range->start;
-                range->end = range->start;
-                range->error = BR_NoError;
-                range->next = next_on_streamed_file;
-        };
-
-        struct StreamedFile *file = push_pointer_rvalue(arena, file);
-        *file = StreamedFile{};
-        file->path = path;
-        file->limit_read = limit;
-
-        stream_on_file(result, file);
-}
-
-void inputstream_finish(struct BufferRange *range)
-{
-        while (range->error == BR_NoError) {
-                range->next(range);
-        }
-}
-
 #include <sys/vnode.h> // for enum vtype
 #include <mach/mach.h> // for vm_allocate
 
@@ -186,8 +94,6 @@ struct FileList {
 
 #include <sys/attr.h>
 #include <cerrno>
-
-zw_global bool global_can_ignore_file = false;
 
 /**
    Query a directory and its sub-directories for all their files,
@@ -693,17 +599,6 @@ directory_query_all_files(char const *root_dir_path,
         return result;
 }
 
-/**
-   NOTE(nicolas)
-
-   We want to read from a root directory a series of small files in
-   the fastest possible way.
-
-   These files may either be stored locally or on a remote drive.
-
-   We extract features from these files in memory.
-*/
-
 #include <dlfcn.h>
 #include <sys/stat.h>
 
@@ -863,19 +758,27 @@ struct ProcessedMessage {
 
 struct Zwei {
         AcceptMimeMessageFn *accept_mime_message;
-        ParseZoeMailstorePathFn *parse_zoe_mailstore_path;
+        ParseZoeMailstoreFilenameFn *parse_zoe_mailstore_filename;
 };
+
+void inputstream_finish(struct BufferRange *range)
+{
+        while (range->error == BR_NoError) {
+                range->next(range);
+        }
+}
 
 zw_internal void process_message(Zwei const &zwei,
                                  char const *filename,
                                  char const *filepath,
                                  uint8_t const *full_message,
                                  uint8_t const *full_message_last,
-                                 MemoryArena &message_arena,
+                                 MemoryArena transient_arena,
                                  MemoryArena &result_arena,
                                  ProcessedMessage &destination)
 {
-        SPDR_SCOPE(global_spdr, "app", "process_message");
+        SPDR_SCOPE1(global_spdr, "app", "process_message",
+                    SPDR_STR("filepath", filepath));
         struct BufferRange file_content;
         stream_on_memory(&file_content, const_cast<uint8_t *>(full_message),
                          full_message_last - full_message);
@@ -888,12 +791,18 @@ zw_internal void process_message(Zwei const &zwei,
 
         destination.sha1 = just(sha1_result);
 
+        destination.filename = filename;
+        destination.filepath = filepath;
+        destination.filesize = full_message_last - full_message;
+
         auto zoefile_errorcode =
-            zwei.parse_zoe_mailstore_path(&destination.zoefile, filename);
-        if (0 != zoefile_errorcode && !cstr_endswith(filename, ".eml")) {
+            zwei.parse_zoe_mailstore_filename(&destination.zoefile, filename);
+        if (0 != zoefile_errorcode && !cstr_endswith(filepath, ".eml")) {
                 return;
         }
 
+        // TODO(nicolas): @platform_specific here we have encoded the
+        // path separator, which makes this code non portable
         if (0 == zoefile_errorcode) {
                 // find predecessor, until you reach
                 // boundary
@@ -905,13 +814,19 @@ zw_internal void process_message(Zwei const &zwei,
                 };
                 // skip day, month, year
                 auto first = cstr_find_last(filepath, '/');
-                first =
-                    algos::find_backward(filepath, pred(filepath, first), '/');
-                first =
-                    algos::find_backward(filepath, pred(filepath, first), '/');
-                first =
-                    algos::find_backward(filepath, pred(filepath, first), '/');
-                first = algos::successor(first);
+                first = *first != '/'
+                            ? first
+                            : algos::find_backward(filepath,
+                                                   pred(filepath, first), '/');
+                first = *first != '/'
+                            ? first
+                            : algos::find_backward(filepath,
+                                                   pred(filepath, first), '/');
+                first = *first != '/'
+                            ? first
+                            : algos::find_backward(filepath,
+                                                   pred(filepath, first), '/');
+                first = *first != '/' ? first : algos::successor(first);
                 auto last = cstr_find_last(first, '.');
                 destination.zoe_rel_url = {(uint8_t *)first,
                                            size_t(last - first)};
@@ -921,7 +836,7 @@ zw_internal void process_message(Zwei const &zwei,
         auto errorcode = zwei.accept_mime_message(
             full_message, full_message_last,
             zoefile_errorcode == 0 ? &destination.zoefile : nullptr,
-            &message_arena, &result_arena, &destination.message_summary);
+            &transient_arena, &result_arena, &destination.message_summary);
         zw_assert(errorcode == 0, "unexpected errorcode");
         SPDR_END(global_spdr, "app", "accept_mime_message");
 
@@ -930,8 +845,11 @@ zw_internal void process_message(Zwei const &zwei,
 
 zw_internal void
 print_processed_message(ProcessedMessage const &processed_message,
-                        MemoryArena &transient_arena)
+                        MemoryArena transient_arena)
 {
+        SPDR_SCOPE2(global_spdr, "main", __FUNCTION__,
+                    SPDR_STR("filepath", processed_message.filepath),
+                    SPDR_INT("fileindex", int(processed_message.fileindex)));
         char const *filepath = processed_message.filepath;
         TextOutputGroup traceg = {};
         allocate(traceg, &transient_arena, KILOBYTES(1));
@@ -1084,6 +1002,9 @@ int main(int argc, char **argv)
 
         struct MemoryArena permanent_arena =
             memory_arena(permanent_storage, permanent_storage_memory_size);
+        MemoryArena transient_arena =
+            memory_arena(transient_storage, transient_storage_memory_size);
+
         if (spdr_init(&global_spdr, push_bytes(&permanent_arena, MEGABYTES(96)),
                       MEGABYTES(96))) {
                 error_print("could not initialize memory for tracing");
@@ -1091,22 +1012,6 @@ int main(int argc, char **argv)
         }
         spdr_enable_trace(global_spdr, 1);
         SPDR_METADATA1(global_spdr, "thread_name", SPDR_STR("name", "main"));
-
-#if ZWEI_DISABLED
-        // testing libdispatch
-        {
-                dispatch_queue_t queue = dispatch_get_global_queue(
-                    DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
-                size_t iteration_count = 9;
-                dispatch_apply_f(
-                    iteration_count, queue, nullptr, [](void *, size_t idx) {
-                            SPDR_BEGIN1(global_spdr, "dispatch", "queue",
-                                        SPDR_INT("idx", int(idx)));
-                            printf("hello %zu world\n", idx);
-                            SPDR_END(global_spdr, "dispatch", "queue");
-                    });
-        }
-#endif
 
         Zwei zwei = {};
 
@@ -1136,22 +1041,21 @@ int main(int argc, char **argv)
                                 trace_print("reloaded library!");
                         }
 
+#define GRAB_FN_SYM(lvalue, symname, dlhandle) {                                 \
+                                lvalue = reinterpret_cast<decltype(lvalue)>(\
+                                                                           dlsym(dlhandle, symname)); \
+                                                        zw_assert(lvalue, "expected symbol " symname); \
+                        }
+
                         InitAppFn *init_app;
-                        init_app = reinterpret_cast<decltype(init_app)>(
-                            dlsym(lib->dlhandle, "init_app"));
-                        zw_assert(init_app, "expected symbol init_app");
+                        GRAB_FN_SYM(init_app, "init_app", lib->dlhandle);
+                        GRAB_FN_SYM(zwei.accept_mime_message,
+                                    "accept_mime_message", lib->dlhandle);
+                        GRAB_FN_SYM(zwei.parse_zoe_mailstore_filename,
+                                    "parse_zoe_mailstore_filename",
+                                    lib->dlhandle);
 
-                        zwei.accept_mime_message = reinterpret_cast<decltype(
-                            zwei.accept_mime_message)>(
-                            dlsym(lib->dlhandle, "accept_mime_message"));
-                        zw_assert(zwei.accept_mime_message,
-                                  "expected symbol check_mime_message");
-
-                        zwei.parse_zoe_mailstore_path = reinterpret_cast<
-                            decltype(zwei.parse_zoe_mailstore_path)>(
-                            dlsym(lib->dlhandle, "parse_zoe_mailstore_path"));
-                        zw_assert(zwei.parse_zoe_mailstore_path,
-                                  "expected symbol parse_zoe_mailstore_path");
+#undef GRAB_FN_SYM
 
                         Platform platform;
                         platform.spdr = global_spdr;
@@ -1167,18 +1071,11 @@ int main(int argc, char **argv)
 
         refresh_zwei_app();
 
-        // TODO(nicolas): traces should feature a timestamp for
-        // performance and auditing. i.e. the platform layer should
-        // offer a logging service
-
         // FEATURE(nicolas): show content of any directory recursively
         // FEATURE(nicolas): show sha-1 digests of all files inside a directory
         if (!root_dir_path) {
                 error_print("you must pass a root directory with --root-dir");
         } else {
-                MemoryArena transient_arena = memory_arena(
-                    transient_storage, transient_storage_memory_size);
-
                 // NOTE(nicolas) we could process files in parallel
                 // .. but how much parallelism can a HDD/SDD/Raid
                 // device support?
@@ -1210,176 +1107,203 @@ int main(int argc, char **argv)
 
                 MemoryArena result_arena =
                     push_sub_arena(permanent_arena, MEGABYTES(512));
-                size_t total_bytes_read =
-                    0; // TODO(nicolas) technically could be larger than size_t
                 // TODO(nicolas) always measure bytes/sec or sec/MB and
                 // print out total bytes
                 SPDR_BEGIN(global_spdr, "main", "processing_files");
 
-                struct FileWorkTaskInput {
-                        Zwei zwei;
-                        char const *filename;
-                        char const *filepath;
-                        uint8_t const *full_message;
-                        uint8_t const *full_message_end;
-                };
+                // Is a file_loader structure necessary? Since I/O
+                // doesn't have many resources, this could be made
+                // purely functional and use a global variable. At
+                // least from an API point of view.
 
-                struct FileWorkTask {
-                        FileWorkTaskInput input;
-                        MemoryArena arena;
+                size_t file_size_limit = MEGABYTES(128);
+                auto file_loader_arena = push_sub_arena(
+                    transient_arena, get_file_loader_allocation_size(
+                                         all_files->count, file_size_limit));
+                auto &files_loader =
+                    create_file_loader(all_files->count, file_loader_arena.base,
+                                       file_loader_arena.size);
+                for (size_t file_index = 0; file_index < all_files->count;
+                     ++file_index) {
+                        size_t size = all_files->attributes[file_index].size;
+                        bool ignore = false;
+                        if (size > file_size_limit) {
+                                // TODO(nicolas): should error be
+                                // dealt with here or inside the
+                                // loader? Inside the loader would
+                                // centralize error handling.
+                                error_print(
+                                    "Ignoring Exceptionally Large File");
+                                if (global_can_ignore_file) {
+                                        ignore = true;
+                                } else {
+                                        zw_assert(false, "large file");
+                                }
+                        }
+
+                        if (!ignore) {
+                                push_file(files_loader,
+                                          all_files->paths[file_index], size,
+                                          (uint32_t)file_index);
+                        }
+                }
+                // iterates over every file in the stream. the loop
+                // can never reach the end if you don't release files
+                // and memory is too constrained to load them all in
+                // memory.
+                //
+                // the stream has to block whenever new loaded files
+                // haven't appeared yet (and we haven't exhausted the
+                // original list)
+                //
+                // Blocking may not be so nice depending on what you
+                // want to do as a user.. (say show some more stuff,
+                // do some other work etc...)
+
+                struct MessageWorkTask {
+                        FileLoader *files_loader;
+                        MemoryArena result_arena;
+                        FileLoaderHandle file_handle;
                         ProcessedMessage result;
                 };
 
-                FileWorkTask tasks[8];
+                struct Task {
+                        MemoryArena arena;
+                        Zwei zwei;
+                        bool done;
+                        enum { NONE, MESSAGE } type;
+                        MessageWorkTask message_task;
+                };
+
+                // TODO(nicolas): NEXT parallelism should be optional,
+                // especially for testing. We want to have a reference
+                // non-parallelized tool so as to verify correctness.
+                Task tasks[8 * 2];
                 size_t tasks_capacity = NCOUNT(tasks);
                 size_t tasks_count = 0;
-                MemoryArena const tasks_arena_init = push_sub_arena(
-                    transient_arena, tasks_capacity * MEGABYTES(5));
-                MemoryArena tasks_arena = tasks_arena_init;
+                for (auto &task : tasks) {
+                        // TODO(nicolas): might not be enough if you
+                        // want to do allocations proportional to the
+                        // input file.
+                        //
+                        // There might be a point in doing first a
+                        // pre-indexing with low-memory and only
+                        // taking into account the first 1M of a
+                        // message, then a full indexing in some other
+                        // form later.
+                        //
+                        // No need to spend resources on spam for instance!
+                        //
+                        // Normally parsing is not memory
+                        // intensive. The memory intensive part in our
+                        // pipeline is the MacRoman bug workaround,
+                        // that is super specific to my corpus.
+                        //
+                        // If I pre-applied it to my files, I wouldn't
+                        // need it in this program.
+                        task.arena =
+                            push_sub_arena(transient_arena, MEGABYTES(2));
+                        task.done = false;
+                        task.type = Task::NONE;
+                }
 
-                auto dispatch_all_app_tasks = [](FileWorkTask *tasks,
-                                                 size_t tasks_count) {
+                auto push_message_task =
+                    [&zwei, &tasks, &tasks_count, &files_loader, &result_arena,
+                     tasks_capacity](FileLoaderHandle const &file_handle) {
+                            zw_assert(1 + tasks_count <= tasks_capacity,
+                                      "overallocating");
+
+                            auto &task = tasks[tasks_count];
+                            task.done = false;
+                            task.type = Task::MESSAGE;
+                            task.zwei = zwei;
+                            task.message_task.files_loader = &files_loader;
+                            task.message_task.result_arena =
+                                push_sub_arena(result_arena, KILOBYTES(8));
+                            task.message_task.file_handle = file_handle;
+                            task.message_task.result = {};
+
+                            tasks_count += 1;
+                    };
+
+                auto task_run = [](void *tasks_ptr, size_t task_index) {
+                        Task *tasks = static_cast<Task *>(tasks_ptr);
+                        Task &task = tasks[task_index];
+
+                        if (task.type != Task::MESSAGE)
+                                return;
+                        auto &message_task = task.message_task;
+
+                        auto &zwei = task.zwei;
+                        auto file = message_task.file_handle;
+                        auto &files_loader = *message_task.files_loader;
+
+                        char const *filepath = get_filepath(files_loader, file);
+                        char const *filename = get_filename(files_loader, file);
+                        auto message_content = get_content(files_loader, file);
+                        process_message(
+                            zwei, filename, filepath, begin(message_content),
+                            end(message_content), task.arena,
+                            message_task.result_arena, message_task.result);
+                        message_task.result.fileindex =
+                            get_tag(files_loader, file);
+                        release_content(
+                            files_loader,
+                            file); // releases the file from the loader
+                        task.done = true;
+                };
+
+                auto process_and_print = [&task_run, transient_arena](
+                    Task *first, Task *last) {
                         dispatch_queue_t queue = dispatch_get_global_queue(
                             DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
 
-                        dispatch_apply_f(
-                            tasks_count, queue, tasks,
-                            [](void *tasks_ptr, size_t task_index) {
-                                    FileWorkTask *tasks =
-                                        static_cast<FileWorkTask *>(tasks_ptr);
-                                    FileWorkTask &task = tasks[task_index];
+                        dispatch_apply_f(last - first, queue, first, task_run);
 
-                                    size_t transient_memory_size =
-                                        KILOBYTES(512);
-                                    MemoryArena transient_arena = memory_arena(
-                                        malloc(transient_memory_size),
-                                        transient_memory_size);
-                                    process_message(task.input.zwei,
-                                                    task.input.filename,
-                                                    task.input.filepath,
-                                                    task.input.full_message,
-                                                    task.input.full_message_end,
-                                                    transient_arena, task.arena,
-                                                    task.result);
-                                    free(transient_arena.base);
-                                    transient_arena = {};
+                        algos::for_each(
+                            first, last, [transient_arena](Task const &x) {
+                                    if (x.type != Task::MESSAGE)
+                                            return;
+                                    if (!x.done)
+                                            return;
+                                    if (!x.message_task.result.success)
+                                            return;
 
+                                    print_processed_message(
+                                        x.message_task.result, transient_arena);
                             });
-
                 };
 
-                auto run_app_tasks = [&tasks, &tasks_count, &tasks_arena,
-                                      tasks_arena_init, dispatch_all_app_tasks](
-                    MemoryArena arena) {
-                        dispatch_all_app_tasks(tasks, tasks_count);
-                        algos::for_each_n(tasks, tasks_count,
-                                          [&arena](FileWorkTask const &task) {
-                                                  print_processed_message(
-                                                      task.result, arena);
-                                          });
-                        tasks_count = 0;
-                        tasks_arena = tasks_arena_init;
-                };
-
-                for (size_t file_index = 0; file_index < all_files->count;
-                     file_index++) {
-                        auto const filename = all_files->filenames[file_index];
-                        auto const filepath = all_files->paths[file_index];
-                        auto const file_attributes =
-                            all_files->attributes[file_index];
-
-                        MemoryArena temp_arena = transient_arena;
-                        MemoryArena message_arena = push_sub_arena(
-                            temp_arena, temp_arena.size - temp_arena.used);
-
-                        if (tasks_count == tasks_capacity) {
-                                run_app_tasks(message_arena);
-                        }
-
-                        FileWorkTask &task = tasks[tasks_count];
-                        task = {};
-
-                        SPDR_SCOPE1(global_spdr, "main", "process_file",
-                                    SPDR_STR("filepath", filepath));
-                        SPDR_COUNTER1(global_spdr, "variables", "tasks_arena",
-                                      SPDR_INT("used", int(tasks_arena.used)));
-
-                        // Slurp entire file in memory
-                        // NOTE(nicolas): this ensure we don't do I/O in the
-                        // parsing
-                        // part of the application.
-                        // TODO(nicolas): what if the message is too large?
-                        uint8_t *full_message;
-                        uint8_t *full_message_end;
-                        {
-                                SPDR_SCOPE(global_spdr, "main",
-                                           "read_entire_file");
-                                struct BufferRange file_content;
-                                inputstream_on_filepath(&message_arena,
-                                                        &file_content, filepath,
-                                                        file_attributes.size);
-
-                                // TODO(nicolas): @copypaste
-                                // cfec80a4708df2e90e45023f0d87af7f4eb54a46
-                                full_message =
-                                    (uint8_t *)push_bytes(&tasks_arena, 0);
-                                full_message_end = full_message;
-
-                                while (file_content.error == BR_NoError) {
-                                        zw_assert(
-                                            full_message_end ==
-                                                push_bytes(&tasks_arena, 0),
-                                            "non contiguous");
-                                        full_message_end = algos::copy(
-                                            file_content.start,
-                                            file_content.end,
-                                            (uint8_t *)push_bytes(
-                                                &tasks_arena,
-                                                file_content.end -
-                                                    file_content.start));
-
-                                        file_content.next(&file_content);
+                while (count_pending_files(files_loader) > 0) {
+                        wait_for_available_files(files_loader);
+                        for (auto &file : available_files(files_loader)) {
+                                if (tasks_count == tasks_capacity) {
+                                        process_and_print(tasks,
+                                                          tasks + tasks_count);
+                                        tasks_count = 0;
                                 }
-                                inputstream_finish(&file_content);
-                                SPDR_EVENT1(
-                                    global_spdr, "main", "read_entire_file",
-                                    SPDR_INT("size", int(full_message_end -
-                                                         full_message)));
-                                zw_assert(
-                                    uint64_t(full_message_end - full_message) ==
-                                        file_attributes.size,
-                                    "surprising file size");
+
+                                accept(files_loader, file);
+                                push_message_task(file);
                         }
-
-                        ++tasks_count;
-                        task.input.zwei = zwei;
-                        task.input.filename = filename;
-                        task.input.filepath = filepath;
-                        task.result.filename = filename;
-                        task.result.filepath = filepath;
-                        task.result.fileindex = file_index;
-                        task.result.filesize = file_attributes.size;
-                        task.input.full_message = full_message;
-                        task.input.full_message_end = full_message_end;
-                        task.arena = push_sub_arena(result_arena, KILOBYTES(4));
-
-                        total_bytes_read += full_message_end - full_message;
-                        SPDR_COUNTER1(
-                            global_spdr, "variables", "result_arena",
-                            SPDR_INT("bytes", int(result_arena.used)));
-                        SPDR_COUNTER1(global_spdr, "variables", "read",
-                                      SPDR_INT("kilobytes",
-                                               int(total_bytes_read / 1000)));
-                        SPDR_COUNTER1(global_spdr, "variables", "tasks_arena",
-                                      SPDR_INT("used", int(tasks_arena.used)));
+                        SPDR_COUNTER1(global_spdr, "main", "process_task",
+                                      SPDR_INT("value", int(tasks_count)));
                 }
-                run_app_tasks(transient_arena);
+                process_and_print(tasks, tasks + tasks_count);
+                tasks_count = 0;
+
+                {
+                        auto error = load_error_files(files_loader);
+                        zw_assert(algos::empty(begin(error), end(error)),
+                                  "expected no loading error");
+
+                        // TODO(nicolas): check that no file in error
+                        // remains. Was the error transient? Should I
+                        // retry? How many times?
+                }
+
+                SPDR_END(global_spdr, "main", "processing_files");
         }
-
-        SPDR_END(global_spdr, "main", "processing_files");
-
-        void text_output_group_print(int filedesc,
-                                     TextOutputGroup const &group);
 
         auto program_path_first = argv[0];
         auto program_path_last = cstr_find_last(argv[0], '/');
@@ -1421,3 +1345,11 @@ int main(int argc, char **argv)
 
 #include "zwei_iobuffer.cpp"
 #include "zwei_osx_logging.cpp"
+
+// TODO(nicolas): NEXT serialize data on disk so we can compare the
+// results of both methods and see that nothing wrong is happening.
+#if 0 * ZWEI_SLOW
+#include "zwei_files_osx_synchronous.cpp"
+#else
+#include "zwei_files_osx_async.cpp"
+#endif

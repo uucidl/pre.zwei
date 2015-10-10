@@ -31,6 +31,6 @@ typedef INIT_APP(InitAppFn);
                  MessageSummary *message_summary)
 typedef ACCEPT_MIME_MESSAGE(AcceptMimeMessageFn);
 
-#define PARSE_ZOE_MAILSTORE_PATH(name)                                         \
+#define PARSE_ZOE_MAILSTORE_FILENAME(name)                                     \
         int name(ZoeMailStoreFile *result, char const *filename)
-typedef PARSE_ZOE_MAILSTORE_PATH(ParseZoeMailstorePathFn);
+typedef PARSE_ZOE_MAILSTORE_FILENAME(ParseZoeMailstoreFilenameFn);

@@ -1,5 +1,9 @@
 #pragma once
 
+// TODO(nicolas): traces should feature a timestamp for
+// performance and auditing. i.e. the platform layer should
+// offer a logging service.
+
 // TODO(nicolas): whenever a segment of string is smaller than this 16
 // bytes, then it's worth actually storing it in place as bytes
 // directly
