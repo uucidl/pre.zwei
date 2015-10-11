@@ -124,6 +124,24 @@ must_compile_osx \
     -o "${PROGRAM}" \
     && printf "PROGRAM\t%s\n" "${PROGRAM}"
 
+(
+    PROGRAM="${BUILD}"/shasum
+    must_compile_osx \
+        "${HERE}"/src/tests/shasum_unit.cpp \
+        -DSHASUM_ASYNC=1 -DSHASUM_TRACING=0 \
+        -o "${PROGRAM}" \
+        && printf "PROGRAM\t%s\n" "${PROGRAM}"
+)
+
+(
+    PROGRAM="${BUILD}"/shasum_sync
+    must_compile_osx \
+        "${HERE}"/src/tests/shasum_unit.cpp \
+        -DSHASUM_ASYNC=0 -DSHASUM_TRACING=0 \
+        -o "${PROGRAM}" \
+        && printf "PROGRAM\t%s\n" "${PROGRAM}"
+)
+
 # beep
 printf "\a"
 set +x

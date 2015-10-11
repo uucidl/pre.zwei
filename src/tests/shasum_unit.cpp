@@ -22,7 +22,9 @@
 #include <CommonCrypto/CommonDigest.h>
 #include <dispatch/dispatch.h>
 
+#include <cassert>
 #include <cstdlib>
+#include <limits>
 
 struct FileShaWork {
         FileLoader *file_loader;
@@ -42,7 +44,9 @@ void shasum_task(void *tasks_ptr, size_t task_index)
         SPDR_SCOPE1(global_spdr, "main", "shasum_task",
                     SPDR_INT("fileindex", get_tag(file_loader, fh)));
         auto content = get_content(file_loader, fh);
-        CC_SHA1(begin(content), end(content) - begin(content), task.digest);
+        auto size = end(content) - begin(content);
+        assert(size <= std::numeric_limits<CC_LONG>::max());
+        CC_SHA1(begin(content), static_cast<CC_LONG>(size), task.digest);
         release_content(file_loader, fh);
 }
 
