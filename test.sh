@@ -3,11 +3,13 @@ set -o pipefail
 
 HERE="$(dirname ${0})"
 
+set -e
 "${HERE}"/build.sh | grep '^PROGRAM' | cut -f2 | \
     while read program ; do
         printf "running ${program}\n"
         ${program} || exit 1
     done
+set +e
 
 if [[ $? -ne 0 ]]; then
    exit 1
