@@ -334,10 +334,20 @@ directory_query_all_files(char const *root_dir_path,
                                 }
 
                                 int const fd = open(path, O_RDONLY, 0);
+                                if (fd < 0) {
+                                        if (errno == ENOENT) {
+                                                // the file actually does not
+                                                // actually exist. This happened
+                                                // on SMB shares for file
+                                                // entries
+                                                // with invalid MAC filenames.
+                                                ignore_file = true;
+                                        }
+                                }
                                 // TODO(nicolas) permissions to open
                                 // that file at all?
                                 zw_assert(ignore_file || fd >= 0, "open file");
-                                DEFER(close(fd));
+                                DEFER(fd >= 0 && close(fd));
 
                                 if (!ignore_file && entry->file_totalsize > 0) {
                                         struct log2phys filephys;
@@ -1310,7 +1320,7 @@ int main(int argc, char **argv)
         char trace_file[4096];
         auto trace_file_last = algos::begin(trace_file);
         cstr_cat(trace_file_last, algos::end(trace_file), program_path_first,
-                   program_path_last);
+                 program_path_last);
         cstr_cat(trace_file_last, algos::end(trace_file), "/trace.json");
         if (!cstr_terminate(trace_file_last, algos::end(trace_file))) {
                 zw_assert(false, "uh");
