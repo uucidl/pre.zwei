@@ -63,6 +63,7 @@ create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size)
         MemoryArena arena = memory_arena(memory, memory_size);
         FileLoader *ptr = push_pointer_rvalue(&arena, ptr);
         FileLoader &file_loader = *ptr;
+        new (&file_loader) FileLoader;
 
         file_loader.entries =
             push_array_rvalue(&arena, file_loader.entries, maximum_file_count);
@@ -85,19 +86,16 @@ create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size)
 
         std::atomic_init(&file_loader.available_since_wait, 0);
 
-        // TODO(nicolas: @leak the created queue must be released
         file_loader.task_queue =
             dispatch_queue_create("com.uucidl.shasum", DISPATCH_QUEUE_SERIAL);
         dispatch_set_target_queue(
             file_loader.task_queue,
             dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0));
 
-        // TODO(nicolas): @leak the semaphore must be released
         file_loader.data_available_semaphore = dispatch_semaphore_create(0);
 
         size_t available_memory_size = arena.size - arena.used;
 
-        new (&file_loader.content_allocator) MemoryBlockAllocator();
         initialize(file_loader.content_allocator,
                    push_bytes(&arena, available_memory_size),
                    available_memory_size);
@@ -105,7 +103,12 @@ create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size)
         return file_loader;
 }
 
-void destroy(FileLoader &file_loader) { file_loader.~FileLoader(); }
+void destroy(FileLoader &file_loader)
+{
+        dispatch_release(file_loader.task_queue);
+        dispatch_release(file_loader.data_available_semaphore);
+        file_loader.~FileLoader();
+}
 
 void push_file(FileLoader &file_loader,
                char const *filepath,
