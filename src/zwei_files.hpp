@@ -37,7 +37,6 @@ struct FileLoaderHandle {
 };
 
 struct FileLoaderHandleList {
-        // TODO(nicolas): extract bounded range
         std::pair<FileLoaderHandle *, FileLoaderHandle *> range;
 
         friend FileLoaderHandle *begin(FileLoaderHandleList const &x)
