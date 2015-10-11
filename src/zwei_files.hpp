@@ -9,16 +9,10 @@
    Requirements:
    - maximum I/O performance,
    - managing memory for every file is not a concern for the user,
-   - we can apply one processing to every file,
-   - we can allocate some additional memory buffer for processing, proportional
-   to the file,
-   - file processing can be done in parallel
+   - processing a file's content can be done in parallel w/ I/O
 
    Optional:
    - cancelling?
-
-   TODO(nicolas): considering auto accepting when fetching available_files,
-   it seems like a typical error to make not to accept them.
 */
 
 #include <cstdint>

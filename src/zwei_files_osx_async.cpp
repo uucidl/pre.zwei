@@ -404,6 +404,8 @@ FileLoaderContent get_content(FileLoader &file_loader,
                               FileLoaderHandle const &file_handle)
 {
         auto const &entry = file_loader.entries[file_handle.id];
+        zw_assert(entry.state == FileLoaderEntry::USER,
+                  "you must accept a file");
         auto first_byte = (uint8_t const *)entry.content;
         auto last_byte = first_byte + entry.content_size;
         return {{first_byte, last_byte}};

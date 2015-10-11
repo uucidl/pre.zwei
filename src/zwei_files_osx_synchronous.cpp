@@ -329,6 +329,8 @@ void release_content(FileLoader &file_loader,
 FileLoaderContent get_content(FileLoader &file_loader,
                               FileLoaderHandle const &file_handle)
 {
+        zw_assert(file_loader.entries[file_handle.id].accepted,
+                  "you must accept a file beforehand");
         return file_loader.file_contents[file_handle.id];
 }
 
