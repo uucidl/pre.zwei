@@ -135,10 +135,6 @@ zw_internal uint8_t *read_entire_file(FileLoader &file_loader,
                     SPDR_STR("path", filepath),
                     SPDR_INT("size", int(entry.size)));
 
-        // TODO(nicolas): simplify this, we don't need the buffer
-        // range abstraction here at all, and we can delete all the
-        // functions/structures above.
-
         SPDR_BEGIN(global_spdr, "file_loader", "open");
         int entry_fd = open(filepath, O_RDONLY, 0);
         if (entry_fd < 0 && errno == EACCES) {
