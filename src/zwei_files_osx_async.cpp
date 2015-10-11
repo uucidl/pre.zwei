@@ -6,8 +6,8 @@
 */
 
 #include "block_allocator.hpp"
+#include "zwei_concurrency.hpp"
 
-#include <atomic>
 #include <cerrno>
 #include <sys/stat.h>
 
@@ -37,7 +37,7 @@ struct FileLoader {
 
         size_t finished_count;
 
-        std::atomic_int available_since_wait;
+        uint32_t available_since_wait;
 
         MemoryBlockAllocator content_allocator;
 
@@ -81,8 +81,6 @@ create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size)
         file_loader.errors_count = 0;
 
         file_loader.finished_count = 0;
-
-        std::atomic_init(&file_loader.available_since_wait, 0);
 
         file_loader.task_queue =
             dispatch_queue_create("com.uucidl.shasum", DISPATCH_QUEUE_SERIAL);
@@ -266,13 +264,10 @@ void wait_for_available_files(FileLoader &file_loader)
                                   perror("something occured: ");
                                   entry.state = FileLoaderEntry::ERROR;
                           } else {
-                                  // TODO(nicolas): @thread_unsafe we
-                                  // probably need a memory barrier here,
-                                  // to ensure all writes made to the
-                                  // entry are seen before we change the
-                                  // status.
                                   entry.state = FileLoaderEntry::AVAILABLE;
-                                  if (!std::atomic_fetch_add(
+
+                                  COMPLETE_PREVIOUS_WRITES_BEFORE_FUTURE_WRITES;
+                                  if (!atomic_add_u32(
                                           &file_loader.available_since_wait,
                                           1)) {
                                           dispatch_semaphore_signal(
@@ -295,7 +290,7 @@ void wait_for_available_files(FileLoader &file_loader)
         file_loader_update_counters(file_loader);
 
         auto new_available_count =
-            std::atomic_exchange(&file_loader.available_since_wait, 0);
+            atomic_exchange_u32(&file_loader.available_since_wait, 0);
         if (!new_available_count &&
             count_pending_files(file_loader) - file_loader.available_count >
                 0) {
