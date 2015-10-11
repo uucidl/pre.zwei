@@ -1185,9 +1185,6 @@ int main(int argc, char **argv)
                         MessageWorkTask message_task;
                 };
 
-                // TODO(nicolas): NEXT parallelism should be optional,
-                // especially for testing. We want to have a reference
-                // non-parallelized tool so as to verify correctness.
                 Task tasks[8 * 2];
                 size_t tasks_capacity = NCOUNT(tasks);
                 size_t tasks_count = 0;
