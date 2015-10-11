@@ -88,10 +88,6 @@ zw_internal FileLoaderFileEntry &push_file_entry(FileLoader &file_loader,
                                                  char const *filepath)
 {
         size_t entry_index = file_loader.entries_count;
-        zw_assert(entry_index <= file_loader.entries_capacity,
-                  "too many files");
-        // TODO(nicolas): what should we do when we reach max capacity?
-
         FileLoaderFileEntry &entry = file_loader.entries[entry_index];
         entry = {};
         entry.path = filepath;
@@ -109,6 +105,11 @@ void push_file(FileLoader &file_loader,
                size_t expected_filesize,
                uint32_t tag)
 {
+        zw_assert(file_loader.entries_count < file_loader.entries_capacity,
+                  "too many files");
+        if (file_loader.entries_count >= file_loader.entries_capacity) {
+                return;
+        }
         auto &entry = push_file_entry(file_loader, filepath);
         entry.size = expected_filesize;
         entry.tag = tag;
@@ -142,10 +143,6 @@ zw_internal uint8_t *read_entire_file(FileLoader &file_loader,
                 return nullptr;
         }
         DEFER(close(entry_fd));
-
-#if ZWEI_DISABLED
-        fcntl(entry_fd, F_NOCACHE, 1); // we only process the files once
-#endif
         fcntl(entry_fd, F_RDAHEAD, 1);
 
         SPDR_END(global_spdr, "file_loader", "open");

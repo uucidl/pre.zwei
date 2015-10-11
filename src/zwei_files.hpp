@@ -65,11 +65,23 @@ FileLoader &
 create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size);
 void destroy(FileLoader &file_loader);
 
+/**
+ * add @p filepath to the list of files to load.
+ *
+ * @pre no more than @p maximum_file_count have been pushed already
+ */
+void push_file(FileLoader &file_loader, char const *filepath, uint32_t tag);
+
+/**
+ * add @p filepath to the list of files to load. its size must be @p
+ *expected_filesize
+ *
+ * @pre no more than @p maximum_file_count have been pushed already
+ */
 void push_file(FileLoader &file_loader,
                char const *filepath,
                size_t expected_filesize,
                uint32_t tag);
-void push_file(FileLoader &file_loader, char const *filepath, uint32_t tag);
 
 size_t count_pending_files(FileLoader &file_loader);
 void wait_for_available_files(FileLoader &file_loader);

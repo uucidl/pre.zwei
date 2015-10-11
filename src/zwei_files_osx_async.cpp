@@ -117,6 +117,9 @@ void push_file(FileLoader &file_loader,
 {
         zw_assert(file_loader.entries_count < file_loader.entries_capacity,
                   "over");
+        if (file_loader.entries_count >= file_loader.entries_capacity) {
+                return;
+        }
         FileLoaderEntry &entry = file_loader.entries[file_loader.entries_count];
         entry.path = filepath;
         entry.size = expected_filesize;
