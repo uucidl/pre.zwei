@@ -25,7 +25,6 @@ struct FileLoader {
         FileLoaderEntry *entries;
         size_t entries_capacity;
         size_t entries_count;
-        size_t load_skipped_count;
         size_t load_started_count;
 
         FileLoaderHandle *available;
@@ -69,7 +68,6 @@ create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size)
             push_array_rvalue(&arena, file_loader.entries, maximum_file_count);
         file_loader.entries_capacity = maximum_file_count;
         file_loader.entries_count = 0;
-        file_loader.load_skipped_count = 0;
         file_loader.load_started_count = 0;
 
         file_loader.available = push_array_rvalue(&arena, file_loader.available,
@@ -177,79 +175,46 @@ void wait_for_available_files(FileLoader &file_loader)
 {
         SPDR_SCOPE(global_spdr, "file_loader", __FUNCTION__);
 
-        /*
-
-          Are there any pending file? If no then we're done
-          Otherwise try allocating result objects.
-
-          If cannot, then it means people are still processing our files, and we
-          can
-          only bail out to the caller.
-
-          If we can we can spawn immediately a read onto the file and
-          wait for the first available file.
-         */
-
-        // TODO(nicolas): kind of bizarre to have to do this here.
         if (count_pending_files(file_loader) == 0)
                 return;
 
-        auto const first_entry = file_loader.entries;
-        auto const last_entry = file_loader.entries + file_loader.entries_count;
-        auto current_entry = first_entry;
-
-        auto needs_load_count = [](FileLoader &fl) {
-                return fl.entries_count - fl.load_skipped_count -
-                       fl.load_started_count;
-        };
-
         SPDR_BEGIN(global_spdr, "file_loader", "submitting");
-        while (current_entry != last_entry &&
-               needs_load_count(file_loader) > 0) {
-                // TODO(nicolas): track pending concurrent read size count.. we
-                // don't need
-                // to submit too many
 
-                auto first_pending = algos::find_if(
-                    current_entry, last_entry,
-                    [](FileLoaderEntry const &entry) {
-                            return entry.state == FileLoaderEntry::PENDING;
-                    });
+        auto next_pending_entry =
+            [](FileLoaderEntry *first, FileLoaderEntry *last) {
+                    return algos::find_if(
+                        first, last, [](FileLoaderEntry const &entry) {
+                                return entry.state == FileLoaderEntry::PENDING;
+                        });
+            };
 
-                zw_assert(first_pending != last_entry, "uh?");
+        auto const entries_last =
+            file_loader.entries + file_loader.entries_count;
+        auto const entries_first = file_loader.entries;
+        auto candidates_first = entries_first;
+        FileLoaderEntry *entry_pos;
+        while ((entry_pos = next_pending_entry(candidates_first,
+                                               entries_last)) != entries_last) {
+                candidates_first = algos::successor(entry_pos);
 
-                auto &entry = algos::source(first_pending);
-                auto *entry_ptr = const_cast<FileLoaderEntry *>(&entry);
-
-                int entry_index = int(entry_ptr - first_entry);
-                // TODO(nicolas): don't submit all opens so early, it
-                // seems that the OS will in the end perform the reads
-                // in chunks in parallel, which means seeking. At
-                // least in my tests the async version is slower than
-                // the sync version!
-                bool submit_load = false;
+                auto &entry = algos::source(entry_pos);
                 int entry_fd = open(entry.path, O_RDONLY | O_NONBLOCK, 0);
                 if (entry_fd < 0) {
-                        if (errno == EMFILE) {
+                        if (errno == EACCES || errno == ENOENT) {
+                                // access denied
+                                entry.state = FileLoaderEntry::ERROR;
+                        } else if (errno == EMFILE) {
                                 // We reached the maximum number of
                                 // opened file descriptors. Let's
                                 // pause a bit.
                                 SPDR_EVENT(global_spdr, "file_loader",
                                            "too-many-files");
                                 break;
-                        } else if (errno == EACCES || errno == ENOENT) {
-                                // access denied
-                                entry.state = FileLoaderEntry::ERROR;
-                                ++file_loader.load_skipped_count;
                         } else {
                                 SPDR_EVENT(global_spdr, "file_loader",
                                            "unexpected error");
                                 // try later, maybe it's a temporary error due
                                 // to lack of resources
-
-                                // TODO(nicolas): actually check that out (the
-                                // errno would tell us if we reached the fd
-                                // limit for instance)
                                 zw_assert(false, "skipping this iteration");
                                 break;
                         }
@@ -261,22 +226,18 @@ void wait_for_available_files(FileLoader &file_loader)
                                 struct stat filestats;
                                 if (0 != fstat(entry_fd, &filestats)) {
                                         entry.state = FileLoaderEntry::ERROR;
-                                        ++file_loader.load_skipped_count;
                                 } else if (!(filestats.st_mode & S_IFREG)) {
                                         entry.state = FileLoaderEntry::ERROR;
-                                        ++file_loader.load_skipped_count;
                                 } else {
                                         entry.size = filestats.st_size;
-                                        submit_load = true;
                                 }
-                        } else {
-                                submit_load = true;
                         }
                 }
 
-                if (!submit_load) {
+                if (entry.state == FileLoaderEntry::ERROR) {
                         close(entry_fd);
                 } else {
+                        int entry_index = int(entry_pos - entries_first);
                         SPDR_ASYNC_EVENT_BEGIN1(
                             global_spdr, "file_loader", "load", entry_index,
                             SPDR_INT("size", int(entry.size)));
@@ -328,7 +289,6 @@ void wait_for_available_files(FileLoader &file_loader)
                         ++file_loader.load_started_count;
                         dispatch_async(file_loader.task_queue, read_all);
                 }
-                current_entry = algos::successor(first_pending);
         }
         SPDR_END(global_spdr, "file_loader", "submitting");
 
