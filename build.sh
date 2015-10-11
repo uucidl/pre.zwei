@@ -109,6 +109,7 @@ if ${PROFILING}; then
     set -x
 fi
 
+set -e
 must_compile_hammer
 
 must_compile_osx -fvisibility=hidden -shared \
@@ -141,6 +142,7 @@ must_compile_osx \
         -o "${PROGRAM}" \
         && printf "PROGRAM\t%s\n" "${PROGRAM}"
 )
+set +e
 
 # beep
 printf "\a"
