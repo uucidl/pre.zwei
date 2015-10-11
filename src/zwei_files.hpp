@@ -63,6 +63,7 @@ size_t get_file_loader_allocation_size(size_t maximum_file_count,
                                        size_t maximum_file_size);
 FileLoader &
 create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size);
+
 void destroy(FileLoader &file_loader);
 
 /**

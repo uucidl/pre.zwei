@@ -32,8 +32,10 @@ void initialize(MemoryBlockAllocator &allocator,
         zw_assert(memory_size > sizeof(MemoryBlockListHeader),
                   "not enough memory");
         MemoryBlockListHeader *all_memory = (MemoryBlockListHeader *)memory;
-        all_memory->total_size = memory_size;
-        all_memory->next = &allocator.free_list_sentinel;
+        {
+                all_memory->total_size = memory_size;
+                all_memory->next = &allocator.free_list_sentinel;
+        }
 
         allocator.base = static_cast<uint8_t *>(memory);
         allocator.free_list_sentinel.next = all_memory;
