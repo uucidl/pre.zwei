@@ -18,6 +18,8 @@ struct FileLoaderFileEntry {
 struct FileLoader {
         MemoryArena arena;
         MemoryArena transient_arena;
+        size_t entries_capacity;
+        size_t entries_count;
         FileLoaderFileEntry *entries;
         // organized so that error files come first, then available files, then
         // pending
@@ -25,8 +27,6 @@ struct FileLoader {
         FileLoaderHandle *last_erroneous_file;
         FileLoaderHandle *last_available_file;
         FileLoaderContent *file_contents;
-        size_t entries_capacity;
-        size_t entries_count;
         size_t loaded_files_count;
         size_t file_memory_size;
         MemoryBlockAllocator files_memory_allocator;
@@ -65,18 +65,19 @@ create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size)
         file_loader.file_handles =
             push_array_rvalue(&file_loader.arena, file_loader.file_handles,
                               file_loader.entries_capacity);
+        file_loader.last_erroneous_file = file_loader.file_handles;
+        file_loader.last_available_file = file_loader.file_handles;
         file_loader.file_contents =
             push_array_rvalue(&file_loader.arena, file_loader.file_contents,
                               file_loader.entries_capacity);
-
+        file_loader.loaded_files_count = 0;
         size_t file_memory_size =
             greatest_multiple(file_loader.arena.size - file_loader.arena.used,
                               MemoryBlockListHeader::MINIMUM_SIZE);
+        file_loader.file_memory_size = file_memory_size;
         initialize(file_loader.files_memory_allocator,
                    push_bytes(&file_loader.arena, file_memory_size),
                    file_memory_size);
-
-        file_loader.file_memory_size = file_memory_size;
 
         return file_loader;
 }
@@ -203,7 +204,7 @@ zw_internal uint8_t *read_entire_file(FileLoader &file_loader,
                 size_t size_to_read = d_bytes_last - d_bytes;
 
                 SPDR_BEGIN1(global_spdr, "io", "read",
-                            SPDR_INT("size", size_to_read));
+                            SPDR_INT("size", int(size_to_read)));
                 ssize_t size_read = read(entry_fd, d_bytes, size_to_read);
                 SPDR_END(global_spdr, "io", "read");
 
