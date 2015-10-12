@@ -753,7 +753,7 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                                message_summary.in_reply_to_msg_ids,
                                message_summary.in_reply_to_msg_ids_count);
         print_field("SUBJECT", message_summary.subject_field_bytes);
-        // TODO(nicolas): @feature print the first line of the message.
+        print_field("FIRST_LINE", message_summary.first_line_bytes);
 }
 
 struct ProcessedMessage {

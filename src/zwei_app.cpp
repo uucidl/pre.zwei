@@ -529,13 +529,42 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                         rfc5322_print_ast(stdout, result->ast, 0, 4);
                 }
                 message_parsed.message_summary.valid_rfc5322 =
-                        rfc5322_validate(result->ast);
+                    rfc5322_validate(result->ast);
 
                 fill_message_summary(&message_parsed.message_summary,
                                      result->ast, result_arena);
 
                 message_parsed.content_state =
-                        MessageBeingParsed::MESSAGE_SUMMARY;
+                    MessageBeingParsed::MESSAGE_SUMMARY;
+
+                // Extract first line of readable text
+                //
+                // TODO(nicolas): when the content is not valid rfc5322,
+                // then we might actually be in the middle of the header still.
+                // We should skip it using an heuristic.
+                //
+                // TODO(nicolas): support quoted/encoded content
+                // TODO(nicolas): support multipart
+                auto body_first = full_message + result->bit_length / 8;
+                body_first =
+                    algos::find_if(body_first, full_message_end, [](uint8_t x) {
+                            if (x == 0x20 || x == 0x09 || x == 0x0d ||
+                                x == 0x0a) {
+                                    return false;
+                            }
+                            return true;
+                    });
+
+                size_t first_line_max_count = 200;
+                uint8_t *first_line = push_array_rvalue(
+                    result_arena, first_line, first_line_max_count);
+                auto copy_end = algos::copy_bounded(
+                    body_first, full_message_end, first_line,
+                    first_line + first_line_max_count);
+                message_parsed.message_summary.first_line_bytes.first =
+                    first_line;
+                message_parsed.message_summary.first_line_bytes.count =
+                    copy_end.second - first_line;
         }
 
         if (message_parsed.content_state ==

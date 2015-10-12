@@ -18,7 +18,6 @@
 #define UH_TOKEN(lit)                                                          \
         h_token((uint8_t *)REQUIRES_LITTERAL(lit), sizeof(lit) - 1)
 
-
 // TODO(nicolas): parsing performance of lower-case US-ASCII.
 //
 // All the ABNF string tokens areupposed to be case-insensitive.

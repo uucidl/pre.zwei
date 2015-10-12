@@ -40,6 +40,7 @@ struct MessageSummary {
 
         ByteCountedRange subject_field_bytes;
 
+        ByteCountedRange first_line_bytes;
         // TODO(nicolas): add references list
         // TODO(nicolas): add missing original date as a concrete type
 };
