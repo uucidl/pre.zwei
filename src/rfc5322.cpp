@@ -1237,3 +1237,15 @@ zw_internal RawMailbox *rfc5322_field_copy_mailbox_array(
 
         return d_first;
 }
+
+zw_internal size_t rfc5322_get_first_line_size(const HParsedToken *ast)
+{
+        return 0;
+}
+
+zw_internal uint8_t *rfc5322_get_first_line(const HParsedToken *ast,
+                                            uint8_t *d_bytes)
+{
+        // TODO(nicolas): NEXT extract first line of readable text
+        return d_bytes;
+}

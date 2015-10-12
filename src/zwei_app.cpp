@@ -448,6 +448,17 @@ zw_internal void fill_message_summary(MessageSummary *message_summary,
                 }
         };
         algos::traverse_each(rfc5322_top(ast), std::cref(collect));
+
+        // Extract first line of readable text
+        {
+                uint8_t *first_line_start = push_array_rvalue(
+                    arena, first_line_start, rfc5322_get_first_line_size(ast));
+                auto first_line_end =
+                    rfc5322_get_first_line(ast, first_line_start);
+                message_summary->first_line_bytes = {
+                    first_line_start, size_t(first_line_end - first_line_start),
+                };
+        }
 }
 
 extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)

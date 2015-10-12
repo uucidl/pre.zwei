@@ -204,3 +204,7 @@ rfc5322_field_get_mailbox_array_size(const HParsedToken *token);
  */
 zw_internal RawMailbox *rfc5322_field_copy_mailbox_array(
     const HParsedToken *token, RawMailbox *d_first, uint8_t *d_bytes_first);
+
+zw_internal size_t rfc5322_get_first_line_size(const HParsedToken *ast);
+zw_internal uint8_t *rfc5322_get_first_line(const HParsedToken *ast,
+                                            uint8_t *d_bytes);
