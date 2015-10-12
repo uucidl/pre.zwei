@@ -9,14 +9,14 @@
 */
 
 /**
-   a ZonedDateTime the human concept of a precise date on Earth.
+   a CivilDateTime the human concept of a precise date on Earth.
 
-   Default equality of two ZonedDateTime is structural equality, not
+   Default equality of two CivilDateTime is structural equality, not
    equivalence in the timeline. For equivalence and ordering you need
    to transform the values onto a timeline.
 */
-struct ZonedDateTime {
-        using RegularMe = ZonedDateTime;
+struct CivilDateTime {
+        using RegularMe = CivilDateTime;
 
         int16_t year;
         uint8_t month_count;        /// month in [1,12]
@@ -27,8 +27,8 @@ struct ZonedDateTime {
         uint8_t minute;             /// minute in [0,60)
         uint8_t seconds;            /// second in [0,60)
 
-        ZonedDateTime() {}
-        ZonedDateTime(const RegularMe &x) = default;
+        CivilDateTime() {}
+        CivilDateTime(const RegularMe &x) = default;
         RegularMe &operator=(const RegularMe &x) = default;
 
         friend bool operator==(const RegularMe &a, const RegularMe &b)

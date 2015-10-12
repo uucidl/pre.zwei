@@ -388,7 +388,7 @@ HAMMER_ACTION(act_date_time)
 
         zw_assert(last - first == 2, "unexpected number of tokens");
 
-        ZonedDateTime result;
+        CivilDateTime result;
 
         auto consume_uint = [](HParsedToken const **&pos) {
                 auto value = H_CAST_UINT(source(pos));
@@ -459,7 +459,7 @@ HAMMER_ACTION(act_date_time)
 
         zw_assert(first == last, "unexpected number of tokens");
 
-        ZonedDateTime *result_value = H_ALLOC(ZonedDateTime);
+        CivilDateTime *result_value = H_ALLOC(CivilDateTime);
         *result_value = result;
 
         return h_make(p->arena, RFC5322HammerTT(DATE_TIME), result_value);
@@ -1005,8 +1005,8 @@ zw_internal void rfc5322_pprint_node(FILE *stream,
                 auto match = match_token_type(rfc5322_token_types, token);
                 if (match.first) {
                         if (match.second.first == RFC5322_TT_DATE_TIME) {
-                                const ZonedDateTime &value =
-                                    *(ZonedDateTime *)token.user;
+                                const CivilDateTime &value =
+                                    *(CivilDateTime *)token.user;
                                 fprintf(stdout, "<%d-%02d-%02dT%02d:%02d:%"
                                                 "02d%c%02d:%02d>\n",
                                         value.year, value.month_count,
