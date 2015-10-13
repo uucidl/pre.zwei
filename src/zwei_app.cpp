@@ -523,29 +523,19 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                         trace_print("PARSE ERROR");
                         return 2;
                 }
+                DEFER(h_parse_result_free(result));
 
-                zw_assert(result, "could not parse message with hammer");
-                if (result) {
-                        if (must_print_ast) {
-                                rfc5322_print_ast(stdout, result->ast, 0, 4);
-                        }
-                        message_parsed.message_summary.valid_rfc5322 =
-                            rfc5322_validate(result->ast);
-
-                        fill_message_summary(&message_parsed.message_summary,
-                                             result->ast, result_arena);
-
-                        message_parsed.content_state =
-                            MessageBeingParsed::MESSAGE_SUMMARY;
-
-                        HArenaStats stats;
-                        h_allocator_stats(result->arena, &stats);
-                        h_parse_result_free(result);
+                if (must_print_ast) {
+                        rfc5322_print_ast(stdout, result->ast, 0, 4);
                 }
+                message_parsed.message_summary.valid_rfc5322 =
+                        rfc5322_validate(result->ast);
 
-                // TODO(nicolas) detect if there was an error.. After all
-                // we just slurped the header or at least some part of
-                // the header.. what about reacting to that?
+                fill_message_summary(&message_parsed.message_summary,
+                                     result->ast, result_arena);
+
+                message_parsed.content_state =
+                        MessageBeingParsed::MESSAGE_SUMMARY;
         }
 
         if (message_parsed.content_state ==
