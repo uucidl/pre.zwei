@@ -25,50 +25,6 @@
 
  */
 
-// TODO(nicolas): parsing performance of lower-case US-ASCII.
-//
-// All the ABNF string tokens areupposed to be case-insensitive.
-//
-// This hacky `h_itoken` was created using hammer's base
-// parsers. However we need to assess its performance.
-//
-// If inefficient, this means going into `token.c` and creating a case
-// insensitive version of the h_token parser. Note that this case
-// insensitivity would only be supported for US-ASCII.
-
-/**
-   US-ASCII case insensitive token parser.
-
-   Used in ABNF when tokens are described in double quotes.
-*/
-HAMMER_FN_DECL(HParser *, h_itoken, const uint8_t *str, const size_t len);
-
-HParser *h_itoken(const uint8_t *str, const size_t len)
-{
-        // NOTE(nicolas): I suspect this will be inefficient compared to a
-        // version
-        // that can do tolower(...) in the backend, but we'll try with
-        // this first.
-
-        HParser *choices[len + 1];
-
-        auto sentinel = algos::apply_copy(
-            str, str + len, (HParser **)&choices, [](const uint8_t &c) {
-                    if (c >= 0x61 && c <= 0x7a) {
-                            // in [a-z]
-                            return UH_ANY(h_ch(c), h_ch(0x41 + (c - 0x61)));
-                    } else if (c >= 0x41 && c <= 0x5a) {
-                            // in [A-Z]
-                            return UH_ANY(h_ch(c), h_ch(0x61 + (c - 0x41)));
-                    } else {
-                            return h_ch(c);
-                    }
-            });
-        algos::sink(sentinel) = nullptr;
-
-        return h_sequence__a((void **)choices);
-}
-
 zw_internal HParsedToken *act_flatten_bytes_tagged(
     const HParseResult *p, RFC5322TokenType rfc5322_token_type, void *user_data)
 {
