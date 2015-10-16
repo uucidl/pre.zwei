@@ -72,6 +72,7 @@
 
 #include "algos.hpp"
 #include "base64.hpp"
+#include "rfc2045.hpp"
 #include "rfc2047.hpp"
 #include "rfc5234.hpp"
 #include "rfc5322.hpp"
@@ -325,9 +326,10 @@ extern "C" EXPORT INIT_APP(init_app)
         hammer_init();
         auto &rfc5234 = make_rfc5234();
         auto &base64 = make_base64(rfc5234);
-        auto &rfc2045 = make_rfc2045(rfc5234);
+        auto &rfc5322_base = make_rfc5322_base(rfc5234);
+        auto &rfc2045 = make_rfc2045(rfc5234, rfc5322_base);
         auto &rfc2047 = make_rfc2047(rfc5234, rfc2045, base64);
-        mail_parsers = make_rfc5322(rfc5234, rfc2047);
+        mail_parsers = make_rfc5322(rfc5234, rfc5322_base, rfc2047, rfc2045);
         zoe_support_init();
 }
 
@@ -552,6 +554,9 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                             }
                             return true;
                     });
+
+                message_parsed.message_summary.content_transfer_encoding =
+                    rfc5322_get_content_transfer_encoding(result->ast);
 
                 size_t first_line_max_count = 200;
                 uint8_t *first_line = push_array_rvalue(

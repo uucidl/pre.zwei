@@ -732,6 +732,7 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                             push_back_cstr(text_output_group, ", ");
                             push_back_mailbox(text_output_group, mailbox);
                     });
+
                 trace(text_output_group);
         };
 
@@ -753,6 +754,14 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                                message_summary.in_reply_to_msg_ids,
                                message_summary.in_reply_to_msg_ids_count);
         print_field("SUBJECT", message_summary.subject_field_bytes);
+        {
+                push_back_cstr(text_output_group, "\t");
+                push_back_cstr(text_output_group, "CONTENT_TRANSFER_ENCODING");
+                push_back_cstr(text_output_group, "\t");
+                push_back_u32(text_output_group,
+                              message_summary.content_transfer_encoding);
+                trace(text_output_group);
+        }
         print_field("FIRST_LINE", message_summary.first_line_bytes);
 }
 

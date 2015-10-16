@@ -6,6 +6,11 @@
 #include "hammer_iterators.hpp"
 #include "zwei_types.hpp"
 
+struct RFC2045;
+struct RFC2047;
+struct RFC5234;
+struct RFC5322_Base;
+
 struct ArrayAllocationSize {
         size_t count; /// number of elements in the array
         size_t
@@ -155,13 +160,22 @@ zw_internal UserTokenTypeEntry rfc5322_token_types[RFC5322_TT_LAST] = {
     {TT_SEQUENCE, "optional-field", TT_INVALID},
 };
 
+struct RFC5322_Base {
+        HParser *FWS;
+        HParser *CFWS;
+        HParser *quoted_string;
+};
+
 struct RFC5322 {
         HParser *message;
         HParser *fields;
 };
 
+zw_internal const RFC5322_Base &make_rfc5322_base(const RFC5234 &rfc5234);
 zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
-                                        const RFC2047 &rfc2047);
+                                        const RFC5322_Base &rfc5322_base,
+                                        const RFC2047 &rfc2047,
+                                        const RFC2045 &rfc2045);
 zw_internal bool rfc5322_validate(const HParsedToken *ast);
 zw_internal void rfc5322_print_ast(FILE *stream,
                                    const HParsedToken *ast,
@@ -204,3 +218,5 @@ rfc5322_field_get_mailbox_array_size(const HParsedToken *token);
  */
 zw_internal RawMailbox *rfc5322_field_copy_mailbox_array(
     const HParsedToken *token, RawMailbox *d_first, uint8_t *d_bytes_first);
+zw_internal ContentTransferEncodingType
+rfc5322_get_content_transfer_encoding(const HParsedToken *ast);

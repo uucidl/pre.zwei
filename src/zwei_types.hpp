@@ -1,5 +1,7 @@
 #pragma once
 
+#include "mail_types.hpp"
+
 #include <cstdint>
 
 struct ZoeMailStoreFile {
@@ -39,6 +41,8 @@ struct MessageSummary {
         size_t cc_mailboxes_count;
 
         ByteCountedRange subject_field_bytes;
+
+        ContentTransferEncodingType content_transfer_encoding;
 
         ByteCountedRange first_line_bytes;
         // TODO(nicolas): add references list

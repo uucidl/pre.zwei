@@ -1,14 +1,15 @@
 #pragma once
 
-#include "base64.hpp"
 #include "hammer_utils.hpp"
-#include "rfc2045.hpp"
-#include "rfc5234.hpp"
 
 extern "C" {
-#include "../builds/include/hammer/hammer.h"
 #include "../builds/include/hammer/glue.h"
+#include "../builds/include/hammer/hammer.h"
 }
+
+struct Base64;
+struct RFC2045;
+struct RFC5234;
 
 enum RFC2047TokenType {
         RFC2047_TT_ENCODED_WORD,
