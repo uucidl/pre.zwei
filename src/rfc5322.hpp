@@ -161,7 +161,8 @@ struct RFC5322 {
 };
 
 zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
-                                        const RFC2047 &rfc2047);
+                                        const RFC2047 &rfc2047,
+                                        const RFC2045 &rfc2045);
 zw_internal bool rfc5322_validate(const HParsedToken *ast);
 zw_internal void rfc5322_print_ast(FILE *stream,
                                    const HParsedToken *ast,

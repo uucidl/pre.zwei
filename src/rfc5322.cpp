@@ -25,6 +25,14 @@
 
  */
 
+zw_internal HParsedToken *act_tag_sequence(const HParseResult *p,
+                                           RFC5322TokenType token_type,
+                                           void *user_data)
+{
+        return uuh_flatten_sequence(
+            p, rfc5322_token_types[token_type].registered_type, user_data);
+}
+
 zw_internal HParsedToken *act_flatten_bytes_tagged(
     const HParseResult *p, RFC5322TokenType rfc5322_token_type, void *user_data)
 {
@@ -34,21 +42,6 @@ zw_internal HParsedToken *act_flatten_bytes_tagged(
 
         return uuh_uint8_sequence_to_tagged_bytes(content, token_type,
                                                   p->arena);
-}
-
-zw_internal HParsedToken *act_tag_sequence(const HParseResult *p,
-                                           RFC5322TokenType token_type,
-                                           void *user_data)
-{
-        return uuh_flatten_sequence(
-            p, rfc5322_token_types[token_type].registered_type, user_data);
-}
-
-zw_internal HParsedToken *uuh_act_integer(const HParseResult *p,
-                                          void *user_data)
-{
-        uint64_t value = (uint64_t)user_data;
-        return H_MAKE_UINT(value);
 }
 
 // NOTE(nicolas) basic action for unstructured field content
@@ -426,7 +419,8 @@ HAMMER_ACTION(act_date_time)
 zw_internal RFC5322 rfc5322_parsers;
 
 zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
-                                        const RFC2047 &rfc2047)
+                                        const RFC2047 &rfc2047,
+                                        const RFC2045 &rfc2045)
 {
         // <RFC5322...
 
@@ -527,15 +521,11 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
                                         rfc5234.VCHAR))),
                    h_many(rfc5234.WSP)));
 
-// ## 3.3.  Date and Time Specification
-#define UUH_ENUM(lit, key)                                                     \
-        h_action(h_itoken((uint8_t *)lit, sizeof lit - 1), uuh_act_integer,    \
-                 (void *)key)
-
-        H_RULE(day_name, UH_ANY(UUH_ENUM("Mon", 0), UUH_ENUM("Tue", 1),
-                                UUH_ENUM("Wed", 2), UUH_ENUM("Thu", 3),
-                                UUH_ENUM("Fri", 4), UUH_ENUM("Sat", 5),
-                                UUH_ENUM("Sun", 6)));
+        // ## 3.3.  Date and Time Specification
+        H_RULE(day_name, UH_ANY(UH_IENUM("Mon", 0), UH_IENUM("Tue", 1),
+                                UH_IENUM("Wed", 2), UH_IENUM("Thu", 3),
+                                UH_IENUM("Fri", 4), UH_IENUM("Sat", 5),
+                                UH_IENUM("Sun", 6)));
 
         H_RULE(day_of_week, h_right(h_optional(FWS), day_name));
 
@@ -545,12 +535,12 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
                                       FWS),
                              act_accumulate_base10, NULL));
 
-        H_ARULE(month, UH_ANY(UUH_ENUM("Jan", 0), UUH_ENUM("Feb", 1),
-                              UUH_ENUM("Mar", 2), UUH_ENUM("Apr", 3),
-                              UUH_ENUM("May", 4), UUH_ENUM("Jun", 5),
-                              UUH_ENUM("Jul", 6), UUH_ENUM("Aug", 7),
-                              UUH_ENUM("Sep", 8), UUH_ENUM("Oct", 9),
-                              UUH_ENUM("Nov", 10), UUH_ENUM("Dec", 11)));
+        H_ARULE(month, UH_ANY(UH_IENUM("Jan", 0), UH_IENUM("Feb", 1),
+                              UH_IENUM("Mar", 2), UH_IENUM("Apr", 3),
+                              UH_IENUM("May", 4), UH_IENUM("Jun", 5),
+                              UH_IENUM("Jul", 6), UH_IENUM("Aug", 7),
+                              UH_IENUM("Sep", 8), UH_IENUM("Oct", 9),
+                              UH_IENUM("Nov", 10), UH_IENUM("Dec", 11)));
 
         H_RULE(year, h_action(h_middle(FWS, UH_SEQ(h_repeat_n(rfc5234.DIGIT, 4),
                                                    h_many(rfc5234.DIGIT)),
@@ -688,7 +678,9 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
                               h_many(optional_field)))),
                    h_many(UH_ANY(orig_date, from, sender, reply_to, to, cc, bcc,
                                  message_id, in_reply_to, references, subject,
-                                 comments, keywords, optional_field))));
+                                 comments, keywords,
+                                 rfc2045.content_transfer_encoding_header_field,
+                                 optional_field))));
 
         // ## 3.5.  Overall Message Syntax
 
@@ -799,7 +791,8 @@ zw_internal std::pair<HTokenType, bool> base_hammer_type(HTokenType token_type)
              algos::end(rfc5322_token_types)},
             {algos::begin(rfc2047_token_types),
              algos::end(rfc2047_token_types)},
-
+            {algos::begin(rfc2045_token_types),
+             algos::end(rfc2045_token_types)},
         };
 
         for (auto const &source : sources) {
@@ -854,7 +847,7 @@ zw_internal void rfc5322_pprint_node(FILE *stream,
                                      const HParsedToken *ast,
                                      int indent)
 {
-        const char *type_name = "null";
+        const char *type_name = "<unknown>";
         switch (ast->token_type) {
         case TT_NONE:
                 type_name = "null";
@@ -885,6 +878,9 @@ zw_internal void rfc5322_pprint_node(FILE *stream,
                 if (!match.first) {
                         match = match_token_type(rfc2047_token_types, *ast);
                 }
+                if (!match.first) {
+                        match = match_token_type(rfc2045_token_types, *ast);
+                }
                 if (match.first) {
                         content_type_utf8 = true;
                         base_token_type = match.second.second.base_type;
@@ -892,6 +888,7 @@ zw_internal void rfc5322_pprint_node(FILE *stream,
         }
 
         if (visit == algos::PRE) {
+                zw_assert(type_name, "unknown type name");
                 fprintf(stream, "%*s%s%s%s", indent, "",
                         ast->token_type >= TT_USER ? "USER:" : "", type_name,
                         type_name[0] ? " " : "");
