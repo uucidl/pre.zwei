@@ -528,12 +528,10 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                 if (must_print_ast) {
                         rfc5322_print_ast(stdout, result->ast, 0, 4);
                 }
-                message_parsed.message_summary.valid_rfc5322 =
-                    rfc5322_validate(result->ast);
-
                 fill_message_summary(&message_parsed.message_summary,
                                      result->ast, result_arena);
-
+                message_parsed.message_summary.valid_rfc5322 =
+                    rfc5322_validate(result->ast);
                 message_parsed.content_state =
                     MessageBeingParsed::MESSAGE_SUMMARY;
 
