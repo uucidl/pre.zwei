@@ -11,6 +11,7 @@
 #include "rfc2047.hpp"
 
 #include "hammer_utils.hpp"
+#include "mime_types.hpp"
 #include "output_iterators.hpp"
 #include "rfc5234.hpp"
 #include "zwei_logging.hpp"
@@ -21,19 +22,8 @@
 
 namespace
 {
-// NOTE(nicolas): from
-// http://www.iana.org/assignments/character-sets/character-sets.xhtml
-
-enum CharsetEnum {
-        CHARSET_UNSUPPORTED = 0,
-        US_ASCII = 3,
-        ISO_8859_1 = 4,
-        UTF_8 = 106,
-        ISO_8859_15 = 111,
-} charset;
-
-CharsetEnum parse_charset_name_n(uint8_t const *charset_name,
-                                 size_t charset_name_size)
+Charset parse_charset_name_n(uint8_t const *charset_name,
+                             size_t charset_name_size)
 {
         std::pair<typename algos::IteratorConcept<char *>::difference_type,
                   typename algos::IteratorConcept<
@@ -44,12 +34,12 @@ CharsetEnum parse_charset_name_n(uint8_t const *charset_name,
         struct A {
                 char const *name;
                 size_t name_size;
-                CharsetEnum charset;
+                Charset charset;
         } assoc_table[] = {
-            {LITE("us-ascii"), US_ASCII},
-            {LITE("iso-8859-1"), ISO_8859_1},
-            {LITE("iso-8859-15"), ISO_8859_15},
-            {LITE("utf-8"), UTF_8},
+            {LITE("us-ascii"), Charset_US_ASCII},
+            {LITE("iso-8859-1"), Charset_ISO_8859_1},
+            {LITE("iso-8859-15"), Charset_ISO_8859_15},
+            {LITE("utf-8"), Charset_UTF_8},
         };
 
         using algos::begin;
@@ -63,12 +53,12 @@ CharsetEnum parse_charset_name_n(uint8_t const *charset_name,
                             return x->charset;
                     }
 
-                    return CHARSET_UNSUPPORTED;
+                    return Charset_UNSUPPORTED;
             };
 
         return algos::reduce(begin(assoc_table), end(assoc_table),
-                             algos::maximum<CharsetEnum>(), entry_if_equal,
-                             CHARSET_UNSUPPORTED);
+                             algos::maximum<Charset>(), entry_if_equal,
+                             Charset_UNSUPPORTED);
 #undef LITE
 }
 
@@ -82,7 +72,7 @@ zw_internal uint8_t ascii_tolower(uint8_t x)
 }
 
 struct EncodedWord {
-        CharsetEnum charset;
+        Charset charset;
         uint8_t const *bytes;
         size_t bytes_count;
 };
@@ -233,7 +223,7 @@ const RFC2047 &make_rfc2047(const RFC5234 &rfc5234,
    @requires ValueType(I) = u8 ∧ ValueType(O) = u8
 */
 template <InputIterator I, OutputIterator O>
-O transcode_to_utf8_n(CharsetEnum charset,
+O transcode_to_utf8_n(Charset charset,
                       I first,
                       typename algos::IteratorConcept<I>::difference_type n,
                       O d_first)
@@ -242,11 +232,11 @@ O transcode_to_utf8_n(CharsetEnum charset,
         using algos::source;
         using algos::successor;
 
-        if (charset == US_ASCII || charset == UTF_8) {
+        if (charset == Charset_US_ASCII || charset == Charset_UTF_8) {
                 // TODO(nicolas) shouldnt we attempt to validate the utf-8 input
                 // stream?
                 return algos::copy_n(first, n, d_first);
-        } else if (charset == ISO_8859_1) {
+        } else if (charset == Charset_ISO_8859_1) {
                 while (n) {
                         uint8_t byte = source(first);
                         if (byte < 0x0080) {
@@ -263,7 +253,7 @@ O transcode_to_utf8_n(CharsetEnum charset,
                         first = successor(first);
                         --n;
                 }
-        } else if (charset == ISO_8859_15) {
+        } else if (charset == Charset_ISO_8859_15) {
                 while (n) {
                         uint8_t byte = source(first);
                         uint32_t codepoint = 0;

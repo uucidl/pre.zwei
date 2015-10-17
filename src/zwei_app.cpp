@@ -558,6 +558,9 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
                 message_parsed.message_summary.content_transfer_encoding =
                     rfc5322_get_content_transfer_encoding(result->ast);
 
+                // TODO(nicolas): fill up content-type for the body
+                // (type + charset for text types)
+
                 size_t first_line_max_count = 200;
                 uint8_t *first_line = push_array_rvalue(
                     result_arena, first_line, first_line_max_count);

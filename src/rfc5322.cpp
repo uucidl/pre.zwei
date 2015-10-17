@@ -125,10 +125,10 @@ HAMMER_ACTION(act_display_name)
         auto count_bytes = [&bytes_count](HParsedToken const *token) {
                 if (RFC5322TokenIs(token, WORD)) {
                         bytes_count += token->bytes.len;
-                        bytes_count += 1; // separator
                 } else if (RFC2047TokenIs(token, ENCODED_WORD)) {
                         bytes_count += rfc2047_get_encoded_word_size(token);
                 }
+                bytes_count += 1; // separator
         };
 
         algos::traverse_each(rfc5322_top(ast), std::cref(count_bytes));
@@ -137,12 +137,12 @@ HAMMER_ACTION(act_display_name)
         bool is_first = true;
 
         auto copy_bytes = [&bytes_last, &is_first](HParsedToken const *token) {
+                if (!is_first) {
+                        sink(bytes_last) = ' ';
+                        bytes_last = successor(bytes_last);
+                }
+                is_first = false;
                 if (RFC5322TokenIs(token, WORD)) {
-                        if (!is_first) {
-                                sink(bytes_last) = ' ';
-                                bytes_last = successor(bytes_last);
-                        }
-                        is_first = false;
                         bytes_last = algos::copy_n(
                             token->bytes.token, token->bytes.len, bytes_last);
                 } else if (RFC2047TokenIs(token, ENCODED_WORD)) {
@@ -694,6 +694,7 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
                                  message_id, in_reply_to, references, subject,
                                  comments, keywords,
                                  rfc2045.content_transfer_encoding_header_field,
+                                 rfc2045.content_type_header_field,
                                  optional_field))));
 
         // ## 3.5.  Overall Message Syntax
@@ -764,6 +765,9 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
                                "testing this\r\n",
                       rfc5322_print_ast);
         CHECK_PARSER2(fields, "fROm: nicolas@uucidl.com\r\n",
+                      rfc5322_print_ast);
+        CHECK_PARSER2(fields, "From: Nicolas =?UTF-8?B?TMOpdmVpbGzDqQ==?= "
+                              "<nicolas.leveille@free.fr>\r\n",
                       rfc5322_print_ast);
         CHECK_PARSER2(fields, "subject:\r\n", rfc5322_print_ast);
 
