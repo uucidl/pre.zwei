@@ -127,9 +127,9 @@ void text_output_group_print(int filedesc, TextOutputGroup const &group)
                         writev(filedesc, iovecs, iovecs_n);
                         iovecs_n = 0;
                 }
-                iovec &entry = iovecs[iovecs_n];
+                iovec *entry = iovecs + iovecs_n;
                 ++iovecs_n;
-                return entry;
+                return *entry;
         };
 
         auto first_entry = group.first;
