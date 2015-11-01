@@ -125,6 +125,8 @@ directory_query_all_files(char const *root_dir_path,
         // TODO(nicolas) compare performance w/ CIFS and AFP network shares
         // TODO(nicolas) how to minimize seeking of a NAS/mounted disk?
 
+        // NOTE(nicolas): getattrlistbulk is only supported on MacOSX >= 10.10
+
         struct FSEntry;
 
         struct State {
