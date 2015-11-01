@@ -89,13 +89,11 @@ function must_compile_osx()
 
 function must_compile_hammer()
 {
-    SCONS=${SCONS:-$(which scons)}
-    [ -x "${SCONS}" ] || die "missing scons or SCONS env variable"
-
     "${SCONS}" -C "${HERE}"/modules/hammer \
                prefix="/" DESTDIR="${ABUILD}" bindings=cpp \
                install
     if [[ "$?" -ne 0 ]]; then
+        printf "error building hammer"
         exit 1
     fi
 }
@@ -109,6 +107,9 @@ if ${PROFILING}; then
     PS4='T $(date "+%s.%N")\011 '
     set -x
 fi
+
+SCONS=${SCONS:-$(which scons)}
+[[ -x "${SCONS}" ]] || die "missing scons or SCONS env variable"
 
 set -e
 must_compile_hammer
