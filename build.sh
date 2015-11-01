@@ -54,7 +54,6 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-# @id 8413bd5dd3db97953791db977bac6bdd6d95852b
 function must_compile_osx()
 {
     local cflags
