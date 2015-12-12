@@ -1,5 +1,6 @@
 #pragma once
 
+#include "algos_concepts_define_typenames.ipp"
 namespace algos
 {
 
@@ -48,3 +49,4 @@ struct IteratorConcept<NullOutputIteratorAdapter<I>> {
         using difference_type = typename IteratorConcept<I>::difference_type;
 };
 }
+#include "algos_concepts_undef_typenames.ipp"

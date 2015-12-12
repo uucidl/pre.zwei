@@ -1,6 +1,10 @@
+#include "zwei_files.hpp"
+#include "zwei_inlines.hpp"
+#include "zwei_debug.hpp"
+
 #include "block_allocator.hpp"
 
-#include <algorithm>
+#include <algorithm> // for std::partition
 #include <cmath>
 
 #include <fcntl.h>
@@ -32,10 +36,12 @@ struct FileLoader {
         MemoryBlockAllocator files_memory_allocator;
 };
 
+#include "algos_concepts_define_typenames.ipp"
 template <typename N, Integral I> N greatest_multiple(N x, I divider)
 {
         return divider * I(std::floor(double(x) / divider));
 }
+#include "algos_concepts_undef_typenames.ipp"
 
 size_t get_file_loader_allocation_size(size_t maximum_file_count,
                                        size_t maximum_file_size)
@@ -127,6 +133,9 @@ size_t count_pending_files(FileLoader &file_loader)
         return file_loader.entries_count - file_loader.loaded_files_count;
 }
 
+zw_internal void posix_platform_fcntl_advise_readahead(int fd,
+                                                       bool should_readahead);
+
 zw_internal uint8_t *read_entire_file(FileLoader &file_loader,
                                       FileLoaderFileEntry &entry)
 {
@@ -143,7 +152,7 @@ zw_internal uint8_t *read_entire_file(FileLoader &file_loader,
                 return nullptr;
         }
         DEFER(close(entry_fd));
-        fcntl(entry_fd, F_RDAHEAD, 1);
+        posix_platform_fcntl_advise_readahead(entry_fd, 1);
 
         SPDR_END(global_spdr, "file_loader", "open");
 
@@ -252,11 +261,11 @@ void wait_for_available_files(FileLoader &file_loader)
                 auto last_handle =
                     file_loader.file_handles + file_loader.loaded_files_count;
 
-                auto with_load_error =
-                    [&file_loader](FileLoaderHandle const &x) {
-                            auto entry_index = x.id;
-                            return file_loader.entries[entry_index].load_error;
-                    };
+                auto with_load_error = [&file_loader](
+                    FileLoaderHandle const &x) {
+                        auto entry_index = x.id;
+                        return file_loader.entries[entry_index].load_error;
+                };
 
                 auto is_available = [&file_loader](FileLoaderHandle const &x) {
                         auto entry_index = x.id;
@@ -351,3 +360,21 @@ char const *get_filename(FileLoader &file_loader,
 
         return pos;
 }
+
+#if ZWEI_DISABLED
+// <posix platform OSX implementation..
+zw_internal void posix_platform_fcntl_advise_readahead(int fd,
+                                                       bool should_readahead)
+{
+        fcntl(fd, F_RDAHEAD, should_readahead ? 1 : 0);
+}
+// ..OSX implementation>
+#else
+// TODO(nicolas): linux/generic posix implementation
+zw_internal void posix_platform_fcntl_advise_readahead(int fd,
+                                                       bool should_readahead)
+{
+        (void)fd;
+        (void)should_readahead;
+}
+#endif

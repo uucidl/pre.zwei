@@ -1,10 +1,12 @@
-#include <cmath>  // for std::ceil
-#include <thread> // for std::mutex
+#include <cmath> // for std::ceil
+#include <mutex> // for std::mutex
 
+#include "algos_concepts_define_typenames.ipp"
 template <typename N, Integral I> N smallest_multiple(N x, I divider)
 {
         return divider * I(std::ceil(double(x) / divider));
 }
+#include "algos_concepts_undef_typenames.ipp"
 
 struct MemoryBlockListHeader {
         enum { MINIMUM_SIZE = 4096 };
@@ -41,9 +43,12 @@ void initialize(MemoryBlockAllocator &allocator,
         allocator.free_list_sentinel.next = all_memory;
 }
 
-template <> struct algos::IteratorConcept<MemoryBlockListHeader *> {
+namespace algos
+{
+template <> struct IteratorConcept<MemoryBlockListHeader *> {
         using difference_type = ssize_t;
 };
+}
 
 zw_internal MemoryBlockListHeader *successor(MemoryBlockListHeader *x)
 {

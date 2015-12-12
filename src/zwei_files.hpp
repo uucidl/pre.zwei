@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef> // for size_t
+
 /**
    @file
    Mass File Loading

@@ -85,9 +85,12 @@ struct RFC5322TreeCoordinate {
         friend DescendantIterator descendants_end(TreeCoordinateMe c);
 };
 
-template <> struct algos::TreeCoordinateConcept<RFC5322TreeCoordinate> {
+namespace algos
+{
+template <> struct TreeCoordinateConcept<RFC5322TreeCoordinate> {
         using WeightType = size_t;
 };
+}
 
 /**
    These mark the various tokens identified in a mail.

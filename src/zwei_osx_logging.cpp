@@ -97,8 +97,6 @@ inline void sync_print(int filedesc, char const *message, size_t message_size)
         writev(filedesc, iovecs, NCOUNT(iovecs));
 }
 
-extern zw_global SPDR_Context *global_spdr;
-
 void text_output_group_print(int filedesc, TextOutputGroup const &group)
 {
         SPDR_SCOPE1(global_spdr, "logging", __FUNCTION__,
@@ -122,7 +120,7 @@ void text_output_group_print(int filedesc, TextOutputGroup const &group)
         // automatically flush the buffer to get to the next buffer as
         // things get copied to it, then we could use a copy
         // algorithm.
-        auto next_iovec = [filedesc, &iovecs, &iovecs_n]() -> iovec &{
+        auto next_iovec = [filedesc, &iovecs, &iovecs_n]() -> iovec & {
                 if (iovecs_n >= IOVECS_CAPACITY) {
                         writev(filedesc, iovecs, iovecs_n);
                         iovecs_n = 0;

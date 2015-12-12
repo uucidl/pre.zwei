@@ -7,6 +7,7 @@
 
 // TODO(nicolas): compare / merge with things from eop
 
+#include "algos_concepts_define_typenames.ipp"
 namespace algos
 {
 
@@ -570,3 +571,4 @@ void traverse_each(C const &c, Proc proc)
         traverse_nonempty(c, visit_element<C, Proc>(proc));
 }
 };
+#include "algos_concepts_undef_typenames.ipp"

@@ -1084,6 +1084,7 @@ zw_internal bool rfc5322_validate(const HParsedToken *ast)
 // TODO(nicolas): isn't there some sort of tree reduction algorithm we could
 // write?
 
+#include "algos_concepts_define_typenames.ipp"
 template <OutputIterator O>
 O copy_all_token_bytes(RFC5322TreeCoordinate const &top, O d_first)
 {
@@ -1096,6 +1097,7 @@ O copy_all_token_bytes(RFC5322TreeCoordinate const &top, O d_first)
         algos::traverse_each(top, std::cref(copier));
         return d_first;
 }
+#include "algos_concepts_undef_typenames.ipp"
 
 zw_internal size_t rfc5322_field_bytes_count(HParsedToken const *token)
 {

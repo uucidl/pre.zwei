@@ -1,4 +1,4 @@
-#if COMPILER_LLVM
+#if defined(COMPILER_LLVM)
 #define COMPLETE_PREVIOUS_WRITES_BEFORE_FUTURE_WRITES                          \
         asm volatile("" ::: "memory")
 

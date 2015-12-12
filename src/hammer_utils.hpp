@@ -211,6 +211,7 @@ match_token_type(RandomAccessRange const &range, HParsedToken const &token)
                 check_parser_do_test(parser, data, data_size, checkerfn);      \
         } while (0)
 
+#include "algos_concepts_define_typenames.ipp"
 /// ValueType(UnaryPredicate) == const HParsedToken*
 template <UnaryPredicate P>
 zw_internal void
@@ -244,5 +245,6 @@ check_parser_do_test(HParser *parser, uint8_t *data, size_t data_size, P astfn)
                 h_parse_result_free(hr);
         }
 };
+#include "algos_concepts_undef_typenames.ipp"
 
 #endif

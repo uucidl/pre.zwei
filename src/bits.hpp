@@ -7,6 +7,7 @@
    @file Utilities for writing to memory locations below the char
 */
 
+#include "algos_concepts_define_typenames.ipp"
 struct NibbleProxy {
         uint8_t *byte;
         uint8_t bitoffset;
@@ -50,3 +51,4 @@ struct NibbleBigEndianOutputIterator {
 
         friend NibbleProxy &sink(WritableMe &x) { return x.nibble; }
 };
+#include "algos_concepts_undef_typenames.ipp"

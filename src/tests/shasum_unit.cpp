@@ -13,13 +13,13 @@
  */
 
 #include "../zwei_inlines.hpp"
+#include "../zwei_debug.hpp"
 #include "../zwei_files.hpp"
 
 #include "../../modules/uu.spdr/include/spdr/spdr.hh"
 
 #include "../algos.hpp"
 
-#include <CommonCrypto/CommonDigest.h>
 #include <dispatch/dispatch.h>
 
 #include <cassert>
@@ -32,7 +32,8 @@ struct FileShaWork {
         uint8_t digest[20];
 };
 
-zw_global SPDR_Context *global_spdr = nullptr;
+zw_internal void
+sha1(uint8_t const *bytes, size_t bytes_size, uint8_t result[20]);
 
 void shasum_task(void *tasks_ptr, size_t task_index)
 {
@@ -45,28 +46,13 @@ void shasum_task(void *tasks_ptr, size_t task_index)
                     SPDR_INT("fileindex", get_tag(file_loader, fh)));
         auto content = get_content(file_loader, fh);
         auto size = end(content) - begin(content);
-        assert(size <= std::numeric_limits<CC_LONG>::max());
-        CC_SHA1(begin(content), static_cast<CC_LONG>(size), task.digest);
+        sha1(begin(content), size, task.digest);
         release_content(file_loader, fh);
 }
 
 static char byte_to_hex[] = {
-    '0',
-    '1',
-    '2',
-    '3',
-    '4',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9',
-    'a',
-    'b',
-    'c',
-    'd',
-    'e',
-    'f',
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
 };
 
 void print_result_line(FileShaWork const &task)
@@ -79,6 +65,8 @@ void print_result_line(FileShaWork const &task)
 
         printf("  %s\n", get_filepath(*task.file_loader, task.file_handle));
 }
+
+SPDR_Context *global_spdr = nullptr;
 
 int main(int argc, char *argv[])
 {
@@ -172,6 +160,16 @@ int main(int argc, char *argv[])
 
         return (0);
 }
+
+// <OSX implementation for sha1..
+#include <CommonCrypto/CommonDigest.h>
+zw_internal void
+sha1(uint8_t const *bytes, size_t bytes_size, uint8_t result[20])
+{
+        assert(bytes_size <= std::numeric_limits<CC_LONG>::max());
+        CC_SHA1(bytes, static_cast<CC_LONG>(bytes_size), result);
+}
+// ..OSX implementation for sha1>
 
 #if SHASUM_ASYNC
 #include "../zwei_files_osx_async.cpp"

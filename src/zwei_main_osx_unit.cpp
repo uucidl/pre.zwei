@@ -17,6 +17,7 @@
 
 #include "zwei_inlines.hpp"
 
+#include "zwei_debug.hpp"
 #include "zwei_files.hpp"
 #include "zwei_iobuffer.hpp"
 #include "zwei_iobuffer_inlines.hpp"
@@ -35,7 +36,6 @@
 #include <cstdarg>
 #include <cstdio>
 
-zw_global SPDR_Context *global_spdr = nullptr;
 zw_global bool global_can_ignore_file = false;
 
 #include <CommonCrypto/CommonDigest.h>
@@ -205,14 +205,10 @@ directory_query_all_files(char const *root_dir_path,
 
         // what we are asking getattrlistbulk
         struct attrlist query_attributes = {
-            ATTR_BIT_MAP_COUNT,
-            0,
+            ATTR_BIT_MAP_COUNT, 0,
             (ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_ERROR | ATTR_CMN_NAME |
              ATTR_CMN_OBJTYPE | ATTR_CMN_OBJTAG),
-            0,
-            0,
-            ATTR_FILE_TOTALSIZE | ATTR_FILE_IOBLOCKSIZE,
-            0,
+            0, 0, ATTR_FILE_TOTALSIZE | ATTR_FILE_IOBLOCKSIZE, 0,
         };
 
         uint64_t query_options =
@@ -879,22 +875,8 @@ print_processed_message(ProcessedMessage const &processed_message,
 
         auto sha1_value = processed_message.sha1;
         char byteToHexChar[] = {
-            '0',
-            '1',
-            '2',
-            '3',
-            '4',
-            '5',
-            '6',
-            '7',
-            '8',
-            '9',
-            'a',
-            'b',
-            'c',
-            'd',
-            'e',
-            'f',
+            '0', '1', '2', '3', '4', '5', '6', '7',
+            '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
         };
         for (size_t byteIndex = 0; byteIndex < NCOUNT(sha1_value.digest);
              byteIndex++) {
@@ -945,6 +927,8 @@ print_processed_message(ProcessedMessage const &processed_message,
                 trace_print("ignored file");
         }
 }
+
+SPDR_Context *global_spdr = nullptr;
 
 int main(int argc, char **argv)
 {
@@ -1053,11 +1037,12 @@ int main(int argc, char **argv)
                                 trace_print("reloaded library!");
                         }
 
-#define GRAB_FN_SYM(lvalue, symname, dlhandle) {                                 \
-                                lvalue = reinterpret_cast<decltype(lvalue)>(\
-                                                                           dlsym(dlhandle, symname)); \
-                                                        zw_assert(lvalue, "expected symbol " symname); \
-                        }
+#define GRAB_FN_SYM(lvalue, symname, dlhandle)                                 \
+        {                                                                      \
+                lvalue = reinterpret_cast<decltype(lvalue)>(                   \
+                    dlsym(dlhandle, symname));                                 \
+                zw_assert(lvalue, "expected symbol " symname);                 \
+        }
 
                         InitAppFn *init_app;
                         GRAB_FN_SYM(init_app, "init_app", lib->dlhandle);

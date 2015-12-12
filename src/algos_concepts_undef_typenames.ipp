@@ -1,0 +1,14 @@
+#undef BidirectionalIterator
+#undef BinaryOperation
+#undef BinaryPredicate
+#undef ForwardIterator
+#undef InputIterator
+#undef Integral
+#undef Iterator
+#undef OutputIterator
+#undef Readable
+#undef Sequence
+#undef UnaryFunction
+#undef UnaryPredicate
+#undef UnaryPredicate
+#undef Writable

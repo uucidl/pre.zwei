@@ -210,9 +210,9 @@ inline bool cstr_endswith(char const *s, char const *suffix)
 /// try to concatenate the given c string when possible, always truncate
 void cstr_cat(char *&string_last, char *buffer_last, char const *cstring)
 {
-        string_last =
-            algos::copy_bounded_unguarded(cstring, is_cstr_char, string_last,
-                                          buffer_last).second;
+        string_last = algos::copy_bounded_unguarded(cstring, is_cstr_char,
+                                                    string_last, buffer_last)
+                          .second;
 }
 
 /// try to concatenate the given c string region when possible, always truncate
@@ -221,8 +221,9 @@ void cstr_cat(char *&string_last,
               char const *cstring,
               char const *cstring_end)
 {
-        string_last = algos::copy_bounded(cstring, cstring_end, string_last,
-                                          buffer_last).second;
+        string_last =
+            algos::copy_bounded(cstring, cstring_end, string_last, buffer_last)
+                .second;
 }
 
 bool cstr_terminate(char *&string_last, char *buffer_last)

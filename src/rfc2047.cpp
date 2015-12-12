@@ -30,7 +30,7 @@ enum CharsetEnum {
         ISO_8859_1 = 4,
         UTF_8 = 106,
         ISO_8859_15 = 111,
-} charset;
+};
 
 CharsetEnum parse_charset_name_n(uint8_t const *charset_name,
                                  size_t charset_name_size)
@@ -55,16 +55,16 @@ CharsetEnum parse_charset_name_n(uint8_t const *charset_name,
         using algos::begin;
         using algos::end;
 
-        auto entry_if_equal =
-            [&no_mismatch, charset_name, charset_name_size](const A *x) {
-                    if (no_mismatch == algos::find_mismatch_n_m(
-                                           x->name, x->name_size, charset_name,
-                                           charset_name_size)) {
-                            return x->charset;
-                    }
+        auto entry_if_equal = [&no_mismatch, charset_name,
+                               charset_name_size](const A *x) {
+                if (no_mismatch ==
+                    algos::find_mismatch_n_m(x->name, x->name_size,
+                                             charset_name, charset_name_size)) {
+                        return x->charset;
+                }
 
-                    return CHARSET_UNSUPPORTED;
-            };
+                return CHARSET_UNSUPPORTED;
+        };
 
         return algos::reduce(begin(assoc_table), end(assoc_table),
                              algos::maximum<CharsetEnum>(), entry_if_equal,
@@ -229,6 +229,7 @@ const RFC2047 &make_rfc2047(const RFC5234 &rfc5234,
         return global_rfc2047_parsers;
 }
 
+#include "algos_concepts_define_typenames.ipp"
 /**
    @requires ValueType(I) = u8 ∧ ValueType(O) = u8
 */
@@ -315,6 +316,7 @@ O transcode_to_utf8_n(CharsetEnum charset,
 
         return d_first;
 }
+#include "algos_concepts_undef_typenames.ipp"
 
 /**
  * Given an encoded word, tell me if you can convert it to UTF-8, in

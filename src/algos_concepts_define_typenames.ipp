@@ -1,0 +1,14 @@
+#define BidirectionalIterator typename
+#define BinaryOperation typename
+#define BinaryPredicate typename
+#define ForwardIterator typename
+#define InputIterator typename
+#define Integral typename
+#define Iterator typename
+#define OutputIterator typename
+#define Readable typename
+#define Sequence typename
+#define UnaryFunction typename
+#define UnaryPredicate typename
+#define UnaryPredicate typename
+#define Writable typename
