@@ -98,8 +98,11 @@ char const *get_filepath(FileLoader &file_loader,
 char const *get_filename(FileLoader &file_loader,
                          FileLoaderHandle const &file_handle);
 
+// TODO(nicolas): rename to accept_file
 void accept(FileLoader &file_loader, FileLoaderHandle const &file_handle);
+// TODO(nicolas): rename to get_file_content
 FileLoaderContent get_content(FileLoader &file_loader,
                               FileLoaderHandle const &file_handle);
+// TODO(nicolas): rename to release_file_content
 void release_content(FileLoader &file_loader,
                      FileLoaderHandle const &file_handle);
