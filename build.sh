@@ -65,6 +65,7 @@ function must_compile_osx()
     cxxflags=("${cxxflags[@]}" -stdlib=libc++)
 
     cflags=("${cflags[@]}" "-DCOMPILER_LLVM")
+    cflags=("${cflags[@]}" "-DPLATFORM_OSX")
     cflags=("${cflags[@]}" "-fno-rtti" "-fno-exceptions")
     cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
     cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Wshorten-64-to-32" "-Werror")
