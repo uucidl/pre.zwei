@@ -114,6 +114,14 @@ SCONS=${SCONS:-$(which scons)}
 set -e
 must_compile_hammer
 
+(
+    PROGRAM="${BUILD}"/tests
+    must_compile_osx \
+	"${HERE}"/src/tests/tests_unit.cpp \
+	-o "${PROGRAM}" \
+	&& printf "PROGRAM\t%s\n" "${PROGRAM}"
+)
+
 must_compile_osx -fvisibility=hidden -shared \
                  "${HERE}"/src/spdr_unit.cpp \
                  "${HERE}"/src/zwei_lib_osx_unit.cpp \

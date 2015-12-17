@@ -115,19 +115,12 @@ must_compile_osx -fvisibility=hidden -fPIC -shared \
                  -o "${LIBRARY}" \
     && printf "SHARED_LIBRARY\t%s\n" "${LIBRARY}"
 
-must_compile_osx \
-    "${HERE}"/src/spdr_unit.cpp \
-    "${HERE}"/src/zwei_main_osx_unit.cpp \
-    -o "${PROGRAM}" \
-    && printf "PROGRAM\t%s\n" "${PROGRAM}"
-
 (
-    PROGRAM="${BUILD}"/shasum
+    PROGRAM="${BUILD}"/tests
     must_compile_osx \
-        "${HERE}"/src/tests/shasum_unit.cpp \
-        -DSHASUM_ASYNC=1 -DSHASUM_TRACING=0 \
-        -o "${PROGRAM}" \
-        && printf "PROGRAM\t%s\n" "${PROGRAM}"
+	"${HERE}"/src/tests/tests_unit.cpp \
+	-o "${PROGRAM}" \
+	&& printf "PROGRAM\t%s\n" "${PROGRAM}"
 )
 
 (
@@ -138,6 +131,22 @@ must_compile_osx \
         -o "${PROGRAM}" \
         && printf "PROGRAM\t%s\n" "${PROGRAM}"
 )
+
+(
+    PROGRAM="${BUILD}"/shasum
+    must_compile_osx \
+        "${HERE}"/src/tests/shasum_unit.cpp \
+        -DSHASUM_ASYNC=1 -DSHASUM_TRACING=0 \
+        -o "${PROGRAM}" \
+        && printf "PROGRAM\t%s\n" "${PROGRAM}"
+)
+
+must_compile_osx \
+    "${HERE}"/src/spdr_unit.cpp \
+    "${HERE}"/src/zwei_main_osx_unit.cpp \
+    -o "${PROGRAM}" \
+    && printf "PROGRAM\t%s\n" "${PROGRAM}"
+
 set +e
 
 # beep
