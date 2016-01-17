@@ -113,6 +113,14 @@ SCONS=${SCONS:-$(which scons)}
 set -e
 must_compile_hammer
 
+(
+    PROGRAM="${BUILD}"/tests
+    must_compile_osx \
+	"${HERE}"/src/tests/tests_unit.cpp \
+	-o "${PROGRAM}" \
+	&& printf "PROGRAM\t%s\n" "${PROGRAM}"
+)
+
 must_compile_osx \
     -DZWEI_API_DLL=zw_dll_exported \
     -fvisibility=hidden -shared \

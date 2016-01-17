@@ -12,8 +12,10 @@
   per byte. (i.e zwei itself)
  */
 
-#include "../zwei_files.hpp"
 #include "../zwei_inlines.hpp"
+
+#include "../secure_hash_standard.hpp"
+#include "../zwei_files.hpp"
 
 #include "../../modules/uu.spdr/include/spdr/spdr.hh"
 
@@ -45,8 +47,7 @@ void shasum_task(void *tasks_ptr, size_t task_index)
                     SPDR_INT("fileindex", get_tag(file_loader, fh)));
         auto content = get_content(file_loader, fh);
         auto size = end(content) - begin(content);
-        assert(size <= std::numeric_limits<CC_LONG>::max());
-        CC_SHA1(begin(content), static_cast<CC_LONG>(size), task.digest);
+        sha1(begin(content), size, task.digest);
         release_content(file_loader, fh);
 }
 
@@ -100,7 +101,8 @@ int main(int argc, char *argv[])
         FileShaWork tasks[tasks_capacity];
         size_t tasks_count = 0;
 
-        while (count_pending_files(file_loader) || tasks_count > 0) {
+        while (count_pending_files(file_loader) || tasks_count > 0 ||
+               !algos::empty(available_files(file_loader))) {
                 // TODO(nicolas): might be nice to ask for up to n
                 // files so as to benefit from the multithreading for
                 // the compute task.
@@ -158,6 +160,8 @@ int main(int argc, char *argv[])
 
         return (0);
 }
+
+#include "../secure_hash_standard.cpp"
 
 #if SHASUM_ASYNC
 #include "../zwei_files_osx_async.cpp"
