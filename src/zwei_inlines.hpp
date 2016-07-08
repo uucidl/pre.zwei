@@ -175,7 +175,7 @@ void pop_unused(MemoryArena &parent, MemoryArena &sub_arena)
 
 // <CSTRINGS
 
-inline bool is_cstr_char(char const &x) { return x; }
+inline bool is_cstr_char(char const &x) { return x != '\0'; }
 
 inline bool cstr_equals(char const *s1, char const *s2)
 {
