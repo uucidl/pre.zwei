@@ -5,7 +5,7 @@ struct MacRomanWorkaround {
         enum { RUNE_COUNT = 64,
         };
         uint8_t utf8_output_block[3 * RUNE_COUNT];
-        uint8_t utf8_output_block_count;
+        size_t utf8_output_block_count;
 
         uint32_t utf8decoder_state;
         uint32_t utf8decoder_codepoint;
