@@ -235,7 +235,6 @@ bool cstr_terminate(char *&string_last, char *buffer_last)
                 string_last = successor(string_last);
                 return true;
         }
-
         return false;
 }
 
