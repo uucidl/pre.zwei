@@ -22,6 +22,7 @@
 
 namespace
 {
+
 Charset parse_charset_name_n(uint8_t const *charset_name,
                              size_t charset_name_size)
 {

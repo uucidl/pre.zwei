@@ -9,7 +9,7 @@ enum Charset {
         Charset_ISO_8859_1 = 4,
         Charset_UTF_8 = 106,
         Charset_ISO_8859_15 = 111,
-} charset;
+};
 
 // IANA MIME TYPES
 // @see [[http://www.iana.org/assignments/media-types/media-types.xhtml]]
