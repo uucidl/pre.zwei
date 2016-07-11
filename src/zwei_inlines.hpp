@@ -7,8 +7,6 @@
 #include <cstdio>
 #include <functional>
 
-#define EXPORT __attribute__((visibility("default")))
-
 #if ZWEI_SLOW
 #define zw_assert(condition, message)                                          \
         do {                                                                   \
@@ -41,6 +39,16 @@
 
 /// global variables
 #define zw_global
+
+/// use to mark symbols that should escape the compilation unit and be public
+/// through dynamic linking
+#if defined(__clang__) || defined(__gnuc__)
+#    define zw_dll_exported __attribute__((visibility("default")))
+#    define zw_dll_imported __attribute__((visibility("default")))
+#else
+#    define zw_dll_exported __declspec(dllexport)
+#    define zw_dll_imported __declspec(dllimport)
+#endif
 
 // <BASIC integer types
 

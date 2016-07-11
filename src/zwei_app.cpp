@@ -310,7 +310,7 @@ struct MessageBeingParsed {
         struct MessageSummary message_summary;
 };
 
-extern "C" EXPORT INIT_APP(init_app)
+ZWEI_API INIT_APP(init_app)
 {
         trace_print("Initializing app");
         global_platform = platform;
@@ -452,7 +452,7 @@ zw_internal void fill_message_summary(MessageSummary *message_summary,
         algos::traverse_each(rfc5322_top(ast), std::cref(collect));
 }
 
-extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
+ZWEI_API ACCEPT_MIME_MESSAGE(accept_mime_message)
 {
         uint8_t const *full_message = data_first;
         uint8_t const *full_message_end = data_last;
@@ -583,7 +583,7 @@ extern "C" EXPORT ACCEPT_MIME_MESSAGE(accept_mime_message)
         return 3;
 }
 
-extern "C" EXPORT PARSE_ZOE_MAILSTORE_FILENAME(parse_zoe_mailstore_filename)
+ZWEI_API PARSE_ZOE_MAILSTORE_FILENAME(parse_zoe_mailstore_filename)
 {
         auto zr = zoe_parse_uuid_filename(filename, cstr_len(filename));
         if (failed(zr)) {
