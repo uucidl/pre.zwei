@@ -9,6 +9,7 @@
 #include "zoe.cpp"
 #include "zwei_iobuffer.cpp"
 #include "zwei_osx_logging.cpp"
+#include "zwei_textoutputgroup.cpp"
 
 #if ZWEI_UNIT_TESTS
 #include "test_bits.cpp"

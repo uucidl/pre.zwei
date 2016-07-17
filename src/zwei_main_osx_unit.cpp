@@ -1345,9 +1345,6 @@ int main(int argc, char **argv)
         return 0;
 }
 
-#include "zwei_iobuffer.cpp"
-#include "zwei_osx_logging.cpp"
-
 // TODO(nicolas): NEXT serialize data on disk so we can compare the
 // results of both methods and see that nothing wrong is happening.
 #if 0 * ZWEI_SLOW
@@ -1355,3 +1352,7 @@ int main(int argc, char **argv)
 #else
 #include "zwei_files_osx_async.cpp"
 #endif
+
+#include "zwei_iobuffer.cpp"
+#include "zwei_osx_logging.cpp"
+#include "zwei_textoutputgroup.cpp"
