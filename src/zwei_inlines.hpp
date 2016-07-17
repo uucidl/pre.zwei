@@ -14,20 +14,34 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 
-#if ZWEI_SLOW
+#if defined(__clang__)
+#define zw_debugbreak() asm("int3")
+#else
+#define zw_debugbreak() __debugbreak()
+#endif
+
 #define zw_assert(condition, message)                                          \
         do {                                                                   \
                 if (!(condition)) {                                            \
                         fputs(message, stderr);                                \
                         fputs("\n", stderr);                                   \
-                        asm("int3");                                           \
+                        zw_debugbreak();                                       \
                 }                                                              \
         } while (0)
-#else
-#define zw_assert(condition, message) (void)(condition)
-#endif
+
+#define fatal_if(__condition, message)                                         \
+        fatal_ifnot(!(__condition), "fatal error: " message)
+
+#define fatal_ifnot(__condition, message)                                      \
+        {                                                                      \
+                auto fatal_ifnot_cond = __condition;                           \
+                zw_assert(fatal_ifnot_cond, "fatal error: " message);          \
+                if (!(fatal_ifnot_cond))                                       \
+                        std::abort();                                          \
+        }
 
 #define ZWEI_UNIT_TESTS (ZWEI_SLOW && ZWEI_INTERNAL)
 
