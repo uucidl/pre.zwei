@@ -69,7 +69,7 @@ function must_compile_osx()
     cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
     cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Wshorten-64-to-32" "-Werror")
     cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter")
-    cflags=("${cflags[@]}" -g -gdwarf-3)
+    cflags=("${cflags[@]}" -g -gdwarf-3 -fsanitize=address)
     cxxflags=("${cxxflags[@]}" "-std=c++11")
 
     if [[ "${CONFIG}" == "development" ]]; then
