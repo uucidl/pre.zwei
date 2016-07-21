@@ -1,5 +1,8 @@
 #pragma once
 
+// TODO(nicolas): question and critique this notion of text output group.
+// What is the problem that it solves? Does it solve it well?
+
 // TODO(nicolas): traces should feature a timestamp for
 // performance and auditing. i.e. the platform layer should
 // offer a logging service.
