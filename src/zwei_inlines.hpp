@@ -1,13 +1,6 @@
 #pragma once
 
-// (Defines)
-#if !defined(ZWEI_SLOW)
-#error ZWEI_SLOW={0,1} controls expensive assertions
-#endif
-#if !defined(ZWEI_INTERNAL)
-#error ZWEI_INTERNAL={0,1} marks a build as internal or published
-#endif
-// (Defines)
+#include "zwei_config.hpp"
 
 #include "algos.hpp"
 #include "algos_concepts.hpp"
@@ -42,8 +35,6 @@
                 if (!(fatal_ifnot_cond))                                       \
                         std::abort();                                          \
         }
-
-#define ZWEI_UNIT_TESTS (ZWEI_SLOW && ZWEI_INTERNAL)
 
 // AKA(NCOUNT) AKA(NELEMS)
 template <typename T, size_t N> constexpr size_t countof(T (&)[N]) { return N; }
