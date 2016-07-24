@@ -77,9 +77,21 @@ HAMMER_ACTION(act_unstructured)
                                 rfc2047_copy_encoded_word(x, bytes_last);
                     }
             });
-
-        HParsedToken *result =
-            h_make_bytes(p->arena, bytes, bytes_last - bytes);
+        byte_count = bytes_last - bytes;
+        {
+                uint32_t decoder_state = UTF8_ACCEPT;
+                uint32_t codepoint = 0;
+                uint8_t last_byte = 0; // useful for debugging
+                bool can_decode_all =
+                    algos::all_n(bytes, byte_count, [&codepoint, &decoder_state,
+                                                     &last_byte](uint8_t x) {
+                            last_byte = x;
+                            return UTF8_REJECT !=
+                                   utf8_decode(&decoder_state, &codepoint, x);
+                    });
+                zw_assert(can_decode_all, "data isn't valid utf-8");
+        }
+        HParsedToken *result = h_make_bytes(p->arena, bytes, byte_count);
         result->token_type = RFC5322HammerTT(UNSTRUCTURED);
         return result;
 }

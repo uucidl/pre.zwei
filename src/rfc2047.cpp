@@ -217,19 +217,25 @@ const RFC2047 &make_rfc2047(const RFC5234 &rfc5234,
    @requires ValueType(I) = u8 ∧ ValueType(O) = u8
 */
 template <InputIterator I, OutputIterator O>
-O transcode_to_utf8_n(Charset charset,
-                      I first,
-                      typename algos::IteratorConcept<I>::difference_type n,
-                      O d_first)
+O transcode_encoded_word_to_utf8_n(
+    Charset charset,
+    I first,
+    typename algos::IteratorConcept<I>::difference_type n,
+    O d_first)
 {
         using algos::sink;
         using algos::source;
         using algos::successor;
 
         if (charset == Charset_US_ASCII || charset == Charset_UTF_8) {
-                // TODO(nicolas) shouldnt we attempt to validate the utf-8 input
-                // stream?
-                return algos::copy_n(first, n, d_first);
+                // NOTE(nil): in case we encounter a series of encoded words in
+                // utf8 format,
+                // they may have been split in the middle of an utf8 byte.
+                // Therefore it is unwise to try validating the utf8 stream on a
+                // word to word basis
+                //
+                // So we simply copy the bytes here.
+                d_first = algos::copy_n(first, n, d_first);
         } else if (charset == Charset_ISO_8859_1) {
                 while (n) {
                         uint8_t byte = source(first);
@@ -310,8 +316,9 @@ size_t rfc2047_get_encoded_word_size(HParsedToken const *token)
 
         algos::NullOutputIteratorAdapter<uint8_t *> d_first = {};
 
-        return transcode_to_utf8_n(encoded_word.charset, encoded_word.bytes,
-                                   encoded_word.bytes_count, d_first) -
+        return transcode_encoded_word_to_utf8_n(
+                   encoded_word.charset, encoded_word.bytes,
+                   encoded_word.bytes_count, d_first) -
                d_first;
 }
 
@@ -323,6 +330,7 @@ uint8_t *rfc2047_copy_encoded_word(HParsedToken const *token, uint8_t *d_first)
 {
         auto encoded_word = pack_encoded_word(token);
 
-        return transcode_to_utf8_n(encoded_word.charset, encoded_word.bytes,
-                                   encoded_word.bytes_count, d_first);
+        return transcode_encoded_word_to_utf8_n(
+            encoded_word.charset, encoded_word.bytes, encoded_word.bytes_count,
+            d_first);
 }

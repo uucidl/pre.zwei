@@ -92,6 +92,19 @@ template <Sequence S> bool empty(S s) { return empty(begin(s), end(s)); }
 namespace algos
 {
 
+template <Iterator I, Integral N, UnaryPredicate P>
+bool all_n(I first, N count, P pred)
+{
+        while (count != N(0)) {
+                if (!pred(source(first))) {
+                        return false;
+                }
+                first = successor(first);
+                count = predecessor(count);
+        }
+        return true;
+}
+
 template <Iterator I, UnaryPredicate P, Iterator J>
 J count_unguarded(I f, P p, J j)
 {
