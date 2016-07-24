@@ -26,17 +26,13 @@ namespace
 Charset parse_charset_name_n(uint8_t const *charset_name,
                              size_t charset_name_size)
 {
-        std::pair<typename algos::IteratorConcept<char *>::difference_type,
-                  typename algos::IteratorConcept<
-                      uint8_t *>::difference_type> const no_mismatch{};
-
 #define LITE(lit) lit, sizeof(lit) - 1
 
         struct A {
                 char const *name;
                 size_t name_size;
                 Charset charset;
-        } assoc_table[] = {
+        } known_charsets[] = {
             {LITE("us-ascii"), Charset_US_ASCII},
             {LITE("iso-8859-1"), Charset_ISO_8859_1},
             {LITE("iso-8859-15"), Charset_ISO_8859_15},
@@ -46,20 +42,17 @@ Charset parse_charset_name_n(uint8_t const *charset_name,
         using algos::begin;
         using algos::end;
 
-        auto entry_if_equal = [&no_mismatch, charset_name,
-                               charset_name_size](const A *x) {
-                if (no_mismatch ==
-                    algos::find_mismatch_n_m(x->name, x->name_size,
-                                             charset_name, charset_name_size)) {
+        auto charset_with_name = [charset_name, charset_name_size](const A *x) {
+                if (algos::equal_n_m(x->name, x->name_size, charset_name,
+                                     charset_name_size)) {
                         return x->charset;
                 }
-
                 return Charset_UNSUPPORTED;
         };
 
-        return algos::reduce(begin(assoc_table), end(assoc_table),
-                             algos::maximum<Charset>(), entry_if_equal,
-                             Charset_UNSUPPORTED);
+        return algos::apply_reduce(begin(known_charsets), end(known_charsets),
+                                   charset_with_name, algos::maximum<Charset>(),
+                                   Charset_UNSUPPORTED);
 #undef LITE
 }
 

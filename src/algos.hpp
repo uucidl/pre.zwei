@@ -9,7 +9,6 @@
 
 namespace algos
 {
-
 template <typename T>
 ConceptRequire(TotallyOrdered(T)) const T &max(const T &a, const T &b)
 {
@@ -405,21 +404,17 @@ OutputIt apply_copy_n(InputIt first,
         return dest_first;
 }
 
-// TODO(nicolas): remove std::pair
 template <InputIterator I0, InputIterator I1>
-std::pair<typename IteratorConcept<I0>::difference_type,
-          typename IteratorConcept<I1>::difference_type>
-find_mismatch_n_m(I0 f0,
-                  typename IteratorConcept<I0>::difference_type n0,
-                  I1 f1,
-                  typename IteratorConcept<I1>::difference_type n1)
+bool equal_n_m(I0 f0,
+               typename IteratorConcept<I0>::difference_type n0,
+               I1 f1,
+               typename IteratorConcept<I1>::difference_type n1)
 {
         while (n0 && n1 && *f0 == *f1) {
                 --n0;
                 --n1;
         }
-
-        return std::make_pair(n0, n1);
+        return n0 == 0 && n1 == 0;
 }
 }
 
@@ -444,9 +439,16 @@ template <typename T> struct BinaryOperationConcept<maximum<T>> {
         using type = T;
 };
 
+template <typename I> bool range_empty(I first, I last)
+{
+        return first == last;
+}
+
+// apply `fun` to each element in [first, last) and reduce using `op`
+// precondition(!range_empty(first, last));
 template <Iterator I, BinaryOperation Op, UnaryFunction F>
 typename BinaryOperationConcept<Op>::type
-reduce_nonempty(I first, I last, Op op, F fun)
+apply_reduce_nonempty(I first, I last, F fun, Op op)
 {
         typename BinaryOperationConcept<Op>::type result = fun(first);
         first = successor(first);
@@ -458,19 +460,20 @@ reduce_nonempty(I first, I last, Op op, F fun)
         return result;
 }
 
+// apply `fun` to each element in [first, last) and reduce using `op`
+// precondition(valid_range(first,last))
 template <Iterator I, BinaryOperation Op, UnaryFunction F>
 typename BinaryOperationConcept<Op>::type
-reduce(I first,
-       I last,
-       Op op,
-       F fun,
-       typename BinaryOperationConcept<Op>::type zero)
+apply_reduce(I first,
+             I last,
+             F fun,
+             Op op,
+             typename BinaryOperationConcept<Op>::type zero)
 {
         if (first == last) {
                 return zero;
         }
-
-        return reduce_nonempty(first, last, op, fun);
+        return apply_reduce_nonempty(first, last, fun, op);
 }
 }
 
