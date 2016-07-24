@@ -624,7 +624,7 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
 // ## 3.6.  Field Definitions
 
 #define UUH_FIELD(lit, right)                                                  \
-        h_middle(h_itoken((uint8_t *)lit, (sizeof lit) - 1), right,            \
+        h_middle(h_ascii_itoken((uint8_t *)lit, (sizeof lit) - 1), right,      \
                  rfc5234.CRLF)
 
         H_ARULE(orig_date, UUH_FIELD("Date:", date_time));

@@ -20,11 +20,11 @@
 
 // Case-insensitive ASCII token
 #define UH_ITOKEN(lit)                                                         \
-        h_itoken((uint8_t *)REQUIRES_LITTERAL(lit), sizeof(lit) - 1)
+        h_ascii_itoken((uint8_t *)REQUIRES_LITTERAL(lit), sizeof(lit) - 1)
 
 #define UH_IENUM(lit, key)                                                     \
-        h_action(h_itoken((uint8_t *)lit, sizeof lit - 1), uuh_act_integer,    \
-                 (void *)key)
+        h_action(h_ascii_itoken((uint8_t *)lit, sizeof lit - 1),               \
+                 uuh_act_integer, (void *)key)
 
 // TODO(nicolas): parsing performance of lower-case US-ASCII.
 //
@@ -42,9 +42,9 @@
 
    Used in ABNF when tokens are described in double quotes.
 */
-HAMMER_FN_DECL(HParser *, h_itoken, const uint8_t *str, const size_t len);
+HAMMER_FN_DECL(HParser *, h_ascii_itoken, const uint8_t *str, const size_t len);
 
-HParser *h_itoken(const uint8_t *str, const size_t len)
+HParser *h_ascii_itoken(const uint8_t *str, const size_t len)
 {
         // NOTE(nicolas): I suspect this will be inefficient compared to a
         // version

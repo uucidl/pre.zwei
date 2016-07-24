@@ -70,7 +70,7 @@ const RFC2045 &make_rfc2045(const RFC5234 &rfc5234,
         auto quoted_string = rfc5322_base.quoted_string;
 
 #define UUH_FIELD(lit, right)                                                  \
-        h_middle(h_itoken((uint8_t *)lit, (sizeof lit) - 1), right,            \
+        h_middle(h_ascii_itoken((uint8_t *)lit, (sizeof lit) - 1), right,      \
                  rfc5234.CRLF)
 
         // # 6.7.  Quoted-Printable Content-Transfer-Encoding
