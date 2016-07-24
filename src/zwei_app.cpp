@@ -71,6 +71,9 @@
 #include "zwei_app.hpp"
 
 #include "algos.hpp"
+#if defined(ZWEI_UNIT_TESTS)
+#include "algos_tests.hpp"
+#endif
 #include "base64.hpp"
 #include "rfc2045.hpp"
 #include "rfc2047.hpp"
@@ -323,6 +326,11 @@ ZWEI_API INIT_APP(init_app)
                 global_debug_mode = true;
         }
 
+#if ZWEI_UNIT_TESTS
+        trace_print("Testing algos");
+        algos::run_tests();
+        trace_print("Testing algos: done");
+#endif
         extern void hammer_init();
 
         hammer_init();
@@ -890,3 +898,7 @@ zw_internal bool ucs4_to_macintosh(uint32_t const *codepoints_first,
 
         return encoding_was_total;
 }
+
+#if ZWEI_UNIT_TESTS
+#include "algos_tests.cpp"
+#endif

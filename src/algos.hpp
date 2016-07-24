@@ -10,15 +10,8 @@
 namespace algos
 {
 
-template <typename T> T &max(T &a, T &b)
-{
-        if (b < a) {
-                return a;
-        }
-        return b;
-}
-
-template <typename T> const T &max(const T &a, const T &b)
+template <typename T>
+ConceptRequire(TotallyOrdered(T)) const T &max(const T &a, const T &b)
 {
         if (b < a) {
                 return a;
@@ -43,6 +36,8 @@ namespace algos
 template <typename T> struct ReadableConcept<T *> {
         using value_type = T;
 };
+
+template <typename T> T *pointer(T &x) { return &x; }
 
 // # pointer as Readable
 template <typename T> const T &source(const T *x) { return *x; }
