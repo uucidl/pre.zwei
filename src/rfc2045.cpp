@@ -89,7 +89,6 @@ const RFC2045 &make_rfc2045(const RFC5234 &rfc5234,
 
         H_RULE(qp_segment, UH_SEQ(qp_section, h_many(rfc5234.WSP), h_ch('=')));
 
-        // TODO(nicolas): make it no more than 76
         H_RULE(qp_part, qp_section);
 
         H_RULE(qp_line,
@@ -99,8 +98,6 @@ const RFC2045 &make_rfc2045(const RFC5234 &rfc5234,
                UH_SEQ(qp_line, h_many(UH_SEQ(rfc5234.CRLF, qp_line))));
 
         // # 6.1 Content-Transfer-Encoding Syntax
-        // TODO(nicolas): There should be a general system for enums so that I
-        // don't have to write the enum recognition by hand.
         H_RULE(mechanism,
                UH_ANY(UH_IENUM("7bit", ContentTransferEncoding_7BIT),
                       UH_IENUM("8bit", ContentTransferEncoding_8BIT),

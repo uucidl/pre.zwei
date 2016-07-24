@@ -13,7 +13,6 @@ enum Charset {
 
 // IANA MIME TYPES
 // @see [[http://www.iana.org/assignments/media-types/media-types.xhtml]]
-// TODO(nicolas): NEXT gather media types into single header
 
 struct TextMedia {
         Charset charset;

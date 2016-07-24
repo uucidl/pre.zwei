@@ -7,6 +7,7 @@
 #include "rfc2047.hpp"
 #include "rfc5234.hpp"
 
+#include "../modules/uu.spdr/include/spdr/spdr.hh"
 #include "hammer.hpp"
 #include <cinttypes>
 #include <functional>
@@ -721,15 +722,13 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
         /* publish our parsers */
 
         if (h_compile(message, PB_MIN, NULL)) {
-                error_print("problem compiling rfc5322 parser");
-                // TODO(nicolas): die here
+                fatal("problem compiling rfc5322 parser")
         } else {
                 rfc5322_parsers.message = message;
         }
 
         if (h_compile(fields, PB_MIN, NULL)) {
-                error_print("problem compiling rfc5322 parser");
-                // TODO(nicolas): die here
+                fatal("problem compiling rfc5322 parser")
         } else {
                 rfc5322_parsers.fields = fields;
         }
@@ -797,7 +796,11 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
         return rfc5322_parsers;
 }
 
-// TODO(nicolas): this could return the UserTokenType entry in the registry?
+// TODO(nil): all uses of this either need to check whether a given token is a
+// byte or sequence token
+// these queries should be made explicit and fast. Tokens could preserve that
+// information at construction time,
+// and accessible in linear time.
 zw_internal std::pair<HTokenType, bool> base_hammer_type(HTokenType token_type)
 {
         HTokenType base_token_type = token_type;
@@ -828,8 +831,12 @@ zw_internal std::pair<HTokenType, bool> base_hammer_type(HTokenType token_type)
 bool has_descendants(RFC5322TreeCoordinate c)
 {
         using algos::source;
-        auto base_type = base_hammer_type(source(c)->token_type).first;
-        return base_type == TT_SEQUENCE && source(c)->seq->used > 0;
+        // TODO(nil): finding out if a token type is a sequence type should be a
+        // cheap
+        // operation, because we're doing this check pretty often.
+        auto is_sequence =
+            TT_SEQUENCE == base_hammer_type(source(c)->token_type).first;
+        return is_sequence && source(c)->seq->used > 0;
 }
 
 RFC5322TreeCoordinate::DescendantIterator
@@ -1105,7 +1112,18 @@ template <OutputIterator O>
 O copy_all_token_bytes(RFC5322TreeCoordinate const &top, O d_first)
 {
         auto copier = [&d_first](HParsedToken const *token) {
-                if (TT_BYTES == base_hammer_type(token->token_type).first) {
+                // TODO(nicolas): statistical property is approximatively 50% of
+                // all nodes
+                // are byte nodes that must be copied. In this case calling
+                // `base_hammer_type`
+                // seems wasteful. Why can't the nodes at construction time keep
+                // that
+                // knowledge somehow.
+                auto contain_bytes =
+                    TT_BYTES == base_hammer_type(token->token_type).first;
+                SPDR_EVENT1(global_spdr, "stats", "copy_all_token_bytes.token",
+                            SPDR_INT("is_copied", int(contain_bytes)));
+                if (contain_bytes) {
                         d_first = algos::copy_n(token->bytes.token,
                                                 token->bytes.len, d_first);
                 }

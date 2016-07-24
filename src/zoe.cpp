@@ -81,11 +81,11 @@ zoe_parse_uuid_filename(const char *filename, size_t filename_size)
         using algos::source;
         using algos::begin;
         using algos::end;
+        using algos::copy_n;
 
         auto const &uuid_token = source(begin(parse_result->ast));
         zw_assert(uuid_token->token_type == TT_BYTES, "unexpected token");
-        algos::copy_n(uuid_token->bytes.token, uuid_token->bytes.len,
-                      result.uuid);
+        copy_n(uuid_token->bytes.token, uuid_token->bytes.len, result.uuid);
 
         h_parse_result_free(parse_result);
 
@@ -94,7 +94,6 @@ zoe_parse_uuid_filename(const char *filename, size_t filename_size)
         uint64_t unique = 0;
         uint64_t sequence = 0;
         uint64_t node = 0;
-
         struct {
                 uint64_t *value;
                 uint8_t byte_start;
@@ -107,7 +106,7 @@ zoe_parse_uuid_filename(const char *filename, size_t filename_size)
             {&sequence, 10, 12, 16 - 8},
             {&node, 12, 16, 32 - 8},
         };
-
+        // split input uuid bytes into the integral values above.
         for (auto segment : segments) {
                 uint64_t *value = segment.value;
                 uint8_t byte_power = segment.byte_power;
@@ -119,9 +118,6 @@ zoe_parse_uuid_filename(const char *filename, size_t filename_size)
                         byte_power -= 8;
                 }
         }
-
-        // TODO(nicolas): it is probably worth having when filing a mail
         result.unix_epoch_millis = unix_epoch_millis;
-
         return result;
 }

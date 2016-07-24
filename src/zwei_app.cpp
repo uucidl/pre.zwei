@@ -6,7 +6,8 @@
   POP, IMAP, Twitter, Facebook etc...
 
   ## Input Parsing
-  TODO(nicolas): Parse First Line Of Content (RFC5322)
+  TODO(nicolas): Parse First Line Of Content (RFC5322) ; for now we have a janky
+  extraction of the first characters of the body.
 
   ## Database
   - Timeline indexing/querying
@@ -14,7 +15,8 @@
   ## User Interface
   ## Platform
   TODO(nicolas): work task queue
-  TODO(nicolas): LINUX port.
+  TODO(nicolas): LINUX port. (started)
+  TODO(nicolas): WIN32 port. (started)
   TODO(nicolas): cross compilation to <powerpc e500 v2> (Synology NAS)
 
   # MIME format

@@ -117,6 +117,9 @@ zw_internal HParsedToken *uuh_uint8_sequence_to_tagged_bytes(
         return result;
 }
 
+// TODO(nicolas): probably should return instead one of our own node types, so
+// we can enrich it with the base hammer type or simply the information whether
+// it was bytes or a sequence
 zw_internal HParsedToken *uuh_flatten_sequence(HParseResult const *p,
                                                HTokenType token_type,
                                                void *user_data)

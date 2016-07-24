@@ -36,6 +36,8 @@
                         std::abort();                                          \
         }
 
+#define fatal(__message) fatal_if(true, __message)
+
 // AKA(NCOUNT) AKA(NELEMS)
 template <typename T, size_t N> constexpr size_t countof(T (&)[N]) { return N; }
 
@@ -197,6 +199,9 @@ void pop_unused(MemoryArena &parent, MemoryArena &sub_arena)
 // ..MEMORY ARENAS>
 
 // <CSTRINGS
+
+// NOTE(nicolas): these query functions are not utf8 safe. their use is to be
+// reserved to programmatic/internal strings and not used for user strings.
 
 inline bool is_cstr_char(char const &x) { return x != '\0'; }
 
