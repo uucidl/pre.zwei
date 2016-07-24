@@ -7,25 +7,36 @@
 
 #include <cstdint>
 
-enum BufferRangeErrorCode {
+enum IOBufferIteratorError {
         /// no error has occured
-        BR_NoError,
+        IOBufferIteratorError_NoError,
         /// the consumer attempted to read past the end
-        BR_ReadPastEnd,
+        IOBufferIteratorError_ReadPastEnd,
         /// unrecoverable IO error
-        BR_IOError,
+        IOBufferIteratorError_IOError,
+        /// If the stream is a decoder stream, denotes a decoding problem
+        IOBufferIteratorError_DecodingError,
 };
 
-extern void
-stream_on_memory(struct BufferRange *range, uint8_t *mem, size_t const size);
+struct IOBufferIterator;
 
-// NOTE(nicolas) a BufferRange shows the two aspect of processing data
+extern void
+stream_on_memory(IOBufferIterator *range, uint8_t *mem, size_t const size);
+
+// NOTE(nicolas) a IOBufferIterator shows the two aspect of processing data
 // for I/O in one datastructure. The points of memory between start
 // and end represent what can be processed by the CPU.
 //
 // The `next` function represents I/O.
 
-struct BufferRange {
+// TODO(nicolas): the name buffer range isn't really great. When using
+// STL's concept, it corresponds more to a specific model for an InputIterator
+// for I/O and decoding.
+//
+// This doesn't mean we should make it STL compatible. At least awareness that
+// we're doing io in next seems rather important to preserve.
+
+struct IOBufferIterator {
         /**
          * start of buffer.
          */
@@ -47,7 +58,7 @@ struct BufferRange {
          */
         uint8_t *cursor;
 
-        enum BufferRangeErrorCode error;
+        enum IOBufferIteratorError error;
 
         /**
          * Refill function, called when more data is needed by the writer/reader
@@ -55,5 +66,5 @@ struct BufferRange {
          * - pre-condition: cursor == end
          * - post-condition: start == cursor < end
          */
-        enum BufferRangeErrorCode (*next)(struct BufferRange *);
+        enum IOBufferIteratorError (*fill_next)(IOBufferIterator *);
 };

@@ -255,11 +255,11 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
 }
 
 // wraps a stream and transcode using the MacRoman workaround
-zw_internal struct BufferRange
-macroman_workaround_stream(struct BufferRange *input, struct MemoryArena *arena)
+zw_internal IOBufferIterator
+macroman_workaround_stream(IOBufferIterator *input, struct MemoryArena *arena)
 {
         struct Stream {
-                BufferRange *input;
+                IOBufferIterator *input;
                 MacRomanWorkaround state;
         } *stream = push_pointer_rvalue(arena, stream);
 
@@ -267,45 +267,45 @@ macroman_workaround_stream(struct BufferRange *input, struct MemoryArena *arena)
         stream->state.utf8decoder_state = UTF8_ACCEPT;
         stream->state.macintosh_chars_utf8decoder_state = UTF8_ACCEPT;
 
-        auto next = [](struct BufferRange *range) {
+        auto next = [](IOBufferIterator *iobuffer) {
                 struct Stream *stream = reinterpret_cast<struct Stream *>(
-                    range->start -
+                    iobuffer->start -
                     offsetof(struct Stream, state.utf8_output_block));
-                if (stream->input->cursor >= stream->input->end) {
-                        if (BR_NoError != stream->input->next(stream->input)) {
-                                return fail(range, stream->input->error);
+                IOBufferIterator &input_iobuffer = *stream->input;
+                if (input_iobuffer.cursor >= input_iobuffer.end) {
+                        if (IOBufferIteratorError_NoError !=
+                            refill_iobuffer(&input_iobuffer)) {
+                                return fail(iobuffer, input_iobuffer.error);
                         }
                 }
 
                 auto input_cursor = macroman_workaround_block(
-                    &stream->state, stream->input->cursor, stream->input->end);
+                    &stream->state, input_iobuffer.cursor, input_iobuffer.end);
                 if (!input_cursor) {
-                        return fail(
-                            range,
-                            BR_IOError); // TODO(nicolas) not really I/O but..
+                        return fail(iobuffer,
+                                    IOBufferIteratorError_DecodingError);
                 }
 
-                stream->input->cursor = input_cursor;
+                input_iobuffer.cursor = input_cursor;
 
-                range->start = &stream->state.utf8_output_block[0];
-                range->end =
-                    range->start + stream->state.utf8_output_block_count;
-                range->cursor = range->start;
+                iobuffer->start = &stream->state.utf8_output_block[0];
+                iobuffer->end =
+                    iobuffer->start + stream->state.utf8_output_block_count;
+                iobuffer->cursor = iobuffer->start;
 
-                return BR_NoError;
+                return IOBufferIteratorError_NoError;
         };
 
-        struct BufferRange range = {
+        IOBufferIterator iobuffer = {
             &stream->state.utf8_output_block[0],
             &stream->state.utf8_output_block[0],
             &stream->state.utf8_output_block[0],
-            BR_NoError,
+            IOBufferIteratorError_NoError,
             next,
         };
 
-        next(&range);
-
-        return range;
+        refill_iobuffer(&iobuffer);
+        return iobuffer;
 }
 
 struct MessageBeingParsed {
@@ -483,37 +483,38 @@ ZWEI_API ACCEPT_MIME_MESSAGE(accept_mime_message)
         if (must_apply_macroman_workaround) {
                 trace_print("applying MacRoman workaround");
 
-                struct BufferRange message_range_memory;
-                struct BufferRange *message_range = &message_range_memory;
-                stream_on_memory(message_range,
+                IOBufferIterator message_iobuffer_memory;
+                IOBufferIterator *message_iobuffer = &message_iobuffer_memory;
+                stream_on_memory(message_iobuffer,
                                  const_cast<uint8_t *>(full_message),
                                  full_message_end - full_message);
 
-                /* wrap message_range into a macroman decoder range */
-                struct BufferRange *message_decoder =
+                /* macroman decoder setup */
+                IOBufferIterator *message_decoder =
                     push_pointer_rvalue(message_arena, message_decoder);
                 *message_decoder =
-                    macroman_workaround_stream(message_range, message_arena);
+                    macroman_workaround_stream(message_iobuffer, message_arena);
 
                 // @id cfec80a4708df2e90e45023f0d87af7f4eb54a46
                 uint8_t *decoded_message =
                     (uint8_t *)push_bytes(message_arena, 0);
                 uint8_t *decoded_message_end = decoded_message;
 
-                while (message_range->error == BR_NoError) {
+                while (message_iobuffer->error ==
+                       IOBufferIteratorError_NoError) {
                         zw_assert(decoded_message_end ==
                                       push_bytes(message_arena, 0),
                                   "non contiguous");
                         decoded_message_end = algos::copy(
-                            message_range->start, message_range->end,
+                            message_iobuffer->start, message_iobuffer->end,
                             (uint8_t *)push_bytes(message_arena,
-                                                  message_range->end -
-                                                      message_range->start));
-
-                        message_range->next(message_range);
+                                                  message_iobuffer->end -
+                                                      message_iobuffer->start));
+                        refill_iobuffer(message_iobuffer);
                 }
 
-                if (message_range->error != BR_ReadPastEnd) {
+                if (message_iobuffer->error !=
+                    IOBufferIteratorError_ReadPastEnd) {
                         error_print("unknown I/O error while parsing message");
                         return 1;
                 }

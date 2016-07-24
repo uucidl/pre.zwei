@@ -1,9 +1,9 @@
-// for when you want to write your own BufferRange implementations
+// for when you want to write your own IOBufferIterator implementations
 
 #pragma once
 
-zw_internal inline enum BufferRangeErrorCode
-next_zeros(struct BufferRange *range)
+zw_internal inline enum IOBufferIteratorError
+fill_zeros(IOBufferIterator *range)
 {
         zw_local_persist uint8_t const zeros[256] = {0};
 
@@ -14,11 +14,16 @@ next_zeros(struct BufferRange *range)
         return range->error;
 }
 
-zw_internal inline enum BufferRangeErrorCode
-fail(struct BufferRange *range, enum BufferRangeErrorCode error)
+zw_internal inline enum IOBufferIteratorError
+fail(IOBufferIterator *range, enum IOBufferIteratorError error)
 {
         range->error = error;
-        range->next = next_zeros;
+        range->fill_next = fill_zeros;
 
-        return range->next(range);
+        return range->fill_next(range);
+}
+
+zw_internal inline IOBufferIteratorError refill_iobuffer(IOBufferIterator *x)
+{
+        return x->fill_next(x);
 }

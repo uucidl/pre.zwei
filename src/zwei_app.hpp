@@ -20,7 +20,7 @@ struct Platform {
         SPDR_Context *spdr; // tracing services
 };
 
-struct BufferRange;
+struct IOBufferIterator;
 struct ZoeMailStoreFile;
 
 #define INIT_APP(name) void name(Platform platform, int flags)

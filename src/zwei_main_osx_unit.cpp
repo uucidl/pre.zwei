@@ -45,7 +45,7 @@ struct Sha1 {
         uint8_t digest[20];
 };
 
-MayFail<Sha1> sha1(struct BufferRange *range)
+MayFail<Sha1> sha1(IOBufferIterator *iobuffer)
 {
         using Result = MayFail<Sha1>;
         Sha1 result;
@@ -59,18 +59,19 @@ MayFail<Sha1> sha1(struct BufferRange *range)
         CC_SHA1_CTX ctx;
         zw_assert(1 == CC_SHA1_Init(&ctx), "CC_SHA1_Init");
 
-        while (range->error == BR_NoError) {
-                while (range->cursor < range->end) {
-                        auto size = chunk_size(range->end - range->cursor);
-                        zw_assert(1 ==
-                                      CC_SHA1_Update(&ctx, range->cursor, size),
-                                  "CC_SHA1_Update");
-                        range->cursor += size;
+        while (iobuffer->error == IOBufferIteratorError_NoError) {
+                while (iobuffer->cursor < iobuffer->end) {
+                        auto size =
+                            chunk_size(iobuffer->end - iobuffer->cursor);
+                        zw_assert(
+                            1 == CC_SHA1_Update(&ctx, iobuffer->cursor, size),
+                            "CC_SHA1_Update");
+                        iobuffer->cursor += size;
                 }
-                range->next(range);
+                refill_iobuffer(iobuffer);
         }
 
-        if (range->error == BR_ReadPastEnd) {
+        if (iobuffer->error == IOBufferIteratorError_ReadPastEnd) {
                 zw_assert(1 == CC_SHA1_Final(result.digest, &ctx),
                           "CC_SHA1_Final");
         } else {
@@ -778,10 +779,10 @@ struct Zwei {
         ParseZoeMailstoreFilenameFn *parse_zoe_mailstore_filename;
 };
 
-void inputstream_finish(struct BufferRange *range)
+void inputstream_finish(IOBufferIterator *iobuffer)
 {
-        while (range->error == BR_NoError) {
-                range->next(range);
+        while (iobuffer->error == IOBufferIteratorError_NoError) {
+                refill_iobuffer(iobuffer);
         }
 }
 
@@ -796,7 +797,7 @@ zw_internal void process_message(Zwei const &zwei,
 {
         SPDR_SCOPE1(global_spdr, "app", "process_message",
                     SPDR_STR("filepath", filepath));
-        struct BufferRange file_content;
+        IOBufferIterator file_content;
         stream_on_memory(&file_content, const_cast<uint8_t *>(full_message),
                          full_message_last - full_message);
         auto sha1_result = sha1(&file_content);

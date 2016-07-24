@@ -2,19 +2,17 @@
 #include "zwei_inlines.hpp"
 #include "zwei_iobuffer_inlines.hpp"
 
-zw_internal enum BufferRangeErrorCode
-next_on_memory_buffer(struct BufferRange *range)
+zw_internal enum IOBufferIteratorError
+fill_next_on_memory_buffer(IOBufferIterator *range)
 {
-        return fail(range, BR_ReadPastEnd);
+        return fail(range, IOBufferIteratorError_ReadPastEnd);
 }
 
-void stream_on_memory(struct BufferRange *range,
-                      uint8_t *mem,
-                      size_t const size)
+void stream_on_memory(IOBufferIterator *range, uint8_t *mem, size_t const size)
 {
         range->start = mem;
         range->cursor = mem;
         range->end = range->start + size;
-        range->error = BR_NoError;
-        range->next = next_on_memory_buffer;
+        range->error = IOBufferIteratorError_NoError;
+        range->fill_next = fill_next_on_memory_buffer;
 }
