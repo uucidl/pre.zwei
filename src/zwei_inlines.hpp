@@ -23,22 +23,22 @@
 #define zw_debugbreak() __debugbreak()
 #endif
 
-#define zw_assert(condition, message)                                          \
+#define zw_assert(__condition, __message)                                      \
         do {                                                                   \
-                if (!(condition)) {                                            \
-                        fputs(message, stderr);                                \
+                if (!(__condition)) {                                          \
+                        fputs(__message, stderr);                              \
                         fputs("\n", stderr);                                   \
                         zw_debugbreak();                                       \
                 }                                                              \
         } while (0)
 
-#define fatal_if(__condition, message)                                         \
-        fatal_ifnot(!(__condition), "fatal error: " message)
+#define fatal_if(__condition, __message)                                       \
+        fatal_ifnot(!(__condition), "fatal error: " __message)
 
-#define fatal_ifnot(__condition, message)                                      \
+#define fatal_ifnot(__condition, __message)                                    \
         {                                                                      \
                 auto fatal_ifnot_cond = __condition;                           \
-                zw_assert(fatal_ifnot_cond, "fatal error: " message);          \
+                zw_assert(fatal_ifnot_cond, "fatal error: " __message);        \
                 if (!(fatal_ifnot_cond))                                       \
                         std::abort();                                          \
         }
