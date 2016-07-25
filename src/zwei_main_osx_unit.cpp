@@ -887,7 +887,7 @@ print_processed_message(ProcessedMessage const &processed_message,
             '0', '1', '2', '3', '4', '5', '6', '7',
             '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
         };
-        for (size_t byteIndex = 0; byteIndex < NCOUNT(sha1_value.digest);
+        for (size_t byteIndex = 0; byteIndex < countof(sha1_value.digest);
              byteIndex++) {
                 uint8_t const byte = sha1_value.digest[byteIndex];
                 push_back_formatted(traceg, "%c%c", byteToHexChar[byte >> 4],
@@ -916,7 +916,7 @@ print_processed_message(ProcessedMessage const &processed_message,
 
                 push_back_cstr(traceg, "UUID");
                 push_back_cstr(traceg, "\t");
-                for (size_t i = 0; i < NCOUNT(processed_message.zoefile.uuid);
+                for (size_t i = 0; i < countof(processed_message.zoefile.uuid);
                      i++) {
                         push_back_formatted(traceg, "%x",
                                             processed_message.zoefile.uuid[i]);
@@ -1180,7 +1180,7 @@ int main(int argc, char **argv)
                 };
 
                 Task tasks[8 * 2];
-                size_t tasks_capacity = NCOUNT(tasks);
+                size_t tasks_capacity = countof(tasks);
                 size_t tasks_count = 0;
                 for (auto &task : tasks) {
                         // TODO(nicolas): might not be enough if you

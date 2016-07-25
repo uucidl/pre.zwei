@@ -11,7 +11,7 @@ inline void sync_print(int filedesc, char const *message, size_t message_size)
         struct iovec iovecs[] = {
             {(void *)message, message_size}, {(void *)"\n", 1},
         };
-        writev(filedesc, iovecs, NCOUNT(iovecs));
+        writev(filedesc, iovecs, countof(iovecs));
 }
 
 extern zw_global SPDR_Context *global_spdr;

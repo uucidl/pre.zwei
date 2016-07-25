@@ -57,7 +57,7 @@ static char byte_to_hex[] = {
 
 void print_result_line(FileShaWork const &task)
 {
-        for (size_t byteIndex = 0; byteIndex < NCOUNT(task.digest);
+        for (size_t byteIndex = 0; byteIndex < countof(task.digest);
              byteIndex++) {
                 uint8_t const byte = task.digest[byteIndex];
                 printf("%c%c", byte_to_hex[byte >> 4], byte_to_hex[byte & 0xF]);

@@ -45,7 +45,8 @@
 
 #define ZWEI_UNIT_TESTS (ZWEI_SLOW && ZWEI_INTERNAL)
 
-#define NCOUNT(array) (sizeof array) / (sizeof array[0])
+// AKA(NCOUNT) AKA(NELEMS)
+template <typename T, size_t N> constexpr size_t countof(T (&)[N]) { return N; }
 
 #define TOKEN_PASTE_inner(x, y) x##y
 #define TOKEN_PASTE(x, y) TOKEN_PASTE_inner(x, y)
