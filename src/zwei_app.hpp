@@ -1,7 +1,7 @@
 #pragma once
 
 #if !defined(ZWEI_API_DLL)
-#    define ZWEI_API_DLL
+#define ZWEI_API_DLL
 #endif
 #define ZWEI_API extern "C" ZWEI_API_DLL
 

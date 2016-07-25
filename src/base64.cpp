@@ -8,8 +8,8 @@
 
 #include "base64.hpp"
 
-#include "hammer_utils.hpp"
 #include "hammer.hpp"
+#include "hammer_utils.hpp"
 
 // helper: return the numeric value of a parsed base64 digit
 zw_internal uint8_t bsfdig_value(const HParsedToken *p)

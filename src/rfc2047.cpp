@@ -7,8 +7,8 @@
    [[https://tools.ietf.org/html/rfc2047.txt]]
  */
 
-#include "base64.hpp"
 #include "rfc2047.hpp"
+#include "base64.hpp"
 
 #include "hammer_utils.hpp"
 #include "mime_types.hpp"
@@ -46,16 +46,16 @@ Charset parse_charset_name_n(uint8_t const *charset_name,
         using algos::begin;
         using algos::end;
 
-        auto entry_if_equal =
-            [&no_mismatch, charset_name, charset_name_size](const A *x) {
-                    if (no_mismatch == algos::find_mismatch_n_m(
-                                           x->name, x->name_size, charset_name,
-                                           charset_name_size)) {
-                            return x->charset;
-                    }
+        auto entry_if_equal = [&no_mismatch, charset_name,
+                               charset_name_size](const A *x) {
+                if (no_mismatch ==
+                    algos::find_mismatch_n_m(x->name, x->name_size,
+                                             charset_name, charset_name_size)) {
+                        return x->charset;
+                }
 
-                    return Charset_UNSUPPORTED;
-            };
+                return Charset_UNSUPPORTED;
+        };
 
         return algos::reduce(begin(assoc_table), end(assoc_table),
                              algos::maximum<Charset>(), entry_if_equal,
@@ -208,7 +208,7 @@ const RFC2047 &make_rfc2047(const RFC5234 &rfc5234,
                 HParseResult *result =
                     h_parse(encoded_word, data, sizeof data - 1);
                 size_t size = rfc2047_get_encoded_word_size(result->ast);
-                uint8_t str[1 + size];
+                uint8_t *str = reinterpret_cast<uint8_t *>(alloca(1 + size));
                 char *str_last =
                     (char *)rfc2047_copy_encoded_word(result->ast, str);
                 if (cstr_terminate(str_last, (char *)str + 1 + size)) {

@@ -690,12 +690,11 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
                                             resent_sender, resent_to, resent_cc,
                                             resent_bcc, resent_msg_id)),
                               h_many(optional_field)))),
-                   h_many(UH_ANY(orig_date, from, sender, reply_to, to, cc, bcc,
-                                 message_id, in_reply_to, references, subject,
-                                 comments, keywords,
-                                 rfc2045.content_transfer_encoding_header_field,
-                                 rfc2045.content_type_header_field,
-                                 optional_field))));
+                   h_many(UH_ANY(
+                       orig_date, from, sender, reply_to, to, cc, bcc,
+                       message_id, in_reply_to, references, subject, comments,
+                       keywords, rfc2045.content_transfer_encoding_header_field,
+                       rfc2045.content_type_header_field, optional_field))));
 
         // ## 3.5.  Overall Message Syntax
 

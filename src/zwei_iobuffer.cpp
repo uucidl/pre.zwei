@@ -1,5 +1,5 @@
-#include "zwei_inlines.hpp"
 #include "zwei_iobuffer.hpp"
+#include "zwei_inlines.hpp"
 #include "zwei_iobuffer_inlines.hpp"
 
 zw_internal enum BufferRangeErrorCode

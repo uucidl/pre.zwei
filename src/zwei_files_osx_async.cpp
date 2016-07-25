@@ -178,13 +178,13 @@ void wait_for_available_files(FileLoader &file_loader)
 
         SPDR_BEGIN(global_spdr, "file_loader", "submitting");
 
-        auto next_pending_entry =
-            [](FileLoaderEntry *first, FileLoaderEntry *last) {
-                    return algos::find_if(
-                        first, last, [](FileLoaderEntry const &entry) {
-                                return entry.state == FileLoaderEntry::PENDING;
-                        });
-            };
+        auto next_pending_entry = [](FileLoaderEntry *first,
+                                     FileLoaderEntry *last) {
+                return algos::find_if(
+                    first, last, [](FileLoaderEntry const &entry) {
+                            return entry.state == FileLoaderEntry::PENDING;
+                    });
+        };
 
         auto const entries_last =
             file_loader.entries + file_loader.entries_count;

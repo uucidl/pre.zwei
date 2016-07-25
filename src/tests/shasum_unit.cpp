@@ -12,8 +12,8 @@
   per byte. (i.e zwei itself)
  */
 
-#include "../zwei_inlines.hpp"
 #include "../zwei_files.hpp"
+#include "../zwei_inlines.hpp"
 
 #include "../../modules/uu.spdr/include/spdr/spdr.hh"
 
@@ -51,22 +51,8 @@ void shasum_task(void *tasks_ptr, size_t task_index)
 }
 
 static char byte_to_hex[] = {
-    '0',
-    '1',
-    '2',
-    '3',
-    '4',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9',
-    'a',
-    'b',
-    'c',
-    'd',
-    'e',
-    'f',
+    '0', '1', '2', '3', '4', '5', '6', '7',
+    '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
 };
 
 void print_result_line(FileShaWork const &task)

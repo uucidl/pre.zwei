@@ -122,7 +122,7 @@ void text_output_group_print(int filedesc, TextOutputGroup const &group)
         // automatically flush the buffer to get to the next buffer as
         // things get copied to it, then we could use a copy
         // algorithm.
-        auto next_iovec = [filedesc, &iovecs, &iovecs_n]() -> iovec &{
+        auto next_iovec = [filedesc, &iovecs, &iovecs_n]() -> iovec & {
                 if (iovecs_n >= IOVECS_CAPACITY) {
                         writev(filedesc, iovecs, iovecs_n);
                         iovecs_n = 0;

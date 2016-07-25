@@ -72,17 +72,17 @@ template <typename T> T &sink(T *x) { return *x; }
 // Array types
 namespace algos
 {
-template <typename T, size_t N> struct SequenceConcept<T(&)[N]> {
+template <typename T, size_t N> struct SequenceConcept<T (&)[N]> {
         using iterator_type = T *;
         using const_iterator_type = T const *;
 };
 
-template <typename T, size_t N> constexpr T *begin(T(&array)[N])
+template <typename T, size_t N> constexpr T *begin(T (&array)[N])
 {
         return array;
 }
 
-template <typename T, size_t N> constexpr T *end(T(&array)[N])
+template <typename T, size_t N> constexpr T *end(T (&array)[N])
 {
         return array + N;
 }

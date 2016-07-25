@@ -80,8 +80,8 @@ MayFail<Sha1> sha1(struct BufferRange *range)
         return result;
 }
 
-#include <sys/vnode.h> // for enum vtype
 #include <mach/mach.h> // for vm_allocate
+#include <sys/vnode.h> // for enum vtype
 
 struct FileList {
         size_t count;
@@ -92,8 +92,8 @@ struct FileList {
         } * attributes;
 };
 
-#include <sys/attr.h>
 #include <cerrno>
+#include <sys/attr.h>
 
 /**
    Query a directory and its sub-directories for all their files,
@@ -205,14 +205,10 @@ directory_query_all_files(char const *root_dir_path,
 
         // what we are asking getattrlistbulk
         struct attrlist query_attributes = {
-            ATTR_BIT_MAP_COUNT,
-            0,
+            ATTR_BIT_MAP_COUNT, 0,
             (ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_ERROR | ATTR_CMN_NAME |
              ATTR_CMN_OBJTYPE | ATTR_CMN_OBJTAG),
-            0,
-            0,
-            ATTR_FILE_TOTALSIZE | ATTR_FILE_IOBLOCKSIZE,
-            0,
+            0, 0, ATTR_FILE_TOTALSIZE | ATTR_FILE_IOBLOCKSIZE, 0,
         };
 
         uint64_t query_options =
@@ -888,22 +884,8 @@ print_processed_message(ProcessedMessage const &processed_message,
 
         auto sha1_value = processed_message.sha1;
         char byteToHexChar[] = {
-            '0',
-            '1',
-            '2',
-            '3',
-            '4',
-            '5',
-            '6',
-            '7',
-            '8',
-            '9',
-            'a',
-            'b',
-            'c',
-            'd',
-            'e',
-            'f',
+            '0', '1', '2', '3', '4', '5', '6', '7',
+            '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
         };
         for (size_t byteIndex = 0; byteIndex < NCOUNT(sha1_value.digest);
              byteIndex++) {
@@ -1062,11 +1044,12 @@ int main(int argc, char **argv)
                                 trace_print("reloaded library!");
                         }
 
-#define GRAB_FN_SYM(lvalue, symname, dlhandle) {                                 \
-                                lvalue = reinterpret_cast<decltype(lvalue)>(\
-                                                                           dlsym(dlhandle, symname)); \
-                                                        zw_assert(lvalue, "expected symbol " symname); \
-                        }
+#define GRAB_FN_SYM(lvalue, symname, dlhandle)                                 \
+        {                                                                      \
+                lvalue = reinterpret_cast<decltype(lvalue)>(                   \
+                    dlsym(dlhandle, symname));                                 \
+                zw_assert(lvalue, "expected symbol " symname);                 \
+        }
 
                         InitAppFn *init_app;
                         GRAB_FN_SYM(init_app, "init_app", lib->dlhandle);
@@ -1344,17 +1327,18 @@ int main(int argc, char **argv)
                 trace(tog);
         }
         int fd = open(trace_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
-        spdr_report(
-            global_spdr,
-            SPDR_CHROME_REPORT, [](char const *string, void *user_data) {
-                    char buffer[4096];
-                    MemoryArena stack = memory_arena(buffer, sizeof buffer);
-                    int *fd_ptr = static_cast<int *>(user_data);
-                    auto tog = TextOutputGroup{};
-                    allocate(tog, &stack, 64);
-                    push_back_cstr(tog, string);
-                    text_output_group_print(*fd_ptr, tog);
-            }, &fd);
+        spdr_report(global_spdr, SPDR_CHROME_REPORT,
+                    [](char const *string, void *user_data) {
+                            char buffer[4096];
+                            MemoryArena stack =
+                                memory_arena(buffer, sizeof buffer);
+                            int *fd_ptr = static_cast<int *>(user_data);
+                            auto tog = TextOutputGroup{};
+                            allocate(tog, &stack, 64);
+                            push_back_cstr(tog, string);
+                            text_output_group_print(*fd_ptr, tog);
+                    },
+                    &fd);
         close(fd);
         spdr_deinit(&global_spdr);
 
