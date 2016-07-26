@@ -59,6 +59,7 @@ create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size)
         file_loader.transient_arena =
             push_sub_arena(file_loader.arena, MEGABYTES(1));
         file_loader.entries_capacity = maximum_file_count;
+        file_loader.entries_count = 0;
         file_loader.entries =
             push_array_rvalue(&file_loader.arena, file_loader.entries,
                               file_loader.entries_capacity);
