@@ -25,6 +25,7 @@ zw_internal void test_sha1()
         zw_assert(0 == memcmp(test_digest, test_abc_digest, 20),
                   "sha1(abc) failed");
 
+        // TODO(nicolas): try with 3767 too
         uint8_t test_message3[3768] = {};
         uint8_t test_message3_digest[20] = {
             0x83, 0xa6, 0x7b, 0xa7, 0x77, 0xf4, 0x7,  0xf8, 0x21, 0xb4,
@@ -38,6 +39,7 @@ zw_internal void test_sha1()
 int main()
 {
         test_sha1();
+        // TODO(nicolas): should run the algos' tests as well here
         return 0;
 }
 #include "../secure_hash_standard.cpp"

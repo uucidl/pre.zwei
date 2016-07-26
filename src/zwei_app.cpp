@@ -464,6 +464,7 @@ zw_internal void fill_message_summary(MessageSummary *message_summary,
         algos::traverse_each(rfc5322_top(ast), std::cref(collect));
 }
 
+// TODO(nicolas): rename to get_message_summary
 ZWEI_API ACCEPT_MIME_MESSAGE(accept_mime_message)
 {
         uint8_t const *full_message = data_first;
