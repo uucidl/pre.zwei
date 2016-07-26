@@ -27,3 +27,12 @@ zw_internal inline IOBufferIteratorError refill_iobuffer(IOBufferIterator *x)
 {
         return x->fill_next(x);
 }
+
+zw_internal inline IOBufferIteratorError
+finish_iobuffer(IOBufferIterator *iobuffer)
+{
+        while (iobuffer->error == IOBufferIteratorError_NoError) {
+                refill_iobuffer(iobuffer);
+        }
+        return iobuffer->error;
+}

@@ -779,13 +779,6 @@ struct Zwei {
         ParseZoeMailstoreFilenameFn *parse_zoe_mailstore_filename;
 };
 
-void inputstream_finish(IOBufferIterator *iobuffer)
-{
-        while (iobuffer->error == IOBufferIteratorError_NoError) {
-                refill_iobuffer(iobuffer);
-        }
-}
-
 zw_internal void process_message(Zwei const &zwei,
                                  char const *filename,
                                  char const *filepath,
@@ -801,7 +794,7 @@ zw_internal void process_message(Zwei const &zwei,
         stream_on_memory(&file_content, const_cast<uint8_t *>(full_message),
                          full_message_last - full_message);
         auto sha1_result = sha1(&file_content);
-        inputstream_finish(&file_content);
+        finish_iobuffer(&file_content);
 
         if (!sha1_result) {
                 return;
