@@ -20,7 +20,7 @@ enum IOBufferIteratorError {
 
 struct IOBufferIterator;
 
-extern void
+zw_internal void
 stream_on_memory(IOBufferIterator *range, uint8_t *mem, size_t const size);
 
 // NOTE(nicolas) a IOBufferIterator shows the two aspect of processing data
