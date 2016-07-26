@@ -40,7 +40,7 @@ sha1(uint8_t const *bytes, size_t const bytes_size, uint8_t result[20])
         size_t leftover_byte_size =
             (BLOCK_SIZE - (bytes_size % BLOCK_SIZE)) % BLOCK_SIZE;
         size_t padded_byte_size = bytes_size + leftover_byte_size +
-                                  (leftover_byte_size < 8 ? BLOCK_SIZE : 0);
+                                  (leftover_byte_size <= 8 ? BLOCK_SIZE : 0);
         size_t first_padding_byte_index = bytes_size;
         size_t total_size_destination_index = padded_byte_size - 8;
         zw_assert(bytes_size <= padded_byte_size, "");

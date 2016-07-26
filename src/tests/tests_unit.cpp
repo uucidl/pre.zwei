@@ -24,6 +24,15 @@ zw_internal void test_sha1()
         sha1(test_abc, 3, test_digest);
         zw_assert(0 == memcmp(test_digest, test_abc_digest, 20),
                   "sha1(abc) failed");
+
+        uint8_t test_message3[3768] = {};
+        uint8_t test_message3_digest[20] = {
+            0x83, 0xa6, 0x7b, 0xa7, 0x77, 0xf4, 0x7,  0xf8, 0x21, 0xb4,
+            0x4b, 0xc1, 0xbe, 0x67, 0x6c, 0xf0, 0xf8, 0x25, 0xe8, 0x6,
+        };
+        sha1(test_message3, 3768, test_digest);
+        zw_assert(0 == memcmp(test_digest, test_message3_digest, 20),
+                  "sha1(0 x 3768) failed");
 }
 
 int main()
@@ -31,5 +40,4 @@ int main()
         test_sha1();
         return 0;
 }
-
 #include "../secure_hash_standard.cpp"
