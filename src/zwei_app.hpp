@@ -16,8 +16,25 @@ enum ZweiAppFlags {
         ZWEI_DEBUG_MODE_FLAG = 1 << 0,
 };
 
+struct PlatformFileList {
+        size_t count;
+        char const **paths;
+        char const **filenames;
+        struct {
+                uint64_t size;
+        } * attributes;
+};
+
+#define PLATFORM_QUERY_ALL_FILES(name)                                         \
+        struct PlatformFileList *name(char const *root_dir_path,               \
+                                      bool trace_on, MemoryArena work_arena,   \
+                                      MemoryArena *result_arena)
+typedef PLATFORM_QUERY_ALL_FILES((*PlatformQueryAllFilesFn));
+// TODO(nicolas) use pattern above (*name) for all function pointer types
+
 struct Platform {
         SPDR_Context *spdr; // tracing services
+        PlatformQueryAllFilesFn query_all_files;
 };
 
 struct IOBufferIterator;

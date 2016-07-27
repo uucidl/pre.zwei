@@ -41,15 +41,6 @@ zw_global bool global_can_ignore_file = false;
 #include <mach/mach.h> // for vm_allocate
 #include <sys/vnode.h> // for enum vtype
 
-struct FileList {
-        size_t count;
-        char const **paths;
-        char const **filenames;
-        struct {
-                uint64_t size;
-        } * attributes;
-};
-
 #include <cerrno>
 #include <sys/attr.h>
 
@@ -58,12 +49,10 @@ struct FileList {
    sorted to maximize throughput when streaming their content.
 
    @return null or a valid file list allocated in the given arena
+
+   // TODO(nicolas): this seems like it should be part of a platform API
 */
-zw_internal struct FileList *
-directory_query_all_files(char const *root_dir_path,
-                          bool trace_on,
-                          MemoryArena work_arena,
-                          MemoryArena *result_arena)
+zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
 {
         // NOTE(nicolas)
         //
@@ -114,6 +103,11 @@ directory_query_all_files(char const *root_dir_path,
                 return result;
         };
 
+        auto discard_entry = [&state](FSEntry *entry) {
+                entry->next = state->free_entry;
+                state->free_entry = entry;
+        };
+
         auto push_directory = [&state, push_entry]() {
                 FSEntry *result = push_entry();
 
@@ -140,11 +134,6 @@ directory_query_all_files(char const *root_dir_path,
                 state->files = result;
 
                 return result;
-        };
-
-        auto discard_entry = [&state](FSEntry *entry) {
-                entry->next = state->free_entry;
-                state->free_entry = entry;
         };
 
         FSEntry *entry = push_directory();
@@ -412,7 +401,8 @@ directory_query_all_files(char const *root_dir_path,
                 }
         }
 
-        zw_assert(state->directories == nullptr, "no more directories");
+        zw_assert(state->directories == nullptr,
+                  "we should visit all directories");
 
         size_t entry_array_count = 0;
         FSEntry *entry_array = nullptr;
@@ -527,7 +517,7 @@ directory_query_all_files(char const *root_dir_path,
         }
 
         // construct file list from array
-        FileList *result = push_pointer_rvalue(result_arena, result);
+        PlatformFileList *result = push_pointer_rvalue(result_arena, result);
         *result = {};
         result->count = entry_array_count;
 
@@ -747,7 +737,7 @@ int main(int argc, char **argv)
                 // .. but how much parallelism can a HDD/SDD/Raid
                 // device support?
 
-                struct FileList *all_files;
+                struct PlatformFileList *all_files;
                 {
                         MemoryArena dc_arena = push_sub_arena(
                             transient_arena, transient_storage_memory_size / 2);
