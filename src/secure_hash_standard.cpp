@@ -20,6 +20,9 @@ sha1(uint8_t const *bytes, size_t const bytes_size, uint8_t result[20])
                 return;
         }
 
+        // TODO(nicolas): can I simplify this algorithm/loop using a
+        // IOBufferIterator
+        // that auto-pads the content?
         enum { BLOCK_SIZE = 512 / 8,
         };
 
