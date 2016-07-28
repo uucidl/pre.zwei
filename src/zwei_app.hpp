@@ -30,7 +30,6 @@ struct PlatformFileList {
                                       bool trace_on, MemoryArena work_arena,   \
                                       MemoryArena *result_arena)
 typedef PLATFORM_QUERY_ALL_FILES((*PlatformQueryAllFilesFn));
-// TODO(nicolas) use pattern above (*name) for all function pointer types
 
 struct Platform {
         SPDR_Context *spdr; // tracing services
@@ -41,7 +40,7 @@ struct IOBufferIterator;
 struct ZoeMailStoreFile;
 
 #define INIT_APP(name) void name(Platform platform, int flags)
-typedef INIT_APP(InitAppFn);
+typedef INIT_APP((*InitAppFn));
 
 /**
    @return errorcode (!= 0) or a message summary in message_summary
@@ -51,8 +50,8 @@ typedef INIT_APP(InitAppFn);
                  ZoeMailStoreFile const *zoe_mailstore_file,                   \
                  MemoryArena *message_arena, MemoryArena *result_arena,        \
                  MessageSummary *message_summary)
-typedef ACCEPT_MIME_MESSAGE(AcceptMimeMessageFn);
+typedef ACCEPT_MIME_MESSAGE((*AcceptMimeMessageFn));
 
 #define PARSE_ZOE_MAILSTORE_FILENAME(name)                                     \
         int name(ZoeMailStoreFile *result, char const *filename)
-typedef PARSE_ZOE_MAILSTORE_FILENAME(ParseZoeMailstoreFilenameFn);
+typedef PARSE_ZOE_MAILSTORE_FILENAME((*ParseZoeMailstoreFilenameFn));

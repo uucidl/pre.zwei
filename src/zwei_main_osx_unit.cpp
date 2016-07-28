@@ -704,7 +704,7 @@ int main(int argc, char **argv)
                 zw_assert(lvalue, "expected symbol " symname);                 \
         }
 
-                        InitAppFn *init_app;
+                        InitAppFn init_app;
                         GRAB_FN_SYM(init_app, "init_app", lib->dlhandle);
                         GRAB_FN_SYM(zwei.accept_mime_message,
                                     "accept_mime_message", lib->dlhandle);

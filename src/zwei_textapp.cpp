@@ -21,8 +21,8 @@ struct ProcessedMessage {
 };
 
 struct Zwei {
-        AcceptMimeMessageFn *accept_mime_message;
-        ParseZoeMailstoreFilenameFn *parse_zoe_mailstore_filename;
+        AcceptMimeMessageFn accept_mime_message;
+        ParseZoeMailstoreFilenameFn parse_zoe_mailstore_filename;
 };
 
 zw_internal void process_message(Zwei const &zwei,
