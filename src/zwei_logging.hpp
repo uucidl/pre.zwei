@@ -1,7 +1,9 @@
 #pragma once
 
 // TODO(nicolas): question and critique this notion of text output group.
-// What is the problem that it solves? Does it solve it well?
+// What is the problem that it solves? Does it solve it well? It seems
+// that it creates more useability problems than help. Most users of a
+// logging facility want a fire&forget facility.
 
 // TODO(nicolas): traces should feature a timestamp for
 // performance and auditing. i.e. the platform layer should
@@ -32,6 +34,7 @@ struct TextOutputGroup {
  *
  * Pushing back onto a full group will mark it as truncated.
  */
+// TODO(nicolas): give this more unique names
 void allocate(TextOutputGroup &group,
               MemoryArena *arena,
               size_t reference_size);

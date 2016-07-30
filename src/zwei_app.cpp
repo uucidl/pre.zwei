@@ -547,7 +547,7 @@ ZWEI_API ACCEPT_MIME_MESSAGE(accept_mime_message)
                 fill_message_summary(&message_parsed.message_summary,
                                      result->ast, result_arena);
                 message_parsed.message_summary.valid_rfc5322 =
-                    rfc5322_validate(result->ast);
+                    rfc5322_validate(result->ast, *message_arena);
                 message_parsed.content_state =
                     MessageBeingParsed::MESSAGE_SUMMARY;
 

@@ -1050,7 +1050,8 @@ zw_internal void rfc5322_print_ast(FILE *stream,
         fflush(stdout);
 }
 
-zw_internal bool rfc5322_validate(const HParsedToken *ast)
+zw_internal bool rfc5322_validate(const HParsedToken *ast,
+                                  MemoryArena work_arena)
 {
         // NOTE(nicolas): Some field validations (number of each,
         // depending on the conditions) i.e. sender must exist if
@@ -1090,25 +1091,29 @@ zw_internal bool rfc5322_validate(const HParsedToken *ast)
 
         algos::traverse_each(top, std::cref(collect));
 
+        // we'd want an unlimited extent textoutput here
+        TextOutputGroup out;
+        allocate(out, &work_arena, 1000);
         bool is_valid = true;
         for (const auto &static_limit : static_limits) {
                 auto count = flags.counts[static_limit.type];
                 if (count < static_limit.min) {
                         is_valid = false;
-                        fprintf(
-                            stdout, "ERROR %s field count %d < min: %d\n",
+                        push_back_formatted(
+                            out, "ERROR %s field count %d < min: %d\n",
                             rfc5322_token_types[static_limit.type].name_literal,
                             count, static_limit.min);
+                        trace(out);
                 }
                 if (count > static_limit.max) {
                         is_valid = false;
-                        fprintf(
-                            stdout, "ERROR %s field count %d > max: %d\n",
+                        push_back_formatted(
+                            out, "ERROR %s field count %d > max: %d\n",
                             rfc5322_token_types[static_limit.type].name_literal,
                             count, static_limit.max);
+                        trace(out);
                 }
         }
-        fflush(stdout);
 
         // TODO(nicolas): by returning a single boolean we are
         // dismissing a lot of additional information that we have
