@@ -706,8 +706,8 @@ int main(int argc, char **argv)
 
                         InitAppFn init_app;
                         GRAB_FN_SYM(init_app, "init_app", lib->dlhandle);
-                        GRAB_FN_SYM(zwei.accept_mime_message,
-                                    "accept_mime_message", lib->dlhandle);
+                        GRAB_FN_SYM(zwei.get_message_summary,
+                                    "get_message_summary", lib->dlhandle);
                         GRAB_FN_SYM(zwei.parse_zoe_mailstore_filename,
                                     "parse_zoe_mailstore_filename",
                                     lib->dlhandle);

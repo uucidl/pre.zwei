@@ -21,7 +21,7 @@ struct ProcessedMessage {
 };
 
 struct Zwei {
-        AcceptMimeMessageFn accept_mime_message;
+        GetMessageSummaryFn get_message_summary;
         ParseZoeMailstoreFilenameFn parse_zoe_mailstore_filename;
 };
 
@@ -233,13 +233,13 @@ zw_internal void process_message(Zwei const &zwei,
                                            size_t(last - first)};
         }
 
-        SPDR_BEGIN(global_spdr, "app", "accept_mime_message");
-        auto errorcode = zwei.accept_mime_message(
+        SPDR_BEGIN(global_spdr, "app", "get_message_summary");
+        auto errorcode = zwei.get_message_summary(
             full_message, full_message_last,
             zoefile_errorcode == 0 ? &destination.zoefile : nullptr,
             &transient_arena, &result_arena, &destination.message_summary);
         zw_assert(errorcode == 0, "unexpected errorcode");
-        SPDR_END(global_spdr, "app", "accept_mime_message");
+        SPDR_END(global_spdr, "app", "get_message_summary");
 
         destination.success = true;
 }

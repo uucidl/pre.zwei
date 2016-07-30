@@ -45,12 +45,12 @@ typedef INIT_APP((*InitAppFn));
 /**
    @return errorcode (!= 0) or a message summary in message_summary
  */
-#define ACCEPT_MIME_MESSAGE(name)                                              \
+#define GET_MESSAGE_SUMMARY(name)                                              \
         int name(uint8_t const *data_first, uint8_t const *data_last,          \
                  ZoeMailStoreFile const *zoe_mailstore_file,                   \
                  MemoryArena *message_arena, MemoryArena *result_arena,        \
                  MessageSummary *message_summary)
-typedef ACCEPT_MIME_MESSAGE((*AcceptMimeMessageFn));
+typedef GET_MESSAGE_SUMMARY((*GetMessageSummaryFn));
 
 #define PARSE_ZOE_MAILSTORE_FILENAME(name)                                     \
         int name(ZoeMailStoreFile *result, char const *filename)
