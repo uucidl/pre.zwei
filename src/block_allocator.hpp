@@ -1,3 +1,7 @@
+#pragma once
+// An allocator dividing a region of memory in blocks that can be split and
+// joined as needed
+
 #include <cmath>  // for std::ceil
 #include <thread> // for std::mutex
 
@@ -131,13 +135,14 @@ zw_internal void free_block(MemoryBlockAllocator &allocator,
                             MemoryBlockListHeader *block)
 {
         auto free_list_lock = make_unique_lock(allocator.free_list_mutex);
-        MemoryBlockListHeader *sentinel = &allocator.free_list_sentinel;
+        MemoryBlockListHeader *free_blocks_sentinel =
+            &allocator.free_list_sentinel;
 
         SPDR_BEGIN1(global_spdr, "allocator", "free_list::find_adjacent_block",
                     SPDR_INT("offset", int((uint8_t *)block - allocator.base)));
-        auto adjacent_prev = sentinel;
+        auto adjacent_prev = free_blocks_sentinel;
         auto adjacent = algos::find_if(
-            successor(sentinel), sentinel,
+            successor(free_blocks_sentinel), free_blocks_sentinel,
             [&adjacent_prev, block](MemoryBlockListHeader const &x) {
                     uint8_t *block_byte = (uint8_t *)block;
                     uint8_t *x_byte = (uint8_t *)&x;
@@ -152,7 +157,7 @@ zw_internal void free_block(MemoryBlockAllocator &allocator,
             });
         SPDR_END(global_spdr, "allocator", "free_list::find_adjacent_block");
 
-        if (adjacent != sentinel) {
+        if (adjacent != free_blocks_sentinel) {
                 SPDR_EVENT1(global_spdr, "allocator", "free_list::merge_block",
                             SPDR_INT("size", int(block->total_size)));
                 if (block > adjacent) {
@@ -165,9 +170,9 @@ zw_internal void free_block(MemoryBlockAllocator &allocator,
         } else {
                 SPDR_EVENT1(global_spdr, "allocator", "free_list::add_block",
                             SPDR_INT("size", int(block->total_size)));
-                auto first = successor(sentinel);
+                auto first = successor(free_blocks_sentinel);
 
-                set_successor(sentinel, block);
+                set_successor(free_blocks_sentinel, block);
                 set_successor(block, first);
         }
 }

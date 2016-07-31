@@ -1,5 +1,6 @@
-#include "hammer.hpp"
 #include "hammer_iterators.hpp"
+
+#include "hammer.hpp"
 
 HParsedToken const **begin(HParsedToken const *p)
 {
