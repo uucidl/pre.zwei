@@ -1,5 +1,6 @@
 #include "../zwei_inlines.hpp"
 
+#include "../algos_tests.hpp"
 #include "../secure_hash_standard.hpp"
 
 #include <cstring>
@@ -36,10 +37,16 @@ zw_internal void test_sha1()
                   "sha1(0 x 3768) failed");
 }
 
+extern void test_bits(void);
+
 int main()
 {
         test_sha1();
-        // TODO(nicolas): should run the algos' tests as well here
+        test_bits();
+        algos::run_tests();
         return 0;
 }
+
+#include "../algos_tests.cpp"
 #include "../secure_hash_standard.cpp"
+#include "../test_bits.cpp"

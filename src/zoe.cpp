@@ -21,7 +21,7 @@ HAMMER_ACTION(act_uuid)
         size_t bytes_size = 16;
         uint8_t *bytes = (uint8_t *)h_arena_malloc(p->arena, bytes_size);
 
-        algos::apply_copy(first, last, NibbleBigEndianOutputIterator(bytes, 0),
+        algos::apply_copy(first, last, NibbleBigEndianOutputIterator(bytes),
                           [](const HParsedToken *token) {
                                   // TODO(nicolas): see better version in
                                   // rfc2045.cpp
