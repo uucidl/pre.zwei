@@ -41,27 +41,30 @@ zw_internal inline uint32_t add_base64_sextet(uint32_t x,
 
 HAMMER_ACTION(act_base64)
 {
-#define seq_append_byte(res, b) h_seq_snoc(res, H_MAKE_UINT(b))
         assert(p->ast->token_type == TT_SEQUENCE);
         assert(p->ast->seq->used == 2);
 
-        HParsedToken *res = H_MAKE_SEQ();
-
-        // concatenate base64_3 blocks
         const HParsedToken *b64_3 = p->ast->seq->elements[0];
         assert(b64_3->token_type == TT_SEQUENCE);
+
+        // max size necessary for the array is: 3*size(b64_3) + 2
+        size_t bytes_size = 3 * (end(b64_3) - begin(b64_3)) + 2;
+        uint8_t *const bytes = (uint8_t *)h_arena_malloc(p->arena, bytes_size);
+        uint8_t *bytes_last = bytes;
+
+        // concatenate base64_3 blocks
         algos::for_each(
             begin(b64_3), end(b64_3),
-            [res, p](const HParsedToken *b64_3_element) {
+            [&bytes_last](const HParsedToken *b64_3_element) {
                     assert(b64_3_element->token_type == TT_SEQUENCE);
                     HParsedToken **digits = b64_3_element->seq->elements;
                     uint32_t x = add_base64_sextet(0, digits[0]);
                     x = add_base64_sextet(x, digits[1]);
                     x = add_base64_sextet(x, digits[2]);
                     x = add_base64_sextet(x, digits[3]);
-                    seq_append_byte(res, (x >> 16) & 0xFF);
-                    seq_append_byte(res, (x >> 8) & 0xFF);
-                    seq_append_byte(res, x & 0xFF);
+                    *(bytes_last++) = (x >> 16) & 0xFF;
+                    *(bytes_last++) = (x >> 8) & 0xFF;
+                    *(bytes_last++) = x & 0xFF;
             });
 
         // grab and analyze b64 end block (_2 or _1)
@@ -73,7 +76,7 @@ HAMMER_ACTION(act_base64)
                         uint32_t x;
                         x = add_base64_sextet(0, digits[0]);
                         x = add_base64_sextet(x, digits[1]);
-                        seq_append_byte(res, (x >> 4) & 0xFF);
+                        *(bytes_last++) = (x >> 4) & 0xFF;
                 } else {
                         // base64 _2 block
                         HParsedToken **digits = b64_end->seq->elements;
@@ -81,12 +84,11 @@ HAMMER_ACTION(act_base64)
                         x = add_base64_sextet(0, digits[0]);
                         x = add_base64_sextet(x, digits[1]);
                         x = add_base64_sextet(x, digits[2]);
-                        seq_append_byte(res, (x >> 10) & 0xFF);
-                        seq_append_byte(res, (x >> 2) & 0xFF);
+                        *(bytes_last++) = (x >> 10) & 0xFF;
+                        *(bytes_last++) = (x >> 2) & 0xFF;
                 }
         }
-        return res;
-#undef seq_append_byte
+        return H_MAKE_BYTES(bytes, bytes_last - bytes);
 };
 
 zw_internal struct Base64 global_base64;

@@ -71,7 +71,7 @@ struct EncodedWord {
         size_t bytes_count;
 };
 
-EncodedWord pack_encoded_word(HParsedToken const *token)
+zw_internal EncodedWord pack_encoded_word(HParsedToken const *token)
 {
         EncodedWord result{};
 
@@ -126,7 +126,7 @@ HAMMER_ACTION(act_encoded_text)
 // (i.e. not space in the charset, but an actual 0x20)
 HAMMER_ACTION(act_qp_underscore) { return H_MAKE_UINT(0x20); }
 
-HAMMER_ACTION(act_qp_or_base64)
+HAMMER_ACTION(act_qp_encoded_text)
 {
         return uuh_uint8_sequence_to_tagged_bytes(p->ast, TT_BYTES, p->arena);
 }
@@ -155,25 +155,22 @@ const RFC2047 &make_rfc2047(const RFC5234 &rfc5234,
         // NOTE(nicolas): this is RFC2045 ptext with safe_char modified with a
         // restriction.
         H_ARULE(qp_underscore, h_ch(0x5f));
-        H_RULE(qp_encoded_text,
-               h_many1(UH_ANY(qp_underscore, rfc2045.lenient_hex_octet,
-                              h_butnot(rfc2045.safe_char, h_ch('?')))));
+        H_ARULE(qp_encoded_text,
+                h_many1(UH_ANY(qp_underscore, rfc2045.lenient_hex_octet,
+                               h_butnot(rfc2045.safe_char, h_ch('?')))));
 
         H_RULE(encoding, UH_ANY(h_ch('B'), h_ch('Q')));
         H_ARULE(charset, token);
         H_ARULE(encoded_word,
-                h_middle(
-                    UH_TOKEN("=?"),
-                    UH_SEQ(charset, h_ignore(h_ch('?')),
-                           UH_ANY(h_action(h_right(UH_SEQ(h_ch('Q'), h_ch('?')),
-                                                   qp_encoded_text),
-                                           act_qp_or_base64, NULL),
-                                  h_action(h_right(UH_SEQ(h_ch('B'), h_ch('?')),
-                                                   base64.base64),
-                                           act_qp_or_base64, NULL),
-                                  UH_SEQ(encoding, h_ignore(h_ch('?')),
-                                         encoded_text))),
-                    UH_TOKEN("?=")));
+                h_middle(UH_TOKEN("=?"),
+                         UH_SEQ(charset, h_ignore(h_ch('?')),
+                                UH_ANY(h_right(UH_SEQ(h_ch('Q'), h_ch('?')),
+                                               qp_encoded_text),
+                                       h_right(UH_SEQ(h_ch('B'), h_ch('?')),
+                                               base64.base64),
+                                       UH_SEQ(encoding, h_ignore(h_ch('?')),
+                                              encoded_text))),
+                         UH_TOKEN("?=")));
 
         allocate_token_types(algos::begin(rfc2047_token_types),
                              algos::end(rfc2047_token_types));
