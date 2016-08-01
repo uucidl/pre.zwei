@@ -36,10 +36,17 @@ struct Platform {
         PlatformQueryAllFilesFn query_all_files;
 };
 
+struct ProgramResources {
+        MemoryArena permanent_arena; // memory guaranteed to be preserved across
+                                     // app reloads
+        MemoryArena transient_arena; // memory that can go away at any time
+};
+
 struct IOBufferIterator;
 struct ZoeMailStoreFile;
 
-#define INIT_APP(name) void name(Platform platform, int flags)
+#define INIT_APP(name)                                                         \
+        void name(Platform platform, int flags, ProgramResources *resources)
 typedef INIT_APP((*InitAppFn));
 
 /**

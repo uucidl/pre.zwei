@@ -656,12 +656,16 @@ int main(int argc, char **argv)
                 transient_storage = (void *)transient_storage_memory_address;
         }
 
-        struct MemoryArena permanent_arena =
+        ProgramResources program_resources = {};
+        program_resources.permanent_arena =
             memory_arena(permanent_storage, permanent_storage_memory_size);
-        MemoryArena transient_arena =
+        program_resources.transient_arena =
             memory_arena(transient_storage, transient_storage_memory_size);
 
-        if (spdr_init(&global_spdr, push_bytes(&permanent_arena, MEGABYTES(96)),
+        MemoryArena *permanent_arena = &program_resources.permanent_arena;
+        MemoryArena *transient_arena = &program_resources.transient_arena;
+
+        if (spdr_init(&global_spdr, push_bytes(permanent_arena, MEGABYTES(96)),
                       MEGABYTES(96))) {
                 error_print("could not initialize memory for tracing");
                 return 1;
@@ -670,7 +674,6 @@ int main(int argc, char **argv)
         SPDR_METADATA1(global_spdr, "thread_name", SPDR_STR("name", "main"));
 
         Zwei zwei = {};
-
         struct LoadedLibrary zwei_app_library = {};
         {
                 auto const buffer_first = zwei_app_library.file_path;
@@ -689,7 +692,7 @@ int main(int argc, char **argv)
                 lib->file_mtime = 0;
         }
 
-        auto refresh_zwei_app = [&zwei_app_library, &zwei, debug_mode_on]() {
+        auto refresh_zwei_app = [&]() {
                 struct LoadedLibrary *lib = &zwei_app_library;
                 bool was_loaded = !!lib->dlhandle;
                 if (refresh_library(lib)) {
@@ -718,7 +721,8 @@ int main(int argc, char **argv)
                         platform.spdr = global_spdr;
 
                         init_app(platform,
-                                 debug_mode_on ? ZWEI_DEBUG_MODE_FLAG : 0);
+                                 debug_mode_on ? ZWEI_DEBUG_MODE_FLAG : 0,
+                                 &program_resources);
 
                         return true;
                 }
@@ -739,20 +743,21 @@ int main(int argc, char **argv)
 
                 struct PlatformFileList *all_files;
                 {
-                        MemoryArena dc_arena = push_sub_arena(
-                            transient_arena, transient_storage_memory_size / 2);
+                        MemoryArena dc_arena =
+                            push_sub_arena(*transient_arena,
+                                           transient_storage_memory_size / 2);
                         all_files = directory_query_all_files(
                             root_dir_path, directory_listing_on,
-                            transient_arena, &dc_arena);
-                        pop_unused(transient_arena, dc_arena);
+                            *transient_arena, &dc_arena);
+                        pop_unused(*transient_arena, dc_arena);
                         {
-                                MemoryArena temp_arena = transient_arena;
+                                MemoryArena temp_arena = *transient_arena;
                                 TextOutputGroup traceg = {};
                                 allocate(traceg, &temp_arena, KILOBYTES(1));
                                 push_back_cstr(traceg,
                                                "Bytes used after query: ");
                                 push_back_formatted(traceg, "%lld",
-                                                    transient_arena.used);
+                                                    transient_arena->used);
                                 trace(traceg);
                         }
                 }
@@ -763,7 +768,7 @@ int main(int argc, char **argv)
                 }
 
                 MemoryArena result_arena =
-                    push_sub_arena(permanent_arena, MEGABYTES(512));
+                    push_sub_arena(*permanent_arena, MEGABYTES(512));
                 // TODO(nicolas) always measure bytes/sec or sec/MB and
                 // print out total bytes
                 SPDR_BEGIN(global_spdr, "main", "processing_files");
@@ -775,8 +780,8 @@ int main(int argc, char **argv)
 
                 size_t file_size_limit = MEGABYTES(128);
                 auto file_loader_arena = push_sub_arena(
-                    transient_arena, get_file_loader_allocation_size(
-                                         all_files->count, file_size_limit));
+                    *transient_arena, get_file_loader_allocation_size(
+                                          all_files->count, file_size_limit));
                 auto &files_loader =
                     create_file_loader(all_files->count, file_loader_arena.base,
                                        file_loader_arena.size);
@@ -856,7 +861,7 @@ int main(int argc, char **argv)
                         // If I pre-applied it to my files, I wouldn't
                         // need it in this program.
                         task.arena =
-                            push_sub_arena(transient_arena, MEGABYTES(2));
+                            push_sub_arena(*transient_arena, MEGABYTES(2));
                         task.done = false;
                         task.type = Task::NONE;
                 }
@@ -914,18 +919,18 @@ int main(int argc, char **argv)
 
                         dispatch_apply_f(last - first, queue, first, task_run);
 
-                        algos::for_each(
-                            first, last, [transient_arena](Task const &x) {
-                                    if (x.type != Task::MESSAGE)
-                                            return;
-                                    if (!x.done)
-                                            return;
-                                    if (!x.message_task.result.success)
-                                            return;
+                        algos::for_each(first, last, [transient_arena](
+                                                         Task const &x) {
+                                if (x.type != Task::MESSAGE)
+                                        return;
+                                if (!x.done)
+                                        return;
+                                if (!x.message_task.result.success)
+                                        return;
 
-                                    print_processed_message(
-                                        x.message_task.result, transient_arena);
-                            });
+                                print_processed_message(x.message_task.result,
+                                                        *transient_arena);
+                        });
                 };
 
                 while (count_pending_files(files_loader) > 0) {
@@ -971,7 +976,7 @@ int main(int argc, char **argv)
                 return 1;
         }
         {
-                MemoryArena temp_arena = permanent_arena;
+                MemoryArena temp_arena = *permanent_arena;
                 auto tog = TextOutputGroup{};
                 allocate(tog, &temp_arena, 512);
                 push_back_cstr(tog, "reporting traces to file: ");
