@@ -291,6 +291,7 @@ int __stdcall WinMain(HINSTANCE hInstance,
                     nullptr);
                 platform.spdr = global_spdr;
                 platform.query_all_files = win32_query_all_files;
+                platform.quit = []() { std::exit(0); };
         }
         ProgramResources program_resources;
         {
