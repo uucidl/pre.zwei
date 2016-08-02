@@ -10,7 +10,9 @@
 
 #include <cstdint>
 
+struct BufferedReader;
 struct SPDR_Context;
+struct ZoeMailStoreFile;
 
 enum ZweiAppFlags {
         ZWEI_DEBUG_MODE_FLAG = 1 << 0,
@@ -48,12 +50,30 @@ struct ProgramResources {
         MemoryArena transient_arena; // memory that can go away at any time
 };
 
-struct BufferedReader;
-struct ZoeMailStoreFile;
+enum DesktopInputsPointerButtonFlagsFlags {
+        DesktopInputsPointerButtonFlags_Down0 = 1 << 0,
+        DesktopInputsPointerButtonFlags_Down1 = 1 << 1,
+        DesktopInputsPointerButtonFlags_Down2 = 1 << 2,
+        DesktopInputsPointerButtonFlags_Transitionned0 = 1 << 3,
+        DesktopInputsPointerButtonFlags_Transitionned1 = 1 << 3,
+        DesktopInputsPointerButtonFlags_Transitionned2 = 1 << 3,
+};
+
+struct DesktopInputs {
+        double pointer_x;
+        double pointer_y;
+        uint16_t
+            pointer_button_state; // SEE(DesktopInputsPointerButtonFlagsFlags)
+};
 
 #define INIT_APP(name)                                                         \
         void name(Platform platform, int flags, ProgramResources *resources)
 typedef INIT_APP((*InitAppFn));
+
+#define UPDATE_AND_RENDER_DESKTOP_UI(name)                                     \
+        void name(Platform platform, DesktopInputs inputs,                     \
+                  ProgramResources *resources)
+typedef UPDATE_AND_RENDER_DESKTOP_UI((*UpdateAndRenderDesktopUIFn));
 
 /**
    @return errorcode (!= 0) or a message summary in message_summary
