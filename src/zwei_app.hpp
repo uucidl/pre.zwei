@@ -55,13 +55,15 @@ enum DesktopInputsPointerButtonFlagsFlags {
         DesktopInputsPointerButtonFlags_Down1 = 1 << 1,
         DesktopInputsPointerButtonFlags_Down2 = 1 << 2,
         DesktopInputsPointerButtonFlags_Transitionned0 = 1 << 3,
-        DesktopInputsPointerButtonFlags_Transitionned1 = 1 << 3,
-        DesktopInputsPointerButtonFlags_Transitionned2 = 1 << 3,
+        DesktopInputsPointerButtonFlags_Transitionned1 = 1 << 4,
+        DesktopInputsPointerButtonFlags_Transitionned2 = 1 << 5,
 };
 
 struct DesktopInputs {
         double pointer_x;
         double pointer_y;
+        // TODO(nicolas): blow up into multiple booleans, which
+        // will make this more readable/debuggable
         uint16_t
             pointer_button_state; // SEE(DesktopInputsPointerButtonFlagsFlags)
 };

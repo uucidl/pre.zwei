@@ -123,9 +123,9 @@ uint32_t __stdcall GetModuleFileNameA(_In_opt_ void *hModule,
                                       _Out_ char *lpFilename,
                                       _In_ uint32_t nSize);
 
-typedef void (*Win32ProcFn)();
-Win32ProcFn __stdcall GetProcAddress(_In_ void *hModule,
-                                     _In_ char const *lpProcName);
+typedef void(Win32ProcFn)();
+Win32ProcFn *__stdcall GetProcAddress(_In_ void *hModule,
+                                      _In_ char const *lpProcName);
 
 void *__stdcall GetProcessHeap(void);
 

@@ -25,6 +25,10 @@ cl %CLFlags% ^
     src\spdr_unit.cpp ^
     -DZWEI_SLOW=1 ^
     -DZWEI_INTERNAL=1 ^
+    gdi32.lib ^
+    kernel32.lib ^
+    opengl32.lib ^
+    user32.lib ^
     -Fe%CLExecutableOutput%
 @echo PROGRAM %CLExecutableOutput%
 
