@@ -13,6 +13,10 @@
   - Timeline indexing/querying
 
   ## User Interface
+
+  TODO(nicolas): loading an displaying word-wrapped text
+  TODO(nicolas): loading and displaying images
+
   ## Platform
   TODO(nicolas): work task queue
   TODO(nicolas): LINUX port. (started)
@@ -579,6 +583,17 @@ ZWEI_API PARSE_ZOE_MAILSTORE_FILENAME(parse_zoe_mailstore_filename)
         return 0;
 };
 
+ZWEI_API UPDATE_AND_RENDER_DESKTOP_UI(update_and_render_desktop_ui)
+{
+        if (inputs.pointer_button_state &
+                DesktopInputsPointerButtonFlags_Down0 &&
+            inputs.pointer_button_state &
+                DesktopInputsPointerButtonFlags_Transitionned0) {
+                platform.quit();
+        }
+}
+
+// Modules
 #define UU_MACROMAN_IMPLEMENTATION
 #include "uu_macroman.cpp"
 
