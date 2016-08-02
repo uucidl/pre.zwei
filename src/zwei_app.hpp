@@ -31,9 +31,13 @@ struct PlatformFileList {
                                       MemoryArena *result_arena)
 typedef PLATFORM_QUERY_ALL_FILES((*PlatformQueryAllFilesFn));
 
+#define PLATFORM_QUIT(name) void name(void)
+typedef PLATFORM_QUIT((*PlatformQuitFn));
+
 struct Platform {
         SPDR_Context *spdr; // tracing services
         PlatformQueryAllFilesFn query_all_files;
+        PlatformQuitFn quit;
 };
 
 struct ProgramResources {
