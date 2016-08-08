@@ -4,3 +4,6 @@
 [submodule "spdr"]
 	path = modules/uu.spdr
 	url = git@github.com:uucidl/uu.spdr.git
+[submodule "nothings_stb"]
+	path = modules/nothings_stb
+	url = https://github.com/nothings/stb.git
