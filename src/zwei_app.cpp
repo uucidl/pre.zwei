@@ -82,6 +82,7 @@
 #include "rfc2047.hpp"
 #include "rfc5234.hpp"
 #include "rfc5322.hpp"
+#include "utf8_decode.hpp"
 #include "zoe.hpp"
 #include "zwei_iobuffer.hpp"
 #include "zwei_iobuffer_inlines.hpp"
@@ -96,59 +97,6 @@ zw_global RFC5322 mail_parsers;
 zw_global bool global_debug_mode;
 zw_global Platform global_platform;
 zw_global SPDR_Context *global_spdr;
-
-/// @see
-/// [economical-utf8.html](http://bjoern.hoehrmann.de/utf-8/decoder/dfa/index.html)
-enum { UTF8_ACCEPT = 0,
-       UTF8_REJECT = 1,
-};
-
-zw_internal uint8_t const utf8d[] = {
-    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0,   0,   0,   0,   0,   0,   1,   1,   1,   1,   1,   1,   1,
-    1,   1,   1,   1,   1,   1,   1,   1,   1,   9,   9,   9,   9,   9,   9,
-    9,   9,   9,   9,   9,   9,   9,   9,   9,   9,   7,   7,   7,   7,   7,
-    7,   7,   7,   7,   7,   7,   7,   7,   7,   7,   7,   7,   7,   7,   7,
-    7,   7,   7,   7,   7,   7,   7,   7,   7,   7,   7,   7,   8,   8,   2,
-    2,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,
-    2,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,   2,   0xa,
-    0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x4, 0x3, 0x3,
-    0xb, 0x6, 0x6, 0x6, 0x5, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8,
-    0x8, 0x0, 0x1, 0x2, 0x3, 0x5, 0x8, 0x7, 0x1, 0x1, 0x1, 0x4, 0x6, 0x1, 0x1,
-    0x1, 0x1, 1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
-    1,   1,   1,   1,   0,   1,   1,   1,   1,   1,   0,   1,   0,   1,   1,
-    1,   1,   1,   1,   1,   2,   1,   1,   1,   1,   1,   2,   1,   2,   1,
-    1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   2,   1,   1,
-    1,   1,   1,   1,   1,   1,   1,   2,   1,   1,   1,   1,   1,   1,   1,
-    2,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   3,
-    1,   3,   1,   1,   1,   1,   1,   1,   1,   3,   1,   1,   1,   1,   1,
-    3,   1,   3,   1,   1,   1,   1,   1,   1,   1,   3,   1,   1,   1,   1,
-    1,   1,   1,   1,   1,   1,   1,   1,   1,   1,
-};
-
-/**
- * decodes UTF-8 streams.
- *
- * @param state must be UTF8_ACCEPT initially
- */
-zw_internal uint32_t utf8_decode(uint32_t *state, uint32_t *codep, uint8_t byte)
-{
-        uint32_t type = utf8d[byte];
-
-        *codep = (*state != UTF8_ACCEPT) ? (byte & 0x3fu) | (*codep << 6)
-                                         : (0xff >> type) & (byte);
-
-        *state = utf8d[256 + *state * 16 + type];
-
-        return *state;
-}
 
 // NOTE(nicolas) the following is a work
 // around for some bad transcoding that
@@ -173,7 +121,7 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
 
         {
                 auto decode_codepoint = [state](uint8_t x) {
-                        return UTF8_ACCEPT ==
+                        return Utf8DecodeResult_Accept ==
                                utf8_decode(&state->utf8decoder_state,
                                            &state->utf8decoder_codepoint, x);
                 };
@@ -185,7 +133,7 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
                     },
                     decode_codepoint);
 
-                if (UTF8_REJECT == state->utf8decoder_state) {
+                if (Utf8DecodeResult_Accept != state->utf8decoder_state) {
                         return nullptr;
                 }
                 decoded_block_last = decode_result.first;
@@ -206,7 +154,7 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
                             &state->macintosh_chars_utf8decoder_codepoint, x);
         });
         bool const is_already_utf8 =
-            UTF8_REJECT != state->macintosh_chars_utf8decoder_state;
+            Utf8DecodeResult_Accept == state->macintosh_chars_utf8decoder_state;
 
         auto const destination_first = begin(state->utf8_output_block);
         auto const destination_last = end(state->utf8_output_block);
@@ -263,8 +211,9 @@ macroman_workaround_stream(IOBufferIterator *input, struct MemoryArena *arena)
         } *stream = push_pointer_rvalue(arena, stream);
 
         stream->input = input;
-        stream->state.utf8decoder_state = UTF8_ACCEPT;
-        stream->state.macintosh_chars_utf8decoder_state = UTF8_ACCEPT;
+        stream->state.utf8decoder_state = Utf8DecodeResult_Accept;
+        stream->state.macintosh_chars_utf8decoder_state =
+            Utf8DecodeResult_Accept;
 
         auto next = [](IOBufferIterator *iobuffer) {
                 struct Stream *stream = reinterpret_cast<struct Stream *>(
@@ -607,6 +556,9 @@ ZWEI_API PARSE_ZOE_MAILSTORE_FILENAME(parse_zoe_mailstore_filename)
 
 #define UU_MACROMAN_EMIT_IMPL
 #include "macroman.cpp"
+
+#define UTF8_DECODE_IMPLEMENTATION
+#include "utf8_decode.hpp"
 
 #if ZWEI_UNIT_TESTS
 #include "algos_tests.cpp"

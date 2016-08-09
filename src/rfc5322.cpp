@@ -79,14 +79,14 @@ HAMMER_ACTION(act_unstructured)
             });
         byte_count = bytes_last - bytes;
         {
-                uint32_t decoder_state = UTF8_ACCEPT;
+                uint32_t decoder_state = Utf8DecodeResult_Accept;
                 uint32_t codepoint = 0;
                 uint8_t last_byte = 0; // useful for debugging
                 bool can_decode_all =
                     algos::all_n(bytes, byte_count, [&codepoint, &decoder_state,
                                                      &last_byte](uint8_t x) {
                             last_byte = x;
-                            return UTF8_REJECT !=
+                            return Utf8DecodeResult_Reject !=
                                    utf8_decode(&decoder_state, &codepoint, x);
                     });
                 zw_assert(can_decode_all, "data isn't valid utf-8");
