@@ -38,7 +38,7 @@ print_processed_message(ProcessedMessage const &processed_message,
                         MemoryArena transient_arena);
 #endif
 
-#if defined(ZWEI_TEXTAPP_EMIT_IMPL)
+#if defined(ZWEI_TEXTAPP_IMPLEMENTATION)
 
 #include "secure_hash_standard.hpp"
 #include "zwei_iobuffer.hpp"

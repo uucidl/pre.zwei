@@ -14,8 +14,8 @@ zw_internal bool ucs4_to_macintosh(uint32_t const *codepoints_first,
                                    uint8_t *destination);
 #endif
 
-#if defined(UU_MACROMAN_EMIT_IMPL)
-#undef UU_MACROMAN_EMIT_IMPL
+#if defined(UU_MACROMAN_IMPLEMENTATION)
+#undef UU_MACROMAN_IMPLEMENTATION
 
 #include "algos.hpp"
 

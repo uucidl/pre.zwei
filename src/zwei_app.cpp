@@ -554,7 +554,7 @@ ZWEI_API PARSE_ZOE_MAILSTORE_FILENAME(parse_zoe_mailstore_filename)
         return 0;
 };
 
-#define UU_MACROMAN_EMIT_IMPL
+#define UU_MACROMAN_IMPLEMENTATION
 #include "macroman.cpp"
 
 #define UTF8_DECODE_IMPLEMENTATION

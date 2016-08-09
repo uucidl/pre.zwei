@@ -1014,6 +1014,6 @@ int main(int argc, char **argv)
 #include "zwei_iobuffer.cpp"
 #include "zwei_osx_logging.cpp"
 #include "zwei_textoutputgroup.cpp"
-#define ZWEI_TEXTAPP_EMIT_IMPL
+#define ZWEI_TEXTAPP_IMPLEMENTATION
 #include "secure_hash_standard.cpp"
 #include "zwei_textapp.cpp"
