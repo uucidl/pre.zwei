@@ -123,6 +123,14 @@ typename IteratorConcept<I>::difference_type count_unguarded(I f, P p)
                                typename IteratorConcept<I>::difference_type(0));
 }
 
+template <Iterator I0, Iterator I1, UnaryPredicate P1, BinaryPredicate R>
+bool equal_bounded_unguarded(I0 f0, I0 l0, I1 f1, P1 valid1, R relation)
+{
+        auto mismatch =
+            find_mismatch_bounded_unguarded(f0, l0, f1, valid1, relation);
+        return mismatch.first == l0 && !valid1(mismatch.second);
+}
+
 /**
 @requires Domain(Pred) = ValueType(It)
 */
@@ -254,6 +262,22 @@ std::pair<I0, I1> find_mismatch_unguarded(I0 f0, I1 f1, P guard, R r)
         return std::make_pair(f0, f1);
 }
 
+/**
+ * @requires Domain(R) = Domain(P) = ValueType(I0) = ValueType(I1)
+ */
+template <InputIterator I0,
+          InputIterator I1,
+          UnaryPredicate P,
+          BinaryPredicate R>
+std::pair<I0, I1>
+find_mismatch_bounded_unguarded(I0 f0, I0 l0, I1 f1, P guard1, R r)
+{
+        while (f0 != l0 && guard(source(f1)) && r(source(f0), source(f1))) {
+                f0 = successor(f0);
+                f1 = successor(f1);
+        }
+        return std::make_pair(f0, f1);
+}
 /**
    @requires Domain(Op) = ValueType(InputIt)
 */
