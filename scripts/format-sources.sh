@@ -33,5 +33,5 @@ function find_all_sources() {
 set -e
 find_all_sources | grep -v -e '\.rl\..*$' |
     while read f; do
-        "${CLANG_FORMAT}" -i "${f}"
+        "${CLANG_FORMAT}" -style=file -i "${f}"
 done
