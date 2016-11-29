@@ -8,6 +8,8 @@
 #include "block_allocator.hpp"
 #include "zwei_concurrency.hpp"
 
+#include <dispatch/dispatch.h> // osx
+
 #include <cerrno>
 #include <sys/stat.h>
 
