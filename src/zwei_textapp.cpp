@@ -147,6 +147,20 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
         print_mailbox_list_field(
             "SENDER", &message_summary.sender_mailbox,
             message_summary.sender_mailbox.domain_bytes.count > 0 ? 1 : 0);
+        {
+                push_back_cstr(text_output_group, "\t");
+                push_back_cstr(text_output_group, "ORIG_DATE");
+                push_back_cstr(text_output_group, "\t");
+                CivilDateTime const &value = message_summary.orig_date;
+                push_back_formatted(
+                    text_output_group, "<%d-%02d-%02dT%02d:%02d:%"
+                                       "02d%c%02d:%02d>",
+                    value.year, value.month_count, value.day_count, value.hour,
+                    value.minute, value.seconds,
+                    value.zone_hour_offset >= 0 ? '+' : '-',
+                    abs(value.zone_hour_offset), value.zone_minute_offset);
+                trace(text_output_group);
+        }
         print_mailbox_list_field("FROM", message_summary.from_mailboxes,
                                  message_summary.from_mailboxes_count);
         print_mailbox_list_field("TO", message_summary.to_mailboxes,

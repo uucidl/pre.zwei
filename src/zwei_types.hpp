@@ -1,5 +1,6 @@
 #pragma once
 
+#include "date_time.hpp"
 #include "mail_types.hpp"
 
 #include <cstdint>
@@ -46,5 +47,5 @@ struct MessageSummary {
 
         ByteCountedRange first_line_bytes;
         // TODO(nicolas): add references list
-        // TODO(nicolas): add missing original date as a concrete type
+        CivilDateTime orig_date;
 };

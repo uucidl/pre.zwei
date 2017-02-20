@@ -1203,6 +1203,24 @@ rfc5322_field_copy_bytes_array(const HParsedToken *token,
         return d_first;
 }
 
+zw_internal CivilDateTime *
+rfc5322_field_copy_date_time(HParsedToken const *token,
+                             CivilDateTime *d_date_time)
+{
+        auto top = rfc5322_top(token);
+        auto dest = d_date_time;
+        auto collect = [&dest, d_date_time](HParsedToken const *token) {
+                if (dest != d_date_time)
+                        return;
+                if (RFC5322TokenIs(token, DATE_TIME)) {
+                        memcpy(dest, token->user, sizeof *dest);
+                        ++dest;
+                }
+        };
+        algos::traverse_each(top, std::cref(collect));
+        return dest;
+}
+
 zw_internal ArrayAllocationSize
 rfc5322_field_get_mailbox_array_size(HParsedToken const *token)
 {

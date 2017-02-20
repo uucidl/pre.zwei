@@ -302,13 +302,16 @@ zw_internal void fill_message_summary(MessageSummary *message_summary,
                        BYTES,
                        BYTES_LIST,
                        MAILBOX,
-                       MAILBOX_LIST } process = NONE;
+                       MAILBOX_LIST,
+                       CIVIL_DATE_TIME,
+                } process = NONE;
                 ByteCountedRange *d_bytes_range = nullptr;
                 ByteCountedRange **d_bytes_ranges = nullptr;
                 size_t *d_bytes_ranges_count = nullptr;
                 RawMailbox *d_mailbox = nullptr;
                 RawMailbox **d_mailboxes = nullptr;
                 size_t *d_mailboxes_count = nullptr;
+                CivilDateTime *d_civil_date_time = nullptr;
 
                 if (RFC5322TokenIs(token, MESSAGE_ID_FIELD)) {
                         process = BYTES;
@@ -339,6 +342,9 @@ zw_internal void fill_message_summary(MessageSummary *message_summary,
                         d_bytes_ranges = &message_summary->in_reply_to_msg_ids;
                         d_bytes_ranges_count =
                             &message_summary->in_reply_to_msg_ids_count;
+                } else if (RFC5322TokenIs(token, ORIG_DATE_FIELD)) {
+                        process = CIVIL_DATE_TIME;
+                        d_civil_date_time = &message_summary->orig_date;
                 }
 
                 switch (process) {
@@ -402,6 +408,13 @@ zw_internal void fill_message_summary(MessageSummary *message_summary,
                                 rfc5322_field_copy_mailbox_array(
                                     token, d_mailbox, bytes);
                         }
+                } break;
+                case CIVIL_DATE_TIME: {
+                        zw_assert(d_civil_date_time, "d_civil_date_time");
+                        zw_assert(d_civil_date_time !=
+                                      rfc5322_field_copy_date_time(
+                                          token, d_civil_date_time),
+                                  "missing");
                 } break;
                 case NONE:
                         break;

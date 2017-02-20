@@ -201,6 +201,10 @@ zw_internal uint8_t *rfc5322_field_copy_bytes(HParsedToken const *token,
 zw_internal ArrayAllocationSize
 rfc5322_field_get_bytes_array_size(HParsedToken const *token);
 
+zw_internal CivilDateTime *
+rfc5322_field_copy_date_time(HParsedToken const *token,
+                             CivilDateTime *d_date_time);
+
 /**
    @pre dest must point at an area >= allocation_size as returned by
    `rfc5322_field_get_bytes_array_size`
