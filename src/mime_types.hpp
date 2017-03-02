@@ -11,6 +11,22 @@ enum Charset {
         Charset_ISO_8859_15 = 111,
 };
 
+static inline char const *Charset_string(Charset x)
+{
+        switch (x) {
+        case Charset_UNSUPPORTED:
+                return "Charset_UNSUPPORTED";
+        case Charset_US_ASCII:
+                return "Charset_US_ASCII";
+        case Charset_ISO_8859_1:
+                return "Charset_ISO_8859_1";
+        case Charset_UTF_8:
+                return "Charset_UTF_8";
+        case Charset_ISO_8859_15:
+                return "Charset_ISO_8859_15";
+        };
+}
+
 // IANA MIME TYPES
 // @see [[http://www.iana.org/assignments/media-types/media-types.xhtml]]
 

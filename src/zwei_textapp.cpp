@@ -175,8 +175,9 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                 push_back_cstr(text_output_group, "\t");
                 push_back_cstr(text_output_group, "CONTENT_TRANSFER_ENCODING");
                 push_back_cstr(text_output_group, "\t");
-                push_back_u32(text_output_group,
-                              message_summary.content_transfer_encoding);
+                push_back_cstr(text_output_group,
+                               ContentTransferEncodingType_string(
+                                   message_summary.content_transfer_encoding));
                 trace(text_output_group);
         }
         print_field("FIRST_LINE", message_summary.first_line_bytes);
