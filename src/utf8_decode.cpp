@@ -1,3 +1,5 @@
+// MODULE(UTF8_DECODE)
+// TODO(nicolas): standalone compilation
 #ifndef UTF8_DECODE_PROTOTYPES
 #define UTF8_DECODE_PROTOTYPES
 

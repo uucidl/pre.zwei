@@ -77,18 +77,20 @@
 #include "algos_tests.hpp"
 #endif
 #include "base64.hpp"
-#include "macroman.cpp"
 #include "rfc2045.hpp"
 #include "rfc2047.hpp"
 #include "rfc5234.hpp"
 #include "rfc5322.hpp"
-#include "utf8_decode.hpp"
 #include "zoe.hpp"
 #include "zwei_iobuffer.hpp"
 #include "zwei_iobuffer_inlines.hpp"
 #include "zwei_logging.hpp"
 #include "zwei_nicolas.hpp"
 #include "zwei_types.hpp"
+
+// modules:
+#include "uu_macroman.cpp"
+#include "utf8_decode.cpp"
 
 #include <cstddef>    // for offsetof
 #include <functional> // for std::cref (TODO(nicolas): can I write it myself?)
@@ -568,10 +570,10 @@ ZWEI_API PARSE_ZOE_MAILSTORE_FILENAME(parse_zoe_mailstore_filename)
 };
 
 #define UU_MACROMAN_IMPLEMENTATION
-#include "macroman.cpp"
+#include "uu_macroman.cpp"
 
 #define UTF8_DECODE_IMPLEMENTATION
-#include "utf8_decode.hpp"
+#include "utf8_decode.cpp"
 
 #if ZWEI_UNIT_TESTS
 #include "algos_tests.cpp"

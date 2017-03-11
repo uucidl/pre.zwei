@@ -1,5 +1,10 @@
+// MODULE(UU_MACROMAN)
+// LANGUAGE(>=C++11)
+// TODO(nicolas): standalone compilation
 #if !defined(UU_MACROMAN_PROTOTYPES)
 #define UU_MACROMAN_PROTOTYPES
+
+#include <cstdint>
 
 /**
 
@@ -9,7 +14,7 @@
    to indicate an incomplete encoding.
 
  */
-zw_internal bool ucs4_to_macintosh(uint32_t const *codepoints_first,
+static bool ucs4_to_macintosh(uint32_t const *codepoints_first,
                                    uint32_t const *codepoints_last,
                                    uint8_t *destination);
 #endif
@@ -19,7 +24,7 @@ zw_internal bool ucs4_to_macintosh(uint32_t const *codepoints_first,
 
 #include "algos.hpp"
 
-zw_internal bool ucs4_to_macintosh(uint32_t const *codepoints_first,
+static bool ucs4_to_macintosh(uint32_t const *codepoints_first,
                                    uint32_t const *codepoints_last,
                                    uint8_t *destination)
 {
