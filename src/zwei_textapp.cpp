@@ -49,6 +49,9 @@ print_processed_message(ProcessedMessage const &processed_message,
 #include "../modules/uu.spdr/include/spdr/spdr.hh"
 extern SPDR_Context *global_spdr;
 
+// TODO(nil): TAG(SAFETY) if a mail contains ansi escape sequences,
+// the mail can control the terminal somehow and fuck the application's text
+// output. I wonder if this has ever happened in the past!?
 zw_internal void print_message_summary(MessageSummary const &message_summary,
                                        MemoryArena transient_arena)
 {
