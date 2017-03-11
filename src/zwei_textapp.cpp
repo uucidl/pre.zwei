@@ -66,9 +66,9 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
         auto print_field = [&text_output_group](const char *name,
                                                 struct ByteCountedRange value) {
                 if (value.first) {
-                        push_back_cstr(text_output_group, "\t");
+                        push_back_tab(text_output_group);
                         push_back_cstr(text_output_group, name);
-                        push_back_cstr(text_output_group, "\t");
+                        push_back_tab(text_output_group);
                         push_back_extent(text_output_group, value.first,
                                          value.count);
                         trace(text_output_group);
@@ -80,9 +80,9 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                         return;
                 }
 
-                push_back_cstr(text_output_group, "\t");
+                push_back_tab(text_output_group);
                 push_back_cstr(text_output_group, name);
-                push_back_cstr(text_output_group, "\t");
+                push_back_tab(text_output_group);
                 algos::for_each_n(
                     values, count, [&](const ByteCountedRange &range) {
                             push_back_extent(text_output_group, range.first,
@@ -102,9 +102,9 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                 if (mailboxes_count == 0) {
                         return;
                 }
-                push_back_cstr(text_output_group, "\t");
+                push_back_tab(text_output_group);
                 push_back_cstr(text_output_group, name);
-                push_back_cstr(text_output_group, "\t");
+                push_back_tab(text_output_group);
 
                 auto push_back_mailbox = [](TextOutputGroup &text_output_group,
                                             RawMailbox const &mailbox) {
@@ -151,9 +151,9 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
             "SENDER", &message_summary.sender_mailbox,
             message_summary.sender_mailbox.domain_bytes.count > 0 ? 1 : 0);
         {
-                push_back_cstr(text_output_group, "\t");
+                push_back_tab(text_output_group);
                 push_back_cstr(text_output_group, "ORIG_DATE");
-                push_back_cstr(text_output_group, "\t");
+                push_back_tab(text_output_group);
                 CivilDateTime const &value = message_summary.orig_date;
                 push_back_formatted(
                     text_output_group, "<%d-%02d-%02dT%02d:%02d:%"
@@ -175,9 +175,9 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                                message_summary.in_reply_to_msg_ids_count);
         print_field("SUBJECT", message_summary.subject_field_bytes);
         {
-                push_back_cstr(text_output_group, "\t");
+                push_back_tab(text_output_group);
                 push_back_cstr(text_output_group, "CONTENT_TRANSFER_ENCODING");
-                push_back_cstr(text_output_group, "\t");
+                push_back_tab(text_output_group);
                 push_back_cstr(text_output_group,
                                ContentTransferEncodingType_string(
                                    message_summary.content_transfer_encoding));
@@ -282,7 +282,7 @@ print_processed_message(ProcessedMessage const &processed_message,
                 trace(traceg);
         }
         push_back_cstr(traceg, "SHA1");
-        push_back_cstr(traceg, "\t");
+        push_back_tab(traceg);
 
         auto const &sha1_digest = processed_message.sha1_digest;
         char byteToHexChar[] = {
@@ -300,24 +300,24 @@ print_processed_message(ProcessedMessage const &processed_message,
         if (processed_message.success) {
                 // FEATURE(nicolas): print filing timestamp
                 push_back_cstr(traceg, "PATH");
-                push_back_cstr(traceg, "\t");
+                push_back_tab(traceg);
                 push_back_cstr(traceg, filepath);
                 trace(traceg);
 
                 push_back_cstr(traceg, "SIZE");
-                push_back_cstr(traceg, "\t");
+                push_back_tab(traceg);
                 push_back_u64(traceg, processed_message.filesize);
-                push_back_cstr(traceg, "\t");
+                push_back_tab(traceg);
                 trace(traceg);
 
                 push_back_cstr(traceg, "ZOE_REL_URL");
-                push_back_cstr(traceg, "\t");
+                push_back_tab(traceg);
                 push_back_extent(traceg, processed_message.zoe_rel_url.first,
                                  processed_message.zoe_rel_url.count);
                 trace(traceg);
                 // ID(a94812)
                 push_back_cstr(traceg, "UUID");
-                push_back_cstr(traceg, "\t");
+                push_back_tab(traceg);
                 for (size_t i = 0; i < countof(processed_message.zoefile.uuid);
                      i++) {
                         push_back_formatted(traceg, "%x",
@@ -326,7 +326,7 @@ print_processed_message(ProcessedMessage const &processed_message,
                 trace(traceg);
 
                 push_back_cstr(traceg, "UNIX TIMESTAMP");
-                push_back_cstr(traceg, "\t");
+                push_back_tab(traceg);
                 push_back_formatted(
                     traceg, "%llu",
                     processed_message.zoefile.unix_epoch_millis);

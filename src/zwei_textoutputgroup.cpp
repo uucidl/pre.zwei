@@ -26,29 +26,60 @@ void clear(TextOutputGroup &group)
         group.bytes_arena.used = 0;
 }
 
-TextOutputGroupEntry *
-push_back_extent(TextOutputGroup &group, uint8_t const *first, size_t n)
+// unsafe in the sense that it lets control characters through
+static void unsafe_push_back_byte(TextOutputGroup &group, uint8_t const *x)
 {
         if (group.last == group.first + group.entries_capacity) {
                 group.truncated = true;
-                return nullptr;
+                return;
         }
-
         auto *entry = group.last;
-        entry->first = first;
-        entry->count = n;
+        entry->first = x;
+        entry->count = 1;
         group.last = entry + 1;
-
-        return entry;
 }
 
-TextOutputGroupEntry *push_back_cstr(TextOutputGroup &group, char const *cstr)
+void push_back_tab(TextOutputGroup &group)
 {
-        return push_back_extent(group, (uint8_t *)cstr, cstr_len(cstr));
+        static uint8_t tab = '\t';
+        unsafe_push_back_byte(group, &tab);
 }
 
-TextOutputGroupEntry *
-push_back_formatted(TextOutputGroup &group, char const *fmt, ...)
+void push_back_newline(TextOutputGroup &group)
+{
+        static uint8_t nl = '\n'; // TODO(nicolas): TAG(portability): some
+                                  // platforms have special nl
+        unsafe_push_back_byte(group, &nl);
+}
+
+void push_back_extent(TextOutputGroup &group, uint8_t const *first, size_t n)
+{
+        auto const is_control_char = [](uint8_t x) { return x < 0x20; };
+        while (n) {
+                auto a = algos::find_if_n(
+                    first, n, [=](uint8_t x) { return !is_control_char(x); });
+                auto b = algos::find_if_n(a.first, a.second, is_control_char);
+
+                if (group.last == group.first + group.entries_capacity) {
+                        group.truncated = true;
+                        return;
+                }
+                auto *entry = group.last;
+                entry->first = a.first;
+                entry->count = b.first - a.first;
+                group.last = entry + 1;
+
+                first = b.first;
+                n = b.second;
+        }
+}
+
+void push_back_cstr(TextOutputGroup &group, char const *cstr)
+{
+        push_back_extent(group, (uint8_t *)cstr, cstr_len(cstr));
+}
+
+void push_back_formatted(TextOutputGroup &group, char const *fmt, ...)
 {
         size_t non_null_count = 0;
         va_list original_args;
@@ -67,19 +98,19 @@ push_back_formatted(TextOutputGroup &group, char const *fmt, ...)
         char *buffer =
             push_array_rvalue(&group.bytes_arena, buffer, buffer_size);
         if (!buffer) {
-                return nullptr;
+                return;
         }
 
         std::vsnprintf(buffer, buffer_size, fmt, original_args);
-        return push_back_extent(group, (uint8_t *)buffer, non_null_count);
+        push_back_extent(group, (uint8_t *)buffer, non_null_count);
 }
 
-TextOutputGroupEntry *push_back_u32(TextOutputGroup &group, uint32_t x)
+void push_back_u32(TextOutputGroup &group, uint32_t x)
 {
-        return push_back_formatted(group, "%u", x);
+        push_back_formatted(group, "%u", x);
 }
 
-TextOutputGroupEntry *push_back_u64(TextOutputGroup &group, uint64_t x)
+void push_back_u64(TextOutputGroup &group, uint64_t x)
 {
-        return push_back_formatted(group, "%llu", x);
+        push_back_formatted(group, "%llu", x);
 }

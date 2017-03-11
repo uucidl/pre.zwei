@@ -40,13 +40,17 @@ void allocate(TextOutputGroup &group,
               size_t reference_size);
 
 void clear(TextOutputGroup &group);
-TextOutputGroupEntry *
-push_back_extent(TextOutputGroup &group, uint8_t const *first, size_t n);
-TextOutputGroupEntry *push_back_cstr(TextOutputGroup &group, char const *cstr);
-TextOutputGroupEntry *
-push_back_formatted(TextOutputGroup &group, char const *fmt, ...);
-TextOutputGroupEntry *push_back_u32(TextOutputGroup &group, uint32_t x);
-TextOutputGroupEntry *push_back_u64(TextOutputGroup &group, uint64_t x);
+
+// terminal control characters
+void push_back_tab(TextOutputGroup &group);
+void push_back_newline(TextOutputGroup &group);
+
+// these functions filter out control character
+void push_back_extent(TextOutputGroup &group, uint8_t const *first, size_t n);
+void push_back_cstr(TextOutputGroup &group, char const *cstr);
+void push_back_formatted(TextOutputGroup &group, char const *fmt, ...);
+void push_back_u32(TextOutputGroup &group, uint32_t x);
+void push_back_u64(TextOutputGroup &group, uint64_t x);
 
 void text_output_group_print(int filedesc, TextOutputGroup const &group);
 

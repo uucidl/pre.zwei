@@ -149,6 +149,23 @@ It find_if(It first, It last, Pred pred)
 
 /**
 @requires Domain(Pred) = ValueType(It)
+*/
+template <Iterator It, Integral N, UnaryPredicate Pred>
+std::pair<It, N> find_if_n(It first, N count, Pred pred)
+{
+        while (count) {
+                if (pred(*first)) {
+                        break;
+                }
+                first = successor(first);
+                --count;
+        }
+
+        return {first, count};
+}
+
+/**
+@requires Domain(Pred) = ValueType(It)
 @requires Domain(ValidItPred) = ValueType(It)
 */
 template <Iterator It, UnaryPredicate ValidItPred, UnaryPredicate Pred>

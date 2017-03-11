@@ -202,16 +202,17 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
                 uint64_t physical_offset = 0;
                 {
                         push_back_cstr(trace_output, name);
+                        push_back_tab(trace_output);
                         if (entry->obj_type == VREG) {
-                                push_back_cstr(trace_output, "\t[f]");
+                                push_back_cstr(trace_output, "[f]");
                         } else if (entry->obj_type == VDIR) {
-                                push_back_cstr(trace_output, "\t[d]");
+                                push_back_cstr(trace_output, "[d]");
                         } else {
                                 // not a file, not a directory
-                                push_back_formatted(trace_output, "\t[%d]",
+                                push_back_formatted(trace_output, "[%d]",
                                                     entry->obj_type);
                         }
-                        push_back_cstr(trace_output, "\t");
+                        push_back_tab(trace_output);
 
                         // NOTE(nicolas) non native file systems
                         // (AFP/CIFS) are problematic not only for
@@ -250,10 +251,10 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
                         }
 
                         if (entry->obj_type == VREG) {
-                                push_back_cstr(trace_output, "\t");
+                                push_back_tab(trace_output);
                                 push_back_u32(trace_output,
                                               entry->file_ioblocksize);
-                                push_back_cstr(trace_output, "\t");
+                                push_back_tab(trace_output);
                                 push_back_u64(trace_output,
                                               entry->file_totalsize);
 
@@ -355,21 +356,22 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
                 }
                 DEFER({ close(dir_fd); });
 
-                push_back_cstr(trace_output, "\nlisting directory: ");
+                push_back_newline(trace_output);
+                push_back_cstr(trace_output, "listing directory: ");
                 push_back_cstr(trace_output, dir_path);
                 trace_optionally();
 
                 // TODO(nicolas): push sep by "\t"
                 push_back_cstr(trace_output, "name");
-                push_back_cstr(trace_output, "\t");
+                push_back_tab(trace_output);
                 push_back_cstr(trace_output, "type");
-                push_back_cstr(trace_output, "\t");
+                push_back_tab(trace_output);
                 push_back_cstr(trace_output, "tag");
-                push_back_cstr(trace_output, "\t");
+                push_back_tab(trace_output);
                 push_back_cstr(trace_output, "ioblocksize");
-                push_back_cstr(trace_output, "\t");
+                push_back_tab(trace_output);
                 push_back_cstr(trace_output, "size");
-                push_back_cstr(trace_output, "\t");
+                push_back_tab(trace_output);
                 push_back_cstr(trace_output, "physical location");
                 trace_optionally();
 
@@ -509,9 +511,9 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
         for (size_t i = 0; i < entry_array_count; i++) {
                 push_back_cstr(trace_output, "FILE");
                 push_back_u64(trace_output, i);
-                push_back_cstr(trace_output, "\t");
+                push_back_tab(trace_output);
                 push_back_u64(trace_output, entry_array[i].physical_offset);
-                push_back_cstr(trace_output, "\t");
+                push_back_tab(trace_output);
                 push_back_cstr(trace_output, entry_array[i].path);
                 trace_optionally();
         }
@@ -981,7 +983,7 @@ int main(int argc, char **argv)
                 allocate(tog, &temp_arena, 512);
                 push_back_cstr(tog, "reporting traces to file: ");
                 push_back_cstr(tog, trace_file);
-                push_back_cstr(tog, "\n");
+                push_back_newline(tog);
                 trace(tog);
         }
         int fd = open(trace_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
