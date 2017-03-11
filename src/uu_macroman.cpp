@@ -15,8 +15,8 @@
 
  */
 static bool ucs4_to_macintosh(uint32_t const *codepoints_first,
-                                   uint32_t const *codepoints_last,
-                                   uint8_t *destination);
+                              uint32_t const *codepoints_last,
+                              uint8_t *destination);
 #endif
 
 #if defined(UU_MACROMAN_IMPLEMENTATION)
@@ -25,8 +25,8 @@ static bool ucs4_to_macintosh(uint32_t const *codepoints_first,
 #include "algos.hpp"
 
 static bool ucs4_to_macintosh(uint32_t const *codepoints_first,
-                                   uint32_t const *codepoints_last,
-                                   uint8_t *destination)
+                              uint32_t const *codepoints_last,
+                              uint8_t *destination)
 {
         bool encoding_was_total = true;
 

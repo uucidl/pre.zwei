@@ -89,8 +89,8 @@
 #include "zwei_types.hpp"
 
 // modules:
-#include "uu_macroman.cpp"
 #include "utf8_decode.cpp"
+#include "uu_macroman.cpp"
 
 #include <cstddef>    // for offsetof
 #include <functional> // for std::cref (TODO(nicolas): can I write it myself?)
