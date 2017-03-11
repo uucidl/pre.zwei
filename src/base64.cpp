@@ -1,8 +1,6 @@
 /**
    Parsing base64 content
 
-   TAG(Base64)
-
    Original source code GPL licensed, in the hammer distribution.
 */
 

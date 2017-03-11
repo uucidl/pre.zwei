@@ -65,7 +65,7 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
         //
         // repeat until there is no more directories to visit
 
-        // TODO(nicolas) @perf we're nowhere near
+        // TODO(nicolas) TAG(performance) we're nowhere near
         // saturating the I/O there, especially when querying
         // a network shared drive.
 

@@ -30,3 +30,9 @@ source "${HERE}"/lib/pipelines.sh
 
 git --no-pager -C "${TOP}" grep --full-name -n -A 3 'TODO' -- src/* | \
     prepend_top_grep_pipeline "${TOP}" | remove_leading_spaces_grep_pipeline | onlymatches_pipeline "${ONLY_MATCHES}" "TODO(.*"
+
+printf "Tags:\n"
+git --no-pager -C "${TOP}" grep --full-name -n 'TAG([^)]*)' -- src/* | \
+    grep -o -e 'TAG([^)]*)' | \
+    sort | uniq | \
+    xargs printf "\t%s\n"

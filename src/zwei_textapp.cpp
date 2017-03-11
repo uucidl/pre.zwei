@@ -49,7 +49,7 @@ print_processed_message(ProcessedMessage const &processed_message,
 #include "../modules/uu.spdr/include/spdr/spdr.hh"
 extern SPDR_Context *global_spdr;
 
-// TODO(nil): TAG(SAFETY) if a mail contains ansi escape sequences,
+// TODO(nil): TAG(security) if a mail contains ansi escape sequences,
 // the mail can control the terminal somehow and fuck the application's text
 // output. I wonder if this has ever happened in the past!?
 zw_internal void print_message_summary(MessageSummary const &message_summary,
@@ -220,7 +220,7 @@ zw_internal void process_message(Zwei const &zwei,
                 return;
         }
 
-        // TODO(nicolas): @platform_specific here we have encoded the
+        // TODO(nicolas): TAG(portability) here we have encoded the
         // path separator, which makes this code non portable
         if (0 == zoefile_errorcode) {
                 // find predecessor, until you reach
