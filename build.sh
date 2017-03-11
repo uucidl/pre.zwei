@@ -77,7 +77,7 @@ function must_compile_osx()
     fi
 
     if [[ "${CONFIG}" == "release" ]]; then
-        cflags=("${cflags[@]}" -O3)
+        cflags=("${cflags[@]}" -O3 -DZWEI_SLOW=0 -DZWEI_INTERNAL=0)
     fi
 
     clang++ "${cflags[@]}" "${cxxflags[@]}" "$@"
