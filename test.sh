@@ -15,7 +15,6 @@ git grep MODULE src | \
     sed -e 's/^.* MODULE(\([^)]*\))/\1/g' | \
     tr [:upper:] [:lower:] | \
     xargs printf "MODULE found in %s.cpp\n"
-exit 0
 
 if [[ $? -ne 0 ]]; then
    exit 1
