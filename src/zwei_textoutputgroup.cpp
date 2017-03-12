@@ -27,7 +27,8 @@ void clear(TextOutputGroup &group)
 }
 
 // unsafe in the sense that it lets control characters through
-static void unsafe_push_back_byte(TextOutputGroup &group, uint8_t const *x)
+static void unsafe_push_back_permanent_byte(TextOutputGroup &group,
+                                            uint8_t const *x)
 {
         if (group.last == group.first + group.entries_capacity) {
                 group.truncated = true;
@@ -42,23 +43,47 @@ static void unsafe_push_back_byte(TextOutputGroup &group, uint8_t const *x)
 void push_back_tab(TextOutputGroup &group)
 {
         static uint8_t tab = '\t';
-        unsafe_push_back_byte(group, &tab);
+        unsafe_push_back_permanent_byte(group, &tab);
 }
 
 void push_back_newline(TextOutputGroup &group)
 {
         static uint8_t nl = '\n'; // TODO(nicolas): TAG(portability): some
                                   // platforms have special nl
-        unsafe_push_back_byte(group, &nl);
+        unsafe_push_back_permanent_byte(group, &nl);
 }
 
 void push_back_extent(TextOutputGroup &group, uint8_t const *first, size_t n)
 {
-        auto const is_control_char = [](uint8_t x) { return x < 0x20; };
+        auto const is_control_char = [](uint8_t x) { return (x >> 5) == 0; };
         while (n) {
                 auto a = algos::find_if_n(
                     first, n, [=](uint8_t x) { return !is_control_char(x); });
                 auto b = algos::find_if_n(a.first, a.second, is_control_char);
+                {
+                        // Escape control characters
+                        uint8_t const *control_char_first = first;
+                        uint8_t const *const control_char_last = a.first;
+                        size_t const dest_size =
+                            2 * (control_char_last -
+                                 control_char_first); // we prepend ^
+                        uint8_t *const dest = push_array_rvalue(
+                            &group.bytes_arena, dest, dest_size);
+                        if (!dest) {
+                                return; // NOTE(nicolas): out of memory
+                        }
+                        uint8_t *dest_first = dest;
+                        uint8_t *const dest_last = dest + dest_size;
+                        for (; dest_first != dest_last &&
+                               control_char_first != control_char_last;
+                             ++control_char_first) {
+                                *dest_first = '^';
+                                ++dest_first;
+                                *dest_first = *control_char_first | (2 << 5);
+                                ++dest_first;
+                        }
+                        push_back_extent(group, dest, dest_size);
+                }
 
                 if (group.last == group.first + group.entries_capacity) {
                         group.truncated = true;

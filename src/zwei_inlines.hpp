@@ -159,8 +159,8 @@ inline void *push_bytes(struct MemoryArena *arena, size_t bytes)
 {
         zw_assert(arena->used + bytes <= arena->size, "overallocating");
         if (arena->used + bytes > arena->size) {
-                // TODO(nicolas) TAG(security) this basically is meant to be fatal
-                // in every build
+                // TODO(nicolas) TAG(security) this basically is meant to be
+                // fatal in every build
                 return nullptr;
         }
         uint8_t *result = arena->base + arena->used;
