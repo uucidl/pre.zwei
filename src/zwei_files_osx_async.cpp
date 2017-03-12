@@ -83,7 +83,7 @@ create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size)
         file_loader.finished_count = 0;
 
         file_loader.task_queue =
-            dispatch_queue_create("com.uucidl.shasum", DISPATCH_QUEUE_SERIAL);
+            dispatch_queue_create("com.uucidl.files", DISPATCH_QUEUE_SERIAL);
         dispatch_set_target_queue(
             file_loader.task_queue,
             dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0));
