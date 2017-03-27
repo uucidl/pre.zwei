@@ -16,6 +16,8 @@ static constexpr auto USAGE = "<program> "
    Mail.app
    TODO(nicolas): control parallelism using sysctl to obtain
    informations about local machine.
+   TODO(nicolas): NEXT review zwei_files API in light of sftp file loading
+   TODO(nicolas): support sftp root directories
 */
 
 #include "zwei_inlines.hpp"
@@ -32,7 +34,9 @@ static constexpr auto USAGE = "<program> "
 
 #include "algos.hpp"
 
+#define SFTP_API [[gnu::unused]] static
 #include "../modules/uu.spdr/include/spdr/spdr.hh"
+#include "sftp.cpp"
 
 #include <dispatch/dispatch.h>
 
@@ -567,6 +571,290 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
         return result;
 }
 
+struct SFTPHostData {
+        char const *username_first;
+        size_t username_size;
+        char const *domain_name_first;
+        size_t domain_name_size;
+        uint16_t port = 22;
+
+        char const *error_msg;
+};
+
+// scan [first,last) and returns where to read username, domain and port
+zw_internal char const *parse_sftp_host_data(char const *first,
+                                             char const *last,
+                                             SFTPHostData *d_result)
+{
+        auto &result = *d_result;
+        result = {};
+        auto username_last = algos::find_if(first, last, [](char const x) {
+                auto valid = (x >= 0x30 && x < 0x40) || (x >= 0x41 && x < 0x7f);
+                return !valid;
+        });
+        if (username_last == first) {
+                result.error_msg = "Expected username";
+                return first;
+        }
+        result.username_first = first;
+        result.username_size = username_last - first;
+
+        first = username_last;
+        if (first == last || *first != '@') {
+                result.error_msg = "Expected @ after username";
+                return first;
+        }
+        ++first;
+
+        auto const parse_many_dtext = [](char const *first, char const *last) {
+                auto const dtext_char = [](char const x) {
+                        return (x >= 33 && x < 47) || (x >= 48 && x < 58) ||
+                               (x >= 59 && x < 90) || (x >= 94 && x < 126);
+                };
+                return algos::find_if(first, last, [dtext_char](char const x) {
+                        return !dtext_char(x);
+                });
+        };
+
+        auto domain_name_first = first;
+        auto dtext_last = parse_many_dtext(first, last);
+        if (dtext_last == first) {
+                result.error_msg = "Expected domain name part";
+                return first;
+        }
+        first = dtext_last;
+        while (first != last && *first == '.') {
+                ++first;
+                dtext_last = parse_many_dtext(first, last);
+                if (dtext_last == first) {
+                        result.error_msg = "expected domain fragment after .";
+                }
+                first = dtext_last;
+        }
+        result.domain_name_first = domain_name_first;
+        result.domain_name_size = dtext_last - domain_name_first;
+
+        if (first != last && *first == ':') {
+                ++first;
+                auto port_last = algos::find_if(first, last, [](char const x) {
+                        return !(x >= 48 && x < 58);
+                });
+                if (first == port_last) {
+                        result.error_msg = "Expected port number";
+                        return first;
+                }
+                result.port = 0;
+                while (first != port_last) {
+                        result.port *= 10;
+                        result.port += *first - 48;
+                        ++first;
+                }
+        }
+        return first;
+}
+
+zw_internal void sftp_client_open(sftp::SFTPClient *sftp_client,
+                                  SFTPHostData const &host_data)
+{
+        sftp_client->username = host_data.username_first;
+        sftp_client->username_size = host_data.username_size;
+        sftp_client->hostname = host_data.domain_name_first;
+        sftp_client->hostname_size = host_data.domain_name_size;
+        sftp_client->port = host_data.port;
+        SFTPClientOpen(sftp_client);
+}
+
+// TODO(nicolas): querying files via sftp isn't as fast as doing it in bulk on a
+// local file system. So the trade-off I chose to first get all the files then
+// do the loading isn't a good one in that scenario.
+zw_internal PLATFORM_QUERY_ALL_FILES(sftp_query_all_files)
+{
+        SFTPHostData host_data;
+        auto root_dir_first = root_dir_path;
+        auto root_dir_last = root_dir_path + cstr_len(root_dir_path);
+        root_dir_first =
+            parse_sftp_host_data(root_dir_first, root_dir_last, &host_data);
+        if (host_data.error_msg) {
+                error_print(host_data.error_msg);
+                error_print(root_dir_first); // where this happened
+                return nullptr;
+        }
+        if (root_dir_first == root_dir_last) {
+                error_print("missing root dir");
+                error_print(root_dir_first);
+                return nullptr;
+        }
+        if (*root_dir_first != '/') {
+                error_print("root dir must start with /");
+                return nullptr;
+        }
+
+        sftp::SFTPClient sftp_client = {};
+        sftp_client_open(&sftp_client, host_data);
+        DEFER(SFTPClientClose(&sftp_client));
+        DEFER(auto x = sftp_client.error_msg; if (x) error_print(x));
+        if (sftp_client.error != sftp::SFTPClient::Error_None) {
+                error_print("could not open sftp session");
+                if (auto x = sftp_client.error_msg)
+                        error_print(x);
+        }
+
+        struct Directory {
+                char const *path_first;
+                size_t path_size;
+                Directory *next;
+        };
+
+        struct File {
+                char const *path_first;
+                size_t path_size;
+                size_t filesize;
+                File *next;
+        };
+
+        auto const directory_next = [](Directory const *x) { return x->next; };
+        auto const file_next = [](File const *x) { return x->next; };
+
+        auto const directory_insert_after = [](Directory *needle,
+                                               Directory *a) {
+                a->next = needle->next;
+                needle->next = a;
+        };
+        auto const file_insert_after = [](File *needle, File *a) {
+                a->next = needle->next;
+                needle->next = a;
+        };
+
+        Directory directories_sentinel = {};
+        auto directories_to_visit_last = &directories_sentinel;
+        Directory root_dir = {root_dir_first,
+                              size_t(root_dir_last - root_dir_first),
+                              directories_to_visit_last};
+        auto directories_to_visit_first = &root_dir;
+
+        File files_sentinel = {};
+        files_sentinel.next = &files_sentinel;
+        auto files_last = &files_sentinel;
+        size_t files_size = 0;
+
+        while (directories_to_visit_first != directories_to_visit_last) {
+                auto const &directory = *directories_to_visit_first;
+                fprintf(stdout, "querying remote directory %.*s\n",
+                        int(directory.path_size), directory.path_first);
+                sftp::SFTPClientListFiles list_files = {};
+                list_files.path = directory.path_first;
+                list_files.path_size = directory.path_size;
+                SFTPClientListFilesOpen(&list_files, &sftp_client);
+                DEFER(
+                    auto x = list_files.error;
+                    if (x != sftp::SFTPClientListFiles::Error_None &&
+                        x != sftp::SFTPClientListFiles::Error_NoMoreListEntry) {
+                            error_print(list_files.error_msg);
+                    });
+                DEFER(SFTPClientListFilesClose(&list_files));
+
+                char filename[1024];
+                size_t filename_size = 0;
+                char long_list_name[4096];
+                size_t long_list_name_size = 0;
+                {
+                        auto d = &list_files.d_entry;
+                        d->filename_buffer = filename;
+                        d->filename_buffer_size = sizeof filename;
+                        d->filename_size = &filename_size;
+                        d->long_list_name_buffer = long_list_name;
+                        d->long_list_name_buffer_size = sizeof long_list_name;
+                        d->long_list_name_size = &long_list_name_size;
+                }
+
+                while (SFTPClientListFilesNext(&list_files) ==
+                       sftp::SFTPClientListFiles::Error_None) {
+                        auto const &entry = list_files.d_entry;
+                        if (filename[0] == '.')
+                                continue;
+
+                        switch (entry.entry_type) {
+                        case sftp::SFTPClientListFiles::EntryType_Directory: {
+                                size_t path_size = list_files.path_size +
+                                                   filename_size + 1 + 1;
+                                char *path = push_array_rvalue(
+                                    &work_arena, path, path_size + 1);
+                                auto d_last = path + path_size + 1;
+                                auto d = path;
+                                cstr_cat(d, d_last, list_files.path,
+                                         list_files.path +
+                                             list_files.path_size);
+                                cstr_cat(d, d_last, "/");
+                                cstr_cat(d, d_last, filename,
+                                         filename + filename_size);
+                                cstr_cat(d, d_last, "/");
+                                if (cstr_terminate(d, d_last)) {
+                                        auto directory =
+                                            push_typed(&work_arena, Directory);
+                                        directory->path_first = path;
+                                        directory->path_size = path_size;
+                                        directory_insert_after(
+                                            directories_to_visit_first,
+                                            directory);
+                                }
+                                break;
+                        }
+                        case sftp::SFTPClientListFiles::EntryType_File: {
+                                size_t path_size = list_files.path_size +
+                                                   filename_size + 1 + 1;
+                                char *path = push_array_rvalue(&work_arena,
+                                                               path, path_size);
+                                auto d_last = path + path_size;
+                                auto d = path;
+                                cstr_cat(d, d_last, list_files.path,
+                                         list_files.path +
+                                             list_files.path_size);
+                                cstr_cat(d, d_last, "/");
+                                cstr_cat(d, d_last, filename,
+                                         filename + filename_size);
+                                if (cstr_terminate(d, d_last)) {
+                                        auto file =
+                                            push_typed(&work_arena, File);
+                                        file->path_first = path;
+                                        file->path_size = path_size;
+                                        file->filesize =
+                                            list_files.d_entry.file_size;
+                                        file_insert_after(files_last, file);
+                                        ++files_size;
+                                }
+                        }
+                        default:
+                                break;
+                        }
+
+                        std::printf("[%d] %.*s (%llu)\n",
+                                    list_files.d_entry.entry_type,
+                                    int(long_list_name_size), long_list_name,
+                                    list_files.d_entry.file_size);
+                }
+                directories_to_visit_first =
+                    directory_next(directories_to_visit_first);
+        }
+        auto files_first = file_next(files_last);
+        std::printf("found %zu files\n", files_size);
+
+        PlatformFileList *result = push_pointer_rvalue(result_arena, result);
+        *result = {};
+        result->entries_size = files_size;
+        result->entries_first = push_array_rvalue(
+            result_arena, result->entries_first, result->entries_size);
+        {
+                size_t file_index = 0;
+                for (auto file = files_first; file != files_last;
+                     file = file_next(file)) {
+                        assign_at(result, file_index++, file->path_first,
+                                  file->path_size, file->filesize,
+                                  result_arena);
+                }
+        }
+        return result;
+}
+
 #include <dlfcn.h>
 #include <sys/stat.h>
 
@@ -845,18 +1133,34 @@ int main(int argc, char **argv)
         if (!root_dir_path) {
                 error_print("you must pass a root directory with --root-dir");
         } else {
+                auto sftp_root_dir_path =
+                    cstr_find_prefix(root_dir_path, "sftp:");
+
                 // NOTE(nicolas) we could process files in parallel
                 // .. but how much parallelism can a HDD/SDD/Raid
                 // device support?
 
-                struct PlatformFileList *all_files;
+                struct PlatformFileList *all_files = {};
+                struct PlatformFileList *sftp_all_files = {};
+                SFTPHostData sftp_host_data = {};
                 {
                         MemoryArena dc_arena =
                             push_sub_arena(*transient_arena,
                                            transient_storage_memory_size / 2);
-                        all_files = directory_query_all_files(
-                            root_dir_path, directory_listing_on,
-                            *transient_arena, &dc_arena);
+                        if (*sftp_root_dir_path) {
+                                parse_sftp_host_data(
+                                    sftp_root_dir_path,
+                                    sftp_root_dir_path +
+                                        cstr_len(sftp_root_dir_path),
+                                    &sftp_host_data);
+                                sftp_all_files = sftp_query_all_files(
+                                    sftp_root_dir_path, directory_listing_on,
+                                    *transient_arena, &dc_arena);
+                        } else {
+                                all_files = directory_query_all_files(
+                                    root_dir_path, directory_listing_on,
+                                    *transient_arena, &dc_arena);
+                        }
                         pop_unused(*transient_arena, dc_arena);
                         {
                                 MemoryArena temp_arena = *transient_arena;
@@ -869,7 +1173,7 @@ int main(int argc, char **argv)
                         }
                 }
 
-                if (!all_files) {
+                if (!sftp_all_files && !all_files) {
                         error_print("could not query all files");
                         return 1;
                 }
@@ -915,8 +1219,8 @@ int main(int argc, char **argv)
                                 };
                             auto wanted_last =
                                 std::stable_partition(f, l, wanted);
-                            auto below_limit_last =
-                                std::stable_partition(f, l, below_limit);
+                            auto below_limit_last = std::stable_partition(
+                                f, wanted_last, below_limit);
 
                             if (!global_can_ignore_file &&
                                 below_limit_last != wanted_last) {
@@ -925,11 +1229,16 @@ int main(int argc, char **argv)
                                         "ignored too large file"); // inspect
                                     // below_limit_last
                             }
-                            all_files->entries_size = wanted_last - f;
+                            all_files->entries_size = below_limit_last - f;
                     };
                 if (all_files)
                         detect_exclude_unwanted_files(all_files,
                                                       file_size_limit);
+
+                std::size_t const sftp_file_size_limit = MEGABYTES(1);
+                if (sftp_all_files)
+                        detect_exclude_unwanted_files(sftp_all_files,
+                                                      sftp_file_size_limit);
                 size_t local_file_count =
                     all_files ? all_files->entries_size : 0;
                 auto file_loader_arena = push_sub_arena(
@@ -938,9 +1247,9 @@ int main(int argc, char **argv)
                 auto &files_loader =
                     create_file_loader(local_file_count, file_loader_arena.base,
                                        file_loader_arena.size);
+                size_t file_index = 0;
                 if (all_files) {
-                        for (size_t file_index = 0;
-                             file_index < all_files->entries_size;
+                        for (; file_index < all_files->entries_size;
                              ++file_index) {
                                 auto const &entry =
                                     all_files->entries_first[file_index];
@@ -1073,7 +1382,18 @@ int main(int argc, char **argv)
                             });
                 };
 
-                while (count_pending_files(files_loader) > 0) {
+                auto sftp_file_first =
+                    sftp_all_files ? sftp_all_files->entries_first : nullptr;
+                auto sftp_file_last =
+                    sftp_file_first +
+                    (sftp_all_files ? sftp_all_files->entries_size : 0);
+                sftp::SFTPClient sftp_client = {};
+                if (sftp_file_first != sftp_file_last) {
+                        sftp_client_open(&sftp_client, sftp_host_data);
+                }
+                DEFER(SFTPClientClose(&sftp_client));
+                while (count_pending_files(files_loader) > 0 ||
+                       sftp_file_first != sftp_file_last) {
                         wait_for_available_files(files_loader);
                         for (auto &file : available_files(files_loader)) {
                                 if (tasks_count == tasks_capacity) {
@@ -1084,6 +1404,69 @@ int main(int argc, char **argv)
 
                                 accept(files_loader, file);
                                 push_message_task(file);
+                        }
+                        if (sftp_file_first != sftp_file_last) {
+                                MemoryArena sftp_file_arena =
+                                    push_sub_arena(*transient_arena,
+                                                   sftp_file_size_limit + 8192);
+                                auto const &file = *sftp_file_first;
+                                size_t d_size = file.filesize + 4096;
+                                uint8_t *d = push_array_rvalue(&sftp_file_arena,
+                                                               d, d_size);
+                                sftp::SFTPClientStreamReader s = {};
+                                {
+                                        s.path = file.path;
+                                        s.path_size = cstr_len(file.path);
+                                }
+                                SFTPClientStreamReaderOpen(&s, &sftp_client);
+                                DEFER(SFTPClientStreamReaderClose(&s));
+                                s.d_buffer = d;
+                                s.d_buffer_size = d_size;
+                                while (
+                                    SFTPClientStreamReaderNext(&s) ==
+                                    sftp::SFTPClientStreamReader::Error_None) {
+                                        s.d_buffer += s.d_bytes_read;
+                                        s.d_buffer_size -= s.d_bytes_read;
+                                };
+                                auto d_read_last = s.d_buffer;
+                                auto io_success = s.error ==
+                                                  sftp::SFTPClientStreamReader::
+                                                      Error_NoMoreBytes;
+                                if (io_success) {
+                                        ProcessedMessage result = {};
+                                        result.fileindex = file_index++;
+                                        auto msg_arena = push_sub_arena(
+                                            result_arena, KILOBYTES(8));
+                                        auto temp_arena = push_sub_arena(
+                                            *transient_arena, MEGABYTES(2));
+                                        // TODO(nicolas): TAG(memory_leak) are
+                                        // we leaking?
+                                        process_message(zwei, file.filename,
+                                                        file.path, d,
+                                                        d_read_last, temp_arena,
+                                                        msg_arena, result);
+                                        if (result.success) {
+                                                print_processed_message(
+                                                    result, *transient_arena);
+                                        }
+                                        pop_unused(*transient_arena,
+                                                   temp_arena);
+                                        pop_unused(result_arena, msg_arena);
+                                } else {
+                                        error_print(s.path);
+                                        if (s.error_msg)
+                                                error_print(s.error_msg);
+                                        if (s.client) {
+                                                printf("status: %d\n",
+                                                       s.client->sftp_status);
+                                                if (s.client->sftp_status_msg)
+                                                        error_print(
+                                                            s.client
+                                                                ->sftp_status_msg);
+                                        }
+                                }
+                                pop_unused(*transient_arena, sftp_file_arena);
+                                ++sftp_file_first;
                         }
                         SPDR_COUNTER1(global_spdr, "main", "process_task",
                                       SPDR_INT("value", int(tasks_count)));
@@ -1153,3 +1536,6 @@ int main(int argc, char **argv)
 #define ZWEI_TEXTAPP_IMPLEMENTATION
 #include "secure_hash_standard.cpp"
 #include "zwei_textapp.cpp"
+
+#define SFTP_IMPLEMENTATION
+#include "sftp.cpp"

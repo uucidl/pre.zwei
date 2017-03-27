@@ -195,6 +195,19 @@ inline char const *cstr_find_last(char const *s, char character)
         return algos::find_last_unguarded(s, is_cstr_char, character);
 }
 
+inline char const *cstr_find_prefix(char const *s, char const *prefix)
+{
+        if (!is_cstr_char(*prefix)) {
+                return s + cstr_len(s);
+        }
+        auto r = algos::find_mismatch_unguarded(s, prefix, is_cstr_char,
+                                                std::equal_to<char>());
+        if (*r.second != 0) {
+                return s + cstr_len(s);
+        }
+        return r.first;
+}
+
 inline bool cstr_endswith(char const *s, char const *suffix)
 {
         if (!is_cstr_char(*suffix)) {
