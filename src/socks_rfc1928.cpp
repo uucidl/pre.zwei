@@ -75,7 +75,7 @@ SOCKSClientProtocolNext(SOCKSClientProtocol *client,
 
 #endif // END(SOCKS_RFC1928_PROTOTYPES)
 
-#if !defined(SOCKS_RFC1928_IMPLEMENTATION) && defined(SOCKS_RFC1928_EMIT_MAIN)
+#if !defined(SOCKS_RFC1928_IMPLEMENTATION) && defined(SOCKS_RFC1928_MAIN)
 #define SOCKS_RFC1928_IMPLEMENTATION
 #endif
 
@@ -463,7 +463,6 @@ SOCKSClientProtocol::Error SOCKSClientProtocolNext(SOCKSClientProtocol *client,
                                 memcpy(&p_a, s, sizeof p_a);
                                 s += sizeof p_a;
                                 s_size -= sizeof p_a;
-                                uint16_t port = p_a.port_hi << 8 | p_a.port_lo;
                                 address_port_ipv4 null_address = {};
                                 if (memcmp(&null_address, &p_a, sizeof p_a)) {
                                         return socks_client_protocol_error(
@@ -502,7 +501,7 @@ SOCKSClientProtocol::Error SOCKSClientProtocolNext(SOCKSClientProtocol *client,
 
 #endif // END(SOCKS_RFC1928_IMPLEMENTATION)
 
-#if defined(SOCKS_RFC1928_EMIT_MAIN)
+#if defined(SOCKS_RFC1928_MAIN)
 
 #include <cstring>
 

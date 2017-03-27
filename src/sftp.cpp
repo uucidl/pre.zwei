@@ -310,6 +310,7 @@ SFTPClientStreamReaderNext(SFTPClientStreamReader *stream);
 
 #include <cstdio>
 #include <cstring>
+#include <limits>
 
 #if !defined(fatal_if)
 #include <cstdlib>
@@ -324,6 +325,15 @@ namespace sftp
 {
 
 template <typename T, size_t N> constexpr size_t countof(T (&)[N]) { return N; }
+
+static int saturated_int(std::size_t x)
+{
+        int upper_bound = std::numeric_limits<int>::max();
+        if (x > std::size_t(upper_bound)) {
+                return upper_bound;
+        }
+        return static_cast<int>(x);
+}
 
 template <typename Resource, typename... MsgArgs>
 typename Resource::Error assign_error(Resource *resource,
@@ -436,7 +446,7 @@ tcp_ip_terminating_error(tcp_ip_connection *connection,
 // open internet address
 static tcp_ip_connection::Error tcp_ip_open(tcp_ip_connection *connection,
                                             char const *hostname,
-                                            int hostname_size,
+                                            std::size_t hostname_size,
                                             int port)
 {
         *connection = {};
@@ -812,10 +822,11 @@ SFTPClientListFilesOpen(SFTPClientListFiles *file_list, SFTPClient *client)
 
         file_list->client = client;
 
-        file_list->directory = global_sftp.sftp.open_ex(
-            file_list->client->sftp, file_list->path, file_list->path_size,
-            libssh2_api::sftp_api::open_flag_READ, 0,
-            libssh2_api::sftp_api::open_type_OPENDIR);
+        file_list->directory =
+            global_sftp.sftp.open_ex(file_list->client->sftp, file_list->path,
+                                     saturated_int(file_list->path_size),
+                                     libssh2_api::sftp_api::open_flag_READ, 0,
+                                     libssh2_api::sftp_api::open_type_OPENDIR);
         if (!file_list->directory) {
                 sftp_client_ssh2error(file_list->client,
                                       SFTPClient::Error_SFTP);
@@ -826,7 +837,7 @@ SFTPClientListFilesOpen(SFTPClientListFiles *file_list, SFTPClient *client)
         return file_list->error = SFTPClientListFiles::Error_None;
 }
 
-static void sftp_fill_status_ssh2error(SFTPClient *client, int ssh2_error)
+static void sftp_fill_status_ssh2error(SFTPClient *client, ssize_t ssh2_error)
 {
         enum { LIBSSH2_ERROR_SFTP_PROTOCOL = -31 };
         sftp_client_ssh2error(client, SFTPClient::Error_SFTP);
@@ -922,10 +933,11 @@ SFTPClientStreamReaderOpen(SFTPClientStreamReader *stream, SFTPClient *client)
 
         stream->client = client;
 
-        stream->file = global_sftp.sftp.open_ex(
-            stream->client->sftp, stream->path, stream->path_size,
-            libssh2_api::sftp_api::open_flag_READ, 0,
-            libssh2_api::sftp_api::open_type_OPENFILE);
+        stream->file =
+            global_sftp.sftp.open_ex(stream->client->sftp, stream->path,
+                                     saturated_int(stream->path_size),
+                                     libssh2_api::sftp_api::open_flag_READ, 0,
+                                     libssh2_api::sftp_api::open_type_OPENFILE);
         if (!stream->file) {
                 sftp_client_ssh2error(stream->client, SFTPClient::Error_SFTP);
                 return assign_error(
@@ -984,19 +996,6 @@ SFTPClientStreamReaderNext(SFTPClientStreamReader *stream)
 
 #include <cstdlib>
 #include <cstring>
-#include <limits>
-
-template <typename Integral, typename Number>
-static Integral saturate_integral_cast(Number x)
-{
-        if (x > Number(std::numeric_limits<Integral>::max())) {
-                return std::numeric_limits<Integral>::max();
-        }
-        if (x < Number(std::numeric_limits<Integral>::lowest())) {
-                return std::numeric_limits<Integral>::lowest();
-        }
-        return static_cast<Integral>(x);
-}
 
 #include <string>
 #include <vector>
@@ -1040,7 +1039,7 @@ sftp_list_files(sftp::SFTPClient *sftp_client,
                             sizeof long_list_name_buffer;
                 }
                 std::fprintf(stdout, "Opening directory %s\n", path.c_str());
-                auto error = SFTPClientListFilesOpen(&list_files, sftp_client);
+                SFTPClientListFilesOpen(&list_files, sftp_client);
                 std::fprintf(stderr, "error:%s (%d)\n", sftp_client->error_msg,
                              sftp_client->error);
                 std::fprintf(stderr, "file_list_error:%s (%d)\n",
@@ -1156,21 +1155,20 @@ int main(int argc, char **argv)
                 sftp_client.opt_socks_proxy_port = opt_socks_proxy_port;
         };
         {
-                std::fprintf(
-                    stdout, "Connecting to %.*s@%.*s:%d\n",
-                    saturate_integral_cast<int>(sftp_client.username_size),
-                    sftp_client.username,
-                    saturate_integral_cast<int>(sftp_client.hostname_size),
-                    sftp_client.hostname, sftp_client.port);
+                std::fprintf(stdout, "Connecting to %.*s@%.*s:%d\n",
+                             sftp::saturated_int(sftp_client.username_size),
+                             sftp_client.username,
+                             sftp::saturated_int(sftp_client.hostname_size),
+                             sftp_client.hostname, sftp_client.port);
                 if (sftp_client.opt_socks_proxy_hostname_size) {
                         std::fprintf(
                             stdout, "Via SOCKS proxy at %.*s:%d\n",
-                            saturate_integral_cast<int>(
+                            sftp::saturated_int(
                                 sftp_client.opt_socks_proxy_hostname_size),
                             sftp_client.opt_socks_proxy_hostname,
                             sftp_client.opt_socks_proxy_port);
                 }
-                auto error = SFTPClientOpen(&sftp_client);
+                SFTPClientOpen(&sftp_client);
                 std::fprintf(stderr, "error:%s (%d)\n",
                              enum_description(sftp_client.error),
                              sftp_client.error);

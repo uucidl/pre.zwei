@@ -153,6 +153,23 @@ must_compile_osx \
         -o "${PROGRAM}" \
         && printf "PROGRAM\t%s\n" "${PROGRAM}"
 )
+
+(
+    PROGRAM="${BUILD}"/socks_rfc1928
+    must_compile_osx \
+        "${HERE}"/src/socks_rfc1928.cpp \
+        -DSOCKS_RFC1928_MAIN=1 \
+        -o "${PROGRAM}"
+)
+
+(
+    PROGRAM="${BUILD}"/sftp
+    must_compile_osx \
+        "${HERE}"/src/sftp.cpp \
+        -DSFTP_MAIN=1 \
+        -DSFTP_API=extern \
+        -o "${PROGRAM}"
+)
 set +e
 
 # beep
