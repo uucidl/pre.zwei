@@ -205,10 +205,12 @@ struct SFTPClientListFiles {
                 EntryType_Unknown,
         };
         struct Entry {
-                char *filename;                  // c string
-                std::size_t filename_size;       // capacity
-                char *long_list_name;            // c string
-                std::size_t long_list_name_size; // capacity
+                char *filename_buffer; // c string buffer
+                std::size_t *filename_size;
+                std::size_t filename_buffer_size; // capacity
+                char *long_list_name_buffer;      // c string buffer
+                std::size_t *long_list_name_size;
+                std::size_t long_list_name_buffer_size; // capacity
                 EntryType entry_type;
                 uint64_t file_size;
         };
@@ -871,10 +873,10 @@ SFTPClientListFilesNext(SFTPClientListFiles *file_list)
         do {
                 libssh2_api::sftp_api::attributes attributes;
                 ssh2_error = global_sftp.sftp.readdir_ex(
-                    file_list->directory, file_list->d_entry.filename,
-                    file_list->d_entry.filename_size,
-                    file_list->d_entry.long_list_name,
-                    file_list->d_entry.long_list_name_size, &attributes);
+                    file_list->directory, file_list->d_entry.filename_buffer,
+                    file_list->d_entry.filename_buffer_size,
+                    file_list->d_entry.long_list_name_buffer,
+                    file_list->d_entry.long_list_name_buffer_size, &attributes);
                 if (attributes.flags & LIBSSH2_SFTP_ATTR_HAS_PERMISSIONS) {
                         if (attributes.permissions & LIBSSH2_SFTP_S_IFDIR) {
                                 file_list->d_entry.entry_type =
@@ -900,6 +902,10 @@ SFTPClientListFilesNext(SFTPClientListFiles *file_list)
                 return assign_error(file_list,
                                     SFTPClientListFiles::Error_NoMoreListEntry);
         }
+        *file_list->d_entry.filename_size =
+            std::strlen(file_list->d_entry.filename_buffer);
+        *file_list->d_entry.long_list_name_size =
+            std::strlen(file_list->d_entry.long_list_name_buffer);
         return SFTPClientListFiles::Error_None;
 }
 
@@ -1027,18 +1033,23 @@ sftp_list_files(sftp::SFTPClient *sftp_client,
                         continue;
                 }
                 sftp::SFTPClientListFiles list_files = {};
-                char filename_buffer[4096];
-                char long_list_name_buffer[4096];
+                char filename[4096];
+                std::size_t filename_size;
+                char long_list_name[4096];
+                std::size_t long_list_name_size;
                 {
                         list_files.path = path.data();
                         list_files.path_size = path.size();
-                        list_files.d_entry.filename = filename_buffer;
-                        list_files.d_entry.filename_size =
-                            sizeof filename_buffer;
-                        list_files.d_entry.long_list_name =
-                            long_list_name_buffer;
+                        list_files.d_entry.filename_buffer = filename;
+                        list_files.d_entry.filename_buffer_size =
+                            sizeof filename;
+                        list_files.d_entry.filename_size = &filename_size;
+                        list_files.d_entry.long_list_name_buffer =
+                            long_list_name;
+                        list_files.d_entry.long_list_name_buffer_size =
+                            sizeof long_list_name;
                         list_files.d_entry.long_list_name_size =
-                            sizeof long_list_name_buffer;
+                            &long_list_name_size;
                 }
                 std::fprintf(stdout, "Opening directory %s\n", path.c_str());
                 SFTPClientListFilesOpen(&list_files, sftp_client);
@@ -1048,14 +1059,14 @@ sftp_list_files(sftp::SFTPClient *sftp_client,
                              list_files.error_msg, list_files.error);
                 while (SFTPClientListFilesNext(&list_files) ==
                        sftp::SFTPClientListFiles::Error_None) {
-                        std::fprintf(stdout, "\t%s\n",
-                                     list_files.d_entry.long_list_name);
-                        if (list_files.d_entry.filename[0] == '.') {
+                        std::fprintf(stdout, "\t%.*s\n",
+                                     int(long_list_name_size), long_list_name);
+                        if (filename[0] == '.') {
                                 continue;
                         }
 
                         auto file_path =
-                            path + std::string(list_files.d_entry.filename);
+                            path + std::string(filename, filename_size);
                         switch (list_files.d_entry.entry_type) {
                         case sftp::SFTPClientListFiles::EntryType_Directory:
                                 std::fprintf(stdout, "[d]\n");
