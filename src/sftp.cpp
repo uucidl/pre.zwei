@@ -185,6 +185,7 @@ struct SFTPClient {
                 SFTPStatusCode_LINK_LOOP = 21,
                 SFTPStatusCodeCount,
         } sftp_status;
+        char const *sftp_status_msg;
 
         // private
         tcp_ip_connection connection;
@@ -844,6 +845,7 @@ static void sftp_fill_status_ssh2error(SFTPClient *client, ssize_t ssh2_error)
         if (ssh2_error == LIBSSH2_ERROR_SFTP_PROTOCOL) {
                 client->sftp_status = SFTPClient::SFTPStatusCode(
                     global_sftp.sftp.last_error(client->sftp));
+                client->sftp_status_msg = enum_description(client->sftp_status);
         } else {
                 client->sftp_status = SFTPClient::SFTPStatusCode_OK;
         }
