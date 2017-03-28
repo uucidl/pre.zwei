@@ -44,6 +44,29 @@ zw_global bool global_can_ignore_file = false;
 #include <cerrno>
 #include <sys/attr.h>
 
+void insert(PlatformFileList *list,
+            size_t file_index,
+            char const *input_path,
+            size_t input_path_size,
+            size_t filesize,
+            MemoryArena *result_arena)
+{
+        ByteCountedRange path = {
+            (uint8_t *)push_bytes(result_arena, 1 + input_path_size),
+            input_path_size,
+        };
+        *algos::copy_n(input_path, input_path_size, path.first) = 0;
+
+        uint8_t *filename =
+            algos::find_backward(path.first, path.first + path.count, '/');
+        // TODO(nicolas): is this skipping a pattern?
+        filename = *filename == '/' ? filename + 1 : filename;
+
+        list->paths[file_index] = (char const *)path.first;
+        list->filenames[file_index] = (char const *)filename;
+        list->attributes[file_index].size = filesize;
+}
+
 /**
    Query a directory and its sub-directories for all their files,
    sorted to maximize throughput when streaming their content.
@@ -534,23 +557,8 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
                 for (size_t i = 0; i < count; i++) {
                         char const *input_path = entry_array[i].path;
                         size_t input_path_n = cstr_len(input_path);
-
-                        ByteCountedRange path = {
-                            (uint8_t *)push_bytes(result_arena,
-                                                  1 + input_path_n),
-                            input_path_n,
-                        };
-                        *algos::copy_n(input_path, input_path_n, path.first) =
-                            0;
-
-                        uint8_t *filename = algos::find_backward(
-                            path.first, path.first + path.count, '/');
-                        // TODO(nicolas): is this skipping a pattern?
-                        filename = *filename == '/' ? filename + 1 : filename;
-
-                        result->paths[i] = (char const *)path.first;
-                        result->filenames[i] = (char const *)filename;
-                        result->attributes[i].size = entry_array[i].size;
+                        insert(result, i, input_path, input_path_n,
+                               entry_array[i].size, result_arena);
                 }
         }
 
