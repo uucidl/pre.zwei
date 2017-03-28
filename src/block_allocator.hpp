@@ -10,32 +10,33 @@ template <typename N, Integral I> N smallest_multiple(N x, I divider)
         return divider * I(std::ceil(double(x) / divider));
 }
 
-struct MemoryBlockListHeader {
+struct BlockListHeader {
         enum { MINIMUM_SIZE = 4096 };
-        MemoryBlockListHeader *next;
+        BlockListHeader *next;
         size_t total_size;
 };
 
-struct MemoryBlockAllocator {
+struct BlockAllocator {
         uint8_t *base;
         std::mutex free_list_mutex;
-        MemoryBlockListHeader free_list_sentinel;
+        BlockListHeader free_list_sentinel;
 };
 
-size_t get_block_allocator_arena_size(size_t maximum_allocation_size)
+size_t block_allocator_get_arena_size(size_t maximum_allocation_size)
 {
         return smallest_multiple(maximum_allocation_size +
-                                     sizeof(MemoryBlockListHeader),
-                                 MemoryBlockListHeader::MINIMUM_SIZE);
+                                     sizeof(BlockListHeader),
+                                 BlockListHeader::MINIMUM_SIZE);
 }
 
-void initialize(MemoryBlockAllocator &allocator,
-                void *memory,
-                size_t memory_size)
+// NOTE(nicolas): a block allocator is neither copyable nor moveable
+void block_allocator_initialize(BlockAllocator *allocator_ptr,
+                                void *memory,
+                                size_t memory_size)
 {
-        zw_assert(memory_size > sizeof(MemoryBlockListHeader),
-                  "not enough memory");
-        MemoryBlockListHeader *all_memory = (MemoryBlockListHeader *)memory;
+        auto &allocator = *allocator_ptr;
+        zw_assert(memory_size > sizeof(BlockListHeader), "not enough memory");
+        BlockListHeader *all_memory = (BlockListHeader *)memory;
         {
                 all_memory->total_size = memory_size;
                 all_memory->next = &allocator.free_list_sentinel;
@@ -45,34 +46,30 @@ void initialize(MemoryBlockAllocator &allocator,
         allocator.free_list_sentinel.next = all_memory;
 }
 
-template <> struct algos::IteratorConcept<MemoryBlockListHeader *> {
+template <> struct algos::IteratorConcept<BlockListHeader *> {
         using difference_type = ssize_t;
 };
 
-zw_internal MemoryBlockListHeader *successor(MemoryBlockListHeader *x)
-{
-        return x->next;
-}
+zw_internal BlockListHeader *successor(BlockListHeader *x) { return x->next; }
 
-zw_internal void set_successor(MemoryBlockListHeader *x,
-                               MemoryBlockListHeader *x_next)
+zw_internal void set_successor(BlockListHeader *x, BlockListHeader *x_next)
 {
         x->next = x_next;
 }
 
-zw_internal void *memory(MemoryBlockListHeader *header)
+zw_internal void *memory(BlockListHeader *header)
 {
         return (void *)(header + 1);
 }
 
-zw_internal size_t memory_size(MemoryBlockListHeader *header)
+zw_internal size_t memory_size(BlockListHeader *header)
 {
         return header->total_size - sizeof(*header);
 }
 
-zw_internal MemoryBlockListHeader *memory_header(void *memory)
+zw_internal BlockListHeader *memory_header(void *memory)
 {
-        return ((MemoryBlockListHeader *)memory) - 1;
+        return ((BlockListHeader *)memory) - 1;
 }
 
 template <typename R> std::unique_lock<R> make_unique_lock(R &r)
@@ -80,8 +77,8 @@ template <typename R> std::unique_lock<R> make_unique_lock(R &r)
         return std::move(std::unique_lock<R>(r));
 }
 
-zw_internal MemoryBlockListHeader *
-allocate_block(MemoryBlockAllocator &allocator, size_t content_size)
+zw_internal BlockListHeader *allocate_block(BlockAllocator &allocator,
+                                            size_t content_size)
 {
         auto free_list_lock = make_unique_lock(allocator.free_list_mutex);
         SPDR_BEGIN1(global_spdr, "allocator", "free_list::find_free_block",
@@ -90,7 +87,7 @@ allocate_block(MemoryBlockAllocator &allocator, size_t content_size)
         auto big_enough_prev = sentinel;
         auto big_enough = algos::find_if(
             successor(sentinel), sentinel,
-            [&big_enough_prev, content_size](MemoryBlockListHeader &header) {
+            [&big_enough_prev, content_size](BlockListHeader &header) {
                     if (content_size > memory_size(&header)) {
                             big_enough_prev = &header;
                             return false;
@@ -105,15 +102,15 @@ allocate_block(MemoryBlockAllocator &allocator, size_t content_size)
         }
 
         size_t needed_block_size =
-            smallest_multiple(content_size + sizeof(MemoryBlockListHeader),
-                              MemoryBlockListHeader::MINIMUM_SIZE);
+            smallest_multiple(content_size + sizeof(BlockListHeader),
+                              BlockListHeader::MINIMUM_SIZE);
         if (big_enough->total_size > needed_block_size) {
                 SPDR_EVENT1(global_spdr, "allocator", "free_list::split_block",
                             SPDR_INT("size", int(needed_block_size)));
                 // Split block as made necessary by the content size
-                MemoryBlockListHeader *remainder_block =
-                    (MemoryBlockListHeader *)((uint8_t *)big_enough +
-                                              needed_block_size);
+                BlockListHeader *remainder_block =
+                    (BlockListHeader *)((uint8_t *)big_enough +
+                                        needed_block_size);
                 remainder_block->total_size =
                     big_enough->total_size - needed_block_size;
                 big_enough->total_size = needed_block_size;
@@ -131,26 +128,24 @@ allocate_block(MemoryBlockAllocator &allocator, size_t content_size)
         return big_enough;
 }
 
-zw_internal void free_block(MemoryBlockAllocator &allocator,
-                            MemoryBlockListHeader *block)
+zw_internal void free_block(BlockAllocator &allocator, BlockListHeader *block)
 {
         auto free_list_lock = make_unique_lock(allocator.free_list_mutex);
-        MemoryBlockListHeader *free_blocks_sentinel =
-            &allocator.free_list_sentinel;
+        BlockListHeader *free_blocks_sentinel = &allocator.free_list_sentinel;
 
         SPDR_BEGIN1(global_spdr, "allocator", "free_list::find_adjacent_block",
                     SPDR_INT("offset", int((uint8_t *)block - allocator.base)));
         auto adjacent_prev = free_blocks_sentinel;
         auto adjacent = algos::find_if(
             successor(free_blocks_sentinel), free_blocks_sentinel,
-            [&adjacent_prev, block](MemoryBlockListHeader const &x) {
+            [&adjacent_prev, block](BlockListHeader const &x) {
                     uint8_t *block_byte = (uint8_t *)block;
                     uint8_t *x_byte = (uint8_t *)&x;
                     bool adjacent =
                         (block_byte + block->total_size == x_byte) ||
                         (x_byte + x.total_size) == block_byte;
                     if (!adjacent) {
-                            adjacent_prev = (MemoryBlockListHeader *)&x;
+                            adjacent_prev = (BlockListHeader *)&x;
                             return false;
                     }
                     return true;
@@ -177,7 +172,7 @@ zw_internal void free_block(MemoryBlockAllocator &allocator,
         }
 }
 
-void *allocate(MemoryBlockAllocator &allocator, size_t size)
+void *allocate(BlockAllocator &allocator, size_t size)
 {
         auto header = allocate_block(allocator, size);
         if (!header) {
@@ -186,7 +181,7 @@ void *allocate(MemoryBlockAllocator &allocator, size_t size)
         return memory(header);
 }
 
-void free(MemoryBlockAllocator &allocator, void *pointer)
+void free(BlockAllocator &allocator, void *pointer)
 {
         auto header = memory_header(pointer);
         free_block(allocator, header);

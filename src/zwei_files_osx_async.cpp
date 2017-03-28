@@ -39,7 +39,7 @@ struct FileLoader {
 
         uint32_t available_since_wait;
 
-        MemoryBlockAllocator content_allocator;
+        BlockAllocator content_allocator;
 
         dispatch_queue_t task_queue;
         dispatch_semaphore_t data_available_semaphore;
@@ -53,7 +53,7 @@ size_t get_file_loader_allocation_size(size_t maximum_file_count,
         return sizeof(FileLoader) +
                maximum_file_count * sizeof(FileLoaderEntry) +
                maximum_file_count * 2 * sizeof(FileLoaderHandle) +
-               get_block_allocator_arena_size(maximum_file_size);
+               block_allocator_get_arena_size(maximum_file_size);
 }
 
 FileLoader &
@@ -92,9 +92,9 @@ create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size)
 
         size_t available_memory_size = arena.size - arena.used;
 
-        initialize(file_loader.content_allocator,
-                   push_bytes(&arena, available_memory_size),
-                   available_memory_size);
+        block_allocator_initialize(&file_loader.content_allocator,
+                                   push_bytes(&arena, available_memory_size),
+                                   available_memory_size);
 
         return file_loader;
 }

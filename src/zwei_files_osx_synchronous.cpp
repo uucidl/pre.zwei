@@ -29,7 +29,7 @@ struct FileLoader {
         FileLoaderContent *file_contents;
         size_t loaded_files_count;
         size_t file_memory_size;
-        MemoryBlockAllocator files_memory_allocator;
+        BlockAllocator files_memory_allocator;
 };
 
 template <typename N, Integral I> N greatest_multiple(N x, I divider)
@@ -74,11 +74,11 @@ create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size)
         file_loader.loaded_files_count = 0;
         size_t file_memory_size =
             greatest_multiple(file_loader.arena.size - file_loader.arena.used,
-                              MemoryBlockListHeader::MINIMUM_SIZE);
+                              BlockListHeader::MINIMUM_SIZE);
         file_loader.file_memory_size = file_memory_size;
-        initialize(file_loader.files_memory_allocator,
-                   push_bytes(&file_loader.arena, file_memory_size),
-                   file_memory_size);
+        block_allocator_initialize(
+            &file_loader.files_memory_allocator,
+            push_bytes(&file_loader.arena, file_memory_size), file_memory_size);
 
         return file_loader;
 }
