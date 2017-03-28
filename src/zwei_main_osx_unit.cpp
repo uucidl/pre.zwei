@@ -44,12 +44,12 @@ zw_global bool global_can_ignore_file = false;
 #include <cerrno>
 #include <sys/attr.h>
 
-void insert(PlatformFileList *list,
-            size_t file_index,
-            char const *input_path,
-            size_t input_path_size,
-            size_t filesize,
-            MemoryArena *result_arena)
+void assign_at(PlatformFileList *list,
+               size_t file_index,
+               char const *input_path,
+               size_t input_path_size,
+               size_t filesize,
+               MemoryArena *result_arena)
 {
         ByteCountedRange path = {
             (uint8_t *)push_bytes(result_arena, 1 + input_path_size),
@@ -62,9 +62,11 @@ void insert(PlatformFileList *list,
         // TODO(nicolas): is this skipping a pattern?
         filename = *filename == '/' ? filename + 1 : filename;
 
-        list->paths[file_index] = (char const *)path.first;
-        list->filenames[file_index] = (char const *)filename;
-        list->attributes[file_index].size = filesize;
+        fatal_ifnot(file_index < list->entries_size, "capacity");
+        auto &entry = list->entries_first[file_index];
+        entry.path = (char const *)path.first;
+        entry.filename = (char const *)filename;
+        entry.filesize = filesize;
 }
 
 /**
@@ -544,21 +546,16 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
         // construct file list from array
         PlatformFileList *result = push_pointer_rvalue(result_arena, result);
         *result = {};
-        result->count = entry_array_count;
+        result->entries_size = entry_array_count;
 
-        if (result->count) {
-                size_t count = result->count;
-                result->paths =
-                    push_array_rvalue(result_arena, result->paths, count);
-                result->filenames =
-                    push_array_rvalue(result_arena, result->filenames, count);
-                result->attributes =
-                    push_array_rvalue(result_arena, result->attributes, count);
-                for (size_t i = 0; i < count; i++) {
+        if (result->entries_size) {
+                result->entries_first = push_array_rvalue(
+                    result_arena, result->entries_first, result->entries_size);
+                for (size_t i = 0; i < result->entries_size; i++) {
                         char const *input_path = entry_array[i].path;
                         size_t input_path_n = cstr_len(input_path);
-                        insert(result, i, input_path, input_path_n,
-                               entry_array[i].size, result_arena);
+                        assign_at(result, i, input_path, input_path_n,
+                                  entry_array[i].size, result_arena);
                 }
         }
 
@@ -790,14 +787,16 @@ int main(int argc, char **argv)
 
                 size_t file_size_limit = MEGABYTES(128);
                 auto file_loader_arena = push_sub_arena(
-                    *transient_arena, get_file_loader_allocation_size(
-                                          all_files->count, file_size_limit));
-                auto &files_loader =
-                    create_file_loader(all_files->count, file_loader_arena.base,
-                                       file_loader_arena.size);
-                for (size_t file_index = 0; file_index < all_files->count;
-                     ++file_index) {
-                        size_t size = all_files->attributes[file_index].size;
+                    *transient_arena,
+                    get_file_loader_allocation_size(all_files->entries_size,
+                                                    file_size_limit));
+                auto &files_loader = create_file_loader(all_files->entries_size,
+                                                        file_loader_arena.base,
+                                                        file_loader_arena.size);
+                for (size_t file_index = 0;
+                     file_index < all_files->entries_size; ++file_index) {
+                        size_t size =
+                            all_files->entries_first[file_index].filesize;
                         bool ignore = false;
                         if (size > file_size_limit) {
                                 // TODO(nicolas): should error be
@@ -814,9 +813,10 @@ int main(int argc, char **argv)
                         }
 
                         if (!ignore) {
-                                push_file(files_loader,
-                                          all_files->paths[file_index], size,
-                                          (uint32_t)file_index);
+                                push_file(
+                                    files_loader,
+                                    all_files->entries_first[file_index].path,
+                                    size, (uint32_t)file_index);
                         }
                 }
                 // iterates over every file in the stream. the loop

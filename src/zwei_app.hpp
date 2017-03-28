@@ -17,12 +17,13 @@ enum ZweiAppFlags {
 };
 
 struct PlatformFileList {
-        size_t count;
-        char const **paths;
-        char const **filenames;
-        struct {
-                uint64_t size;
-        } * attributes;
+        struct Entry {
+                uint64_t filesize;
+                char const *path;
+                char const *filename;
+        };
+        Entry *entries_first;
+        size_t entries_size;
 };
 
 #define PLATFORM_QUERY_ALL_FILES(name)                                         \
