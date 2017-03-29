@@ -788,6 +788,28 @@ int main(int argc, char **argv)
                 // That's less true if we're taking the data from the network?
 
                 size_t file_size_limit = MEGABYTES(128);
+                /* trap/ignore files that are too large */ {
+                        auto f = all_files->entries_first;
+                        auto const l =
+                            all_files->entries_first + all_files->entries_size;
+                        auto const below_limit = [file_size_limit](
+                            PlatformFileList::Entry const &x) {
+                                std::fprintf(stdout, "f:%llu\n", x.filesize);
+                                return x.filesize < file_size_limit;
+                        };
+                        auto below_limit_last =
+                            std::stable_partition(f, l, below_limit);
+
+                        if (!global_can_ignore_file && below_limit_last != l) {
+                                zw_assert(
+                                    false,
+                                    "large files"); // inspect below_limit_last
+                        }
+                        all_files->entries_size = below_limit_last - f;
+                }
+
+                std::fprintf(stdout, "files: %zu\n", all_files->entries_size);
+
                 auto file_loader_arena = push_sub_arena(
                     *transient_arena,
                     get_file_loader_allocation_size(all_files->entries_size,
@@ -797,29 +819,10 @@ int main(int argc, char **argv)
                                                         file_loader_arena.size);
                 for (size_t file_index = 0;
                      file_index < all_files->entries_size; ++file_index) {
-                        size_t size =
-                            all_files->entries_first[file_index].filesize;
-                        bool ignore = false;
-                        if (size > file_size_limit) {
-                                // TODO(nicolas): should error be
-                                // dealt with here or inside the
-                                // loader? Inside the loader would
-                                // centralize error handling.
-                                error_print(
-                                    "Ignoring Exceptionally Large File");
-                                if (global_can_ignore_file) {
-                                        ignore = true;
-                                } else {
-                                        zw_assert(false, "large file");
-                                }
-                        }
-
-                        if (!ignore) {
-                                push_file(
-                                    files_loader,
-                                    all_files->entries_first[file_index].path,
-                                    size, (uint32_t)file_index);
-                        }
+                        auto const &entry =
+                            all_files->entries_first[file_index];
+                        push_file(files_loader, entry.path, entry.filesize,
+                                  (uint32_t)file_index);
                 }
                 // iterates over every file in the stream. the loop
                 // can never reach the end if you don't release files
