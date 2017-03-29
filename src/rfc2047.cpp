@@ -297,6 +297,8 @@ O transcode_encoded_word_to_utf8_n(
                 }
         } else {
                 // don't know how to deal with this charset
+                // TODO(nicolas) ISO-2022 for jp text
+                // we should also have a reasonable fallback
         }
 
         return d_first;
