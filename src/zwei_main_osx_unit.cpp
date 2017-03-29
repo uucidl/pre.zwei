@@ -788,7 +788,8 @@ int main(int argc, char **argv)
                 // That's less true if we're taking the data from the network?
 
                 size_t file_size_limit = MEGABYTES(128);
-                /* trap/ignore files that are too large */ {
+                auto const detect_exclude_large_files = [](
+                    PlatformFileList *all_files, size_t file_size_limit) {
                         auto f = all_files->entries_first;
                         auto const l =
                             all_files->entries_first + all_files->entries_size;
@@ -806,23 +807,26 @@ int main(int argc, char **argv)
                                     "large files"); // inspect below_limit_last
                         }
                         all_files->entries_size = below_limit_last - f;
-                }
-
-                std::fprintf(stdout, "files: %zu\n", all_files->entries_size);
-
+                };
+                if (all_files)
+                        detect_exclude_large_files(all_files, file_size_limit);
+                size_t local_file_count =
+                    all_files ? all_files->entries_size : 0;
                 auto file_loader_arena = push_sub_arena(
-                    *transient_arena,
-                    get_file_loader_allocation_size(all_files->entries_size,
-                                                    file_size_limit));
-                auto &files_loader = create_file_loader(all_files->entries_size,
-                                                        file_loader_arena.base,
-                                                        file_loader_arena.size);
-                for (size_t file_index = 0;
-                     file_index < all_files->entries_size; ++file_index) {
-                        auto const &entry =
-                            all_files->entries_first[file_index];
-                        push_file(files_loader, entry.path, entry.filesize,
-                                  (uint32_t)file_index);
+                    *transient_arena, get_file_loader_allocation_size(
+                                          local_file_count, file_size_limit));
+                auto &files_loader =
+                    create_file_loader(local_file_count, file_loader_arena.base,
+                                       file_loader_arena.size);
+                if (all_files) {
+                        for (size_t file_index = 0;
+                             file_index < all_files->entries_size;
+                             ++file_index) {
+                                auto const &entry =
+                                    all_files->entries_first[file_index];
+                                push_file(files_loader, entry.path,
+                                          entry.filesize, (uint32_t)file_index);
+                        }
                 }
                 // iterates over every file in the stream. the loop
                 // can never reach the end if you don't release files
