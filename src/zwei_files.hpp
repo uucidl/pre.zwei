@@ -11,6 +11,10 @@
    - managing memory for every file is not a concern for the user,
    - processing a file's content can be done in parallel w/ I/O
 
+   What is this, essentially?  It's a process that sorts files by state
+   continuously waiting for certain content to appear, in order to implement a
+   pipeline
+
    Optional:
    - cancelling?
 */
