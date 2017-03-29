@@ -224,6 +224,13 @@ zw_internal void process_message(Zwei const &zwei,
                 return;
         }
 
+        if (destination.zoefile.maildir_flags & MaildirFlag_Trashed) {
+                // TODO(nil): TAG(Performance) it's a bit late to reject a
+                // message, since we now have fetched its content!!
+                return; // ignore trashed messages
+        }
+
+        // Compute ZOE url:
         // TODO(nicolas): TAG(portability) here we have encoded the
         // path separator, which makes this code non portable
         if (0 == zoefile_errorcode) {

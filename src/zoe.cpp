@@ -35,6 +35,51 @@ HAMMER_ACTION(act_uuid)
         return H_MAKE_BYTES(bytes, bytes_size);
 }
 
+HAMMER_ACTION(act_maildir_flags)
+{
+        auto fields_first = begin(p->ast);
+        auto const fields_last = end(p->ast);
+        uint64_t flags = 0;
+        for (; fields_first != fields_last;
+             fields_first = algos::successor(fields_first)) {
+                auto &token = algos::source(fields_first);
+                fatal_ifnot(token->token_type == TT_UINT, "expected uint");
+                switch (token->uint) {
+                case 'P':
+                        flags |= MaildirFlag_Passed;
+                        break;
+                case 'R':
+                        flags |= MaildirFlag_Replied;
+                        break;
+                case 'S':
+                        flags |= MaildirFlag_Seen;
+                        break;
+                case 'T':
+                        flags |= MaildirFlag_Trashed;
+                        break;
+                case 'D':
+                        flags |= MaildirFlag_Draft;
+                        break;
+                case 'F':
+                        flags |= MaildirFlag_User;
+                        break;
+                }
+        }
+        return H_MAKE_UINT(flags);
+}
+
+HAMMER_ACTION(act_opt_maildir_tags)
+{
+        if (p->ast->token_type == TT_NONE) {
+                uint64_t flags = 0;
+                return H_MAKE_UINT(flags);
+        } else if (p->ast->token_type == TT_UINT) {
+                return (HParsedToken *)p->ast;
+        }
+        fatal_if(true, "invalid token type");
+        return (HParsedToken *)p->ast;
+}
+
 zw_internal void zoe_support_init()
 {
 #if ZWEI_UNIT_TESTS
@@ -46,11 +91,12 @@ zw_internal void zoe_support_init()
         H_RULE(eml_extension, UH_TOKEN(".eml"));
 
         H_RULE(standard_maildir_flag, UH_IN("PRSTDF"));
-        H_RULE(maildir_tags, UH_SEQ(UH_IN(":;"), h_ch('2'), h_ch(','),
-                                    h_many1(standard_maildir_flag)));
+        H_ARULE(maildir_flags, h_many1(standard_maildir_flag));
+        H_RULE(maildir_tags, h_right(UH_SEQ(UH_IN(":;"), h_ch('2'), h_ch(',')),
+                                     maildir_flags));
 
-        H_RULE(uuid_eml_file,
-               UH_SEQ(uuid, h_optional(maildir_tags), eml_extension));
+        H_ARULE(opt_maildir_tags, h_optional(maildir_tags));
+        H_RULE(uuid_eml_file, UH_SEQ(uuid, opt_maildir_tags, eml_extension));
 
         zoe_support.uuid_eml_file = uuid_eml_file;
 
@@ -83,8 +129,15 @@ zoe_parse_uuid_filename(const char *filename, size_t filename_size)
         using algos::end;
         using algos::copy_n;
 
-        auto const &uuid_token = source(begin(parse_result->ast));
+        auto token_first = begin(parse_result->ast);
+        auto const &uuid_token = source(token_first);
         zw_assert(uuid_token->token_type == TT_BYTES, "unexpected token");
+        token_first = algos::successor(token_first);
+        auto const &maildir_flags_uint = source(token_first);
+        zw_assert(maildir_flags_uint->token_type == TT_UINT,
+                  "unexpected token");
+        result.maildir_flags = maildir_flags_uint->uint;
+        token_first = algos::successor(token_first);
         copy_n(uuid_token->bytes.token, uuid_token->bytes.len, result.uuid);
 
         h_parse_result_free(parse_result);

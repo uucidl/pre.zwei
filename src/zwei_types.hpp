@@ -5,9 +5,19 @@
 
 #include <cstdint>
 
+enum MaildirFlag {
+        MaildirFlag_Passed = 1 << 0,
+        MaildirFlag_Replied = 1 << 2,
+        MaildirFlag_Seen = 1 << 3,
+        MaildirFlag_Trashed = 1 << 4,
+        MaildirFlag_Draft = 1 << 5,
+        MaildirFlag_User = 1 << 6,
+};
+
 struct ZoeMailStoreFile {
         uint8_t uuid[16];
         uint64_t unix_epoch_millis;
+        uint64_t maildir_flags; // Bitfield(MaildirFlag)
 };
 
 struct ByteCountedRange {
