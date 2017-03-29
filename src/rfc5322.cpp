@@ -1100,7 +1100,7 @@ zw_internal bool rfc5322_validate(const HParsedToken *ast,
                 if (count < static_limit.min) {
                         is_valid = false;
                         push_back_formatted(
-                            out, "ERROR %s field count %d < min: %d\n",
+                            out, "ERROR %s field count %d < min: %d",
                             rfc5322_token_types[static_limit.type].name_literal,
                             count, static_limit.min);
                         trace(out);
@@ -1108,7 +1108,7 @@ zw_internal bool rfc5322_validate(const HParsedToken *ast,
                 if (count > static_limit.max) {
                         is_valid = false;
                         push_back_formatted(
-                            out, "ERROR %s field count %d > max: %d\n",
+                            out, "ERROR %s field count %d > max: %d",
                             rfc5322_token_types[static_limit.type].name_literal,
                             count, static_limit.max);
                         trace(out);
