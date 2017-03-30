@@ -784,6 +784,8 @@ int main(int argc, char **argv)
                 // doesn't have many resources, this could be made
                 // purely functional and use a global variable. At
                 // least from an API point of view.
+                //
+                // That's less true if we're taking the data from the network?
 
                 size_t file_size_limit = MEGABYTES(128);
                 auto file_loader_arena = push_sub_arena(
