@@ -143,7 +143,11 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
         };
 
         if (!message_summary.valid_rfc5322) {
-                trace_print("\tRFC5322\tfalse");
+                push_back_tab(text_output_group);
+                push_back_cstr(text_output_group, "RFC5322");
+                push_back_tab(text_output_group);
+                push_back_cstr(text_output_group, "false");
+                trace(text_output_group);
         }
 
         print_field("MESSAGE-ID", message_summary.message_id_bytes);
