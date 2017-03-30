@@ -25,6 +25,10 @@ struct Zwei {
         ParseZoeMailstoreFilenameFn parse_zoe_mailstore_filename;
 };
 
+zw_internal bool should_skip_message_file(Zwei const &zwei,
+                                          char const *filename,
+                                          char const *filepath);
+
 zw_internal void process_message(Zwei const &zwei,
                                  char const *filename,
                                  char const *filepath,
@@ -48,6 +52,24 @@ print_processed_message(ProcessedMessage const &processed_message,
 // in every executable
 #include "../modules/uu.spdr/include/spdr/spdr.hh"
 extern SPDR_Context *global_spdr;
+
+zw_internal bool should_skip_message_file(Zwei const &zwei,
+                                          char const *filename,
+                                          char const *filepath)
+{
+        ZoeMailStoreFile zoefile = {};
+        auto zoefile_errorcode =
+            zwei.parse_zoe_mailstore_filename(&zoefile, filename);
+        if (0 != zoefile_errorcode && !cstr_endswith(filepath, ".eml")) {
+                return true;
+        }
+
+        if (zoefile.maildir_flags & MaildirFlag_Trashed) {
+                return true; // ignore trashed messages
+        }
+
+        return false;
+}
 
 // TODO(nil): TAG(security) if a mail contains ansi escape sequences,
 // the mail can control the terminal somehow and fuck the application's text
@@ -224,12 +246,6 @@ zw_internal void process_message(Zwei const &zwei,
                 return;
         }
 
-        if (destination.zoefile.maildir_flags & MaildirFlag_Trashed) {
-                // TODO(nil): TAG(Performance) it's a bit late to reject a
-                // message, since we now have fetched its content!!
-                return; // ignore trashed messages
-        }
-
         // Compute ZOE url:
         // TODO(nicolas): TAG(portability) here we have encoded the
         // path separator, which makes this code non portable
@@ -320,6 +336,14 @@ print_processed_message(ProcessedMessage const &processed_message,
                 push_back_u64(traceg, processed_message.filesize);
                 push_back_tab(traceg);
                 trace(traceg);
+
+                if (processed_message.zoefile.maildir_flags &
+                    MaildirFlag_Trashed) {
+                        push_back_cstr(traceg, "TRASHED");
+                        push_back_tab(traceg);
+                        push_back_cstr(traceg, "true");
+                        trace(traceg);
+                }
 
                 push_back_cstr(traceg, "ZOE_REL_URL");
                 push_back_tab(traceg);
