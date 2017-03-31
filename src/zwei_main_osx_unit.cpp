@@ -1031,8 +1031,6 @@ int main(int argc, char **argv)
         return 0;
 }
 
-// TODO(nicolas): NEXT serialize data on disk so we can compare the
-// results of both methods and see that nothing wrong is happening.
 #if 0 * ZWEI_SLOW
 #include "zwei_files_osx_synchronous.cpp"
 #else
