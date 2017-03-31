@@ -1,5 +1,7 @@
 #pragma once
 
+// TODO(nicolas) NEXT modularize and rename
+
 #include "hammer_fwd.hpp"
 
 struct RFC5234 {
