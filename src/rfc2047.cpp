@@ -12,7 +12,6 @@
 
 #include "hammer_utils.hpp"
 #include "mime_types.hpp"
-#include "output_iterators.hpp"
 #include "rfc5234.hpp"
 #include "zwei_logging.hpp"
 #include "zwei_types.hpp"
@@ -311,7 +310,7 @@ size_t rfc2047_get_encoded_word_size(HParsedToken const *token)
 {
         auto encoded_word = pack_encoded_word(token);
 
-        algos::NullOutputIteratorAdapter<uint8_t *> d_first = {};
+        algos::VoidOutputIteratorAdapter<uint8_t *> d_first = {};
 
         return transcode_encoded_word_to_utf8_n(
                    encoded_word.charset, encoded_word.bytes,

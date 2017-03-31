@@ -1151,7 +1151,7 @@ O copy_all_token_bytes(RFC5322TreeCoordinate const &top, O d_first)
 
 zw_internal size_t rfc5322_field_bytes_count(HParsedToken const *token)
 {
-        algos::NullOutputIteratorAdapter<uint8_t *> d_first = {};
+        algos::VoidOutputIteratorAdapter<uint8_t *> d_first = {};
         return copy_all_token_bytes(rfc5322_top(token), d_first) - d_first;
 }
 

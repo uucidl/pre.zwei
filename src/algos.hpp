@@ -531,6 +531,64 @@ apply_reduce(I first,
 }
 }
 
+// void output iterators
+namespace algos
+{
+
+/**
+ * A generic sink (type that supports assignment) which discards any input
+ *
+ * MODEL(Sink)
+ */
+struct VoidSink {
+        template <typename T> VoidSink const &operator=(const T &x) const
+        {
+                return *this;
+        }
+};
+
+/**
+ * Adapts an output iterator as an output that will disregard writes made to it.
+ *
+ * MODEL(OutputIterator)
+ */
+template <typename OutputIt> struct VoidOutputIteratorAdapter {
+        using WritableMe = VoidOutputIteratorAdapter;
+        using OutputIteratorMe = VoidOutputIteratorAdapter;
+
+        OutputIt iterator;
+
+        // MODEL(Writable)
+        friend VoidSink const &sink(WritableMe &self)
+        {
+                static constexpr VoidSink void_sink{};
+                return void_sink;
+        }
+
+        // MODEL(Iterator)
+        friend OutputIteratorMe successor(const OutputIteratorMe &x)
+        {
+                return {successor(x.iterator)};
+        }
+
+        // REQUIRES(RandomAccessIterator(OutputIt))
+        friend typename IteratorConcept<OutputIt>::difference_type
+        operator-(VoidOutputIteratorAdapter const &x,
+                  VoidOutputIteratorAdapter const &y)
+        {
+                return x.iterator - y.iterator;
+        }
+};
+
+template <typename I> struct WritableConcept<VoidOutputIteratorAdapter<I>> {
+        using value_type = typename WritableConcept<I>::value_type;
+};
+
+template <typename I> struct IteratorConcept<VoidOutputIteratorAdapter<I>> {
+        using difference_type = typename IteratorConcept<I>::difference_type;
+};
+}
+
 // tree concepts and algorithms
 namespace algos
 {
