@@ -1,5 +1,7 @@
 #pragma once
 
+#include "hammer_fwd.hpp"
+
 struct RFC5234 {
         HParser *ALPHA;
         HParser *BIT;
