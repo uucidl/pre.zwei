@@ -620,7 +620,7 @@ static inline SFTPClient::Error sftp_client_ssh2error(SFTPClient *client,
 
 static bool sftp_client_terminated(SFTPClient *client)
 {
-        return client->error == SFTPClient::Error_ApiMissing ||
+        return !client || client->error == SFTPClient::Error_ApiMissing ||
                client->error == SFTPClient::Error_Session ||
                client->error == SFTPClient::Error_Connection ||
                client->error == SFTPClient::Error_Auth ||
