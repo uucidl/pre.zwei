@@ -26,6 +26,15 @@
 namespace sftp
 {
 
+// Optional configuration interface
+struct SFTPConfig {
+        char const **module_directory_paths_first;
+        std::size_t module_directory_paths_size;
+};
+
+// Only necessary when not using the default configuration
+SFTP_API bool SFTPInit(SFTPConfig const &x);
+
 #if TCP_IP_CONNECTION_USE_BSD
 struct tcp_ip_connection {
         int sock;
@@ -382,15 +391,28 @@ static temp_cstring cstring(char const *x, std::size_t size)
 
 #if SFTP_SSH2_MODULE_USE_DLFCN
 
-static bool module_open(module *module, char const *name)
+static bool module_open(module *module,
+                        char const *name,
+                        char const **source_dirs_first,
+                        std::size_t source_dirs_size)
 {
-        // TODO(nicolas): TAG(portability) where should the library come from?
-        std::string path{name};
-        path += ".dylib"; // TAG(MacOS)
-        module->handle = dlopen(path.c_str(), RTLD_NOW);
-        if (!module->handle) {
-                std::fprintf(stderr, "error: could not load module '%s'\n",
-                             path.c_str());
+        // TODO(nicolas): address portablity
+        auto path_sep = "/"; // TAG(portability) TAG(POSIX)
+        auto lib_suffix = ".dylib"; // TAG(portability) TAG(MacOS)
+        auto const load = [=](char const *prefix, char const *name) {
+                std::string path{prefix};
+                if (!path.empty()) {
+                        path += path_sep; 
+                }
+                path += name;
+                path += lib_suffix;
+                return dlopen(path.c_str(), RTLD_NOW);
+        };
+
+        module->handle = load("", name);
+        while (source_dirs_size-- && !module->handle) {
+                module->handle = load(*source_dirs_first, name);
+                ++source_dirs_first;
         }
         return module->handle;
 }
@@ -481,12 +503,14 @@ static tcp_ip_connection::Error tcp_ip_open(tcp_ip_connection *connection,
 
 static libssh2_api global_sftp;
 
-static bool sftp_init()
+static bool sftp_init(SFTPConfig const &config)
 {
         if (module_opened(&global_sftp.ssh2_module))
                 return true;
         module module = {};
-        auto has_module = module_open(&module, "libssh2");
+        auto has_module =
+            module_open(&module, "libssh2", config.module_directory_paths_first,
+                        config.module_directory_paths_size);
         if (!has_module) {
                 goto failure;
         }
@@ -556,6 +580,8 @@ failure:
         global_sftp = {};
         return false;
 }
+
+SFTP_API bool SFTPInit(SFTPConfig const &x) { return sftp_init(x); }
 
 static char const *enum_description(SFTPClient::Error x)
 {
@@ -667,7 +693,8 @@ static bool establish_socks_proxy(tcp_ip_connection *connection,
 
 SFTPClient::Error SFTPClientOpen(SFTPClient *client)
 {
-        sftp_init();
+        SFTPConfig config = {};
+        sftp_init(config);
         if (!module_opened(&global_sftp.ssh2_module))
                 return client->error = SFTPClient::Error_ApiMissing;
 
