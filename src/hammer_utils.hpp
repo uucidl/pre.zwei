@@ -200,11 +200,12 @@ match_token_type(RandomAccessRange const &range, HParsedToken const &token)
         do {                                                                   \
                 uint8_t data[] = lit;                                          \
                 size_t data_size = sizeof data - 1;                            \
-                auto printer = [](const HParsedToken *ast) {                   \
+                auto check_parser_printer = [=](const HParsedToken *ast) {     \
                         printfn(stdout, ast, 0, 4);                            \
                         return true;                                           \
                 };                                                             \
-                check_parser_do_test(parser, data, data_size, printer);        \
+                check_parser_do_test(parser, data, data_size,                  \
+                                     check_parser_printer);                    \
         } while (0)
 
 #define VALIDATE_PARSER(parser, lit, checkerfn)                                \
