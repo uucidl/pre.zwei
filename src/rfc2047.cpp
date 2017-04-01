@@ -10,9 +10,9 @@
 #include "rfc2047.hpp"
 #include "base64.hpp"
 
+#include "abnf_rfc5234.hpp"
 #include "hammer_utils.hpp"
 #include "mime_types.hpp"
-#include "rfc5234.hpp"
 #include "zwei_logging.hpp"
 #include "zwei_types.hpp"
 
@@ -138,18 +138,17 @@ HAMMER_ACTION(act_encoded_word)
 
 zw_internal RFC2047 global_rfc2047_parsers;
 
-const RFC2047 &make_rfc2047(const RFC5234 &rfc5234,
+const RFC2047 &make_rfc2047(const ABNF_RFC5234 &abnf,
                             const RFC2045 &rfc2045,
                             const Base64 &base64)
 {
         // # 2. Syntax of encoded-words
 
-        H_RULE(safe_char, h_butnot(rfc5234.VCHAR, h_ch('?')));
+        H_RULE(safe_char, h_butnot(abnf.VCHAR, h_ch('?')));
         H_ARULE(encoded_text, h_many1(safe_char));
         H_RULE(especials, UH_IN("()<>@,;:\"/[]?.="));
-        H_RULE(token,
-               h_many1(h_butnot(h_ch_range(0x00, 0xff),
-                                UH_ANY(rfc5234.SP, rfc5234.CTL, especials))));
+        H_RULE(token, h_many1(h_butnot(h_ch_range(0x00, 0xff),
+                                       UH_ANY(abnf.SP, abnf.CTL, especials))));
 
         // NOTE(nicolas): this is RFC2045 ptext with safe_char modified with a
         // restriction.

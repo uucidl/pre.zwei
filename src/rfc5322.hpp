@@ -8,7 +8,7 @@
 
 struct RFC2045;
 struct RFC2047;
-struct RFC5234;
+struct ABNF_RFC5234;
 struct RFC5322_Base;
 
 struct ArrayAllocationSize {
@@ -171,8 +171,9 @@ struct RFC5322 {
         HParser *fields;
 };
 
-zw_internal const RFC5322_Base &make_rfc5322_base(const RFC5234 &rfc5234);
-zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
+zw_internal const RFC5322_Base &
+make_rfc5322_base(const ABNF_RFC5234 &abnf_rfc5234);
+zw_internal const RFC5322 &make_rfc5322(const ABNF_RFC5234 &abnf,
                                         const RFC5322_Base &rfc5322_base,
                                         const RFC2047 &rfc2047,
                                         const RFC2045 &rfc2045);

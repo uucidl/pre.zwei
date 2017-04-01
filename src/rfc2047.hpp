@@ -9,7 +9,7 @@ extern "C" {
 
 struct Base64;
 struct RFC2045;
-struct RFC5234;
+struct ABNF_RFC5234;
 
 enum RFC2047TokenType {
         RFC2047_TT_ENCODED_WORD,
@@ -31,7 +31,7 @@ struct RFC2047 {
         HParser *encoded_word;
 };
 
-const RFC2047 &make_rfc2047(const RFC5234 &rfc5234,
+const RFC2047 &make_rfc2047(const ABNF_RFC5234 &abnf,
                             const RFC2045 &rfc2045,
                             const Base64 &base64);
 

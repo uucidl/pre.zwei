@@ -76,10 +76,10 @@
 #if defined(ZWEI_UNIT_TESTS)
 #include "algos_tests.hpp"
 #endif
+#include "abnf_rfc5234.hpp"
 #include "base64.hpp"
 #include "rfc2045.hpp"
 #include "rfc2047.hpp"
-#include "rfc5234.hpp"
 #include "rfc5322.hpp"
 #include "zoe.hpp"
 #include "zwei_iobuffer.hpp"
@@ -284,12 +284,12 @@ ZWEI_API INIT_APP(init_app)
         extern void hammer_init();
 
         hammer_init();
-        auto &rfc5234 = make_rfc5234();
-        auto &base64 = make_base64(rfc5234);
-        auto &rfc5322_base = make_rfc5322_base(rfc5234);
-        auto &rfc2045 = make_rfc2045(rfc5234, rfc5322_base);
-        auto &rfc2047 = make_rfc2047(rfc5234, rfc2045, base64);
-        mail_parsers = make_rfc5322(rfc5234, rfc5322_base, rfc2047, rfc2045);
+        auto &abnf = make_abnf_rfc5234();
+        auto &base64 = make_base64(abnf);
+        auto &rfc5322_base = make_rfc5322_base(abnf);
+        auto &rfc2045 = make_rfc2045(abnf, rfc5322_base);
+        auto &rfc2047 = make_rfc2047(abnf, rfc2045, base64);
+        mail_parsers = make_rfc5322(abnf, rfc5322_base, rfc2047, rfc2045);
         zoe_support_init();
 }
 

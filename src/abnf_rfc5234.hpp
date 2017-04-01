@@ -4,7 +4,7 @@
 
 #include "hammer_fwd.hpp"
 
-struct RFC5234 {
+struct ABNF_RFC5234 {
         HParser *ALPHA;
         HParser *BIT;
         HParser *CHAR;
@@ -20,4 +20,4 @@ struct RFC5234 {
         HParser *WSP;
 };
 
-const RFC5234 &make_rfc5234();
+const ABNF_RFC5234 &make_abnf_rfc5234();

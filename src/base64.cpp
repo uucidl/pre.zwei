@@ -6,6 +6,8 @@
 
 #include "base64.hpp"
 
+#include "abnf_rfc5234.hpp"
+
 #include "hammer.hpp"
 #include "hammer_utils.hpp"
 
@@ -91,7 +93,7 @@ HAMMER_ACTION(act_base64)
 
 zw_internal struct Base64 global_base64;
 
-const Base64 &make_base64(RFC5234 const &rfc5234)
+const Base64 &make_base64(ABNF_RFC5234 const &rfc5234)
 {
         HParser *plus = h_ch('+');
         HParser *slash = h_ch('/');

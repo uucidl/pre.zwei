@@ -1,11 +1,11 @@
 #include "rfc5322.hpp"
 
+#include "abnf_rfc5234.hpp"
 #include "algos.hpp"
 #include "date_time.hpp"
 #include "hammer_iterators.hpp"
 #include "hammer_utils.hpp"
 #include "rfc2047.hpp"
-#include "rfc5234.hpp"
 
 #include "../modules/uu.spdr/include/spdr/spdr.hh"
 #include "hammer.hpp"
@@ -432,16 +432,15 @@ HAMMER_ACTION(act_date_time)
 zw_internal RFC5322_Base rfc5322_base_parsers;
 zw_internal RFC5322 rfc5322_parsers;
 
-zw_internal const RFC5322_Base &make_rfc5322_base(const RFC5234 &rfc5234)
+zw_internal const RFC5322_Base &make_rfc5322_base(const ABNF_RFC5234 &abnf)
 {
         // ## 3.2.2.  Folding White Space and Comments
-        H_RULE(quoted_pair,
-               h_right(h_ch('\\'), UH_ANY(rfc5234.VCHAR, rfc5234.WSP)));
+        H_RULE(quoted_pair, h_right(h_ch('\\'), UH_ANY(abnf.VCHAR, abnf.WSP)));
 
         // Folding white space
-        H_RULE(FWS, UH_ANY(UH_SEQ(h_many(rfc5234.WSP), h_ignore(rfc5234.CRLF),
-                                  h_many1(rfc5234.WSP)),
-                           h_many1(rfc5234.WSP)));
+        H_RULE(FWS, UH_ANY(UH_SEQ(h_many(abnf.WSP), h_ignore(abnf.CRLF),
+                                  h_many1(abnf.WSP)),
+                           h_many1(abnf.WSP)));
 
         // printable US-ASCII characters not including (, ), backslash
         H_RULE(ctext, UH_ANY(h_ch_range(33, 39), h_ch_range(42, 91),
@@ -471,10 +470,10 @@ zw_internal const RFC5322_Base &make_rfc5322_base(const RFC5234 &rfc5234)
         H_RULE(
             quoted_string,
             h_middle(h_optional(CFWS),
-                     h_middle(rfc5234.DQUOTE,
+                     h_middle(abnf.DQUOTE,
                               UH_SEQ(h_many(UH_SEQ(h_optional(FWS), qcontent)),
                                      h_optional(FWS)),
-                              rfc5234.DQUOTE),
+                              abnf.DQUOTE),
                      h_optional(CFWS)));
 
         rfc5322_base_parsers.FWS = FWS;
@@ -484,7 +483,7 @@ zw_internal const RFC5322_Base &make_rfc5322_base(const RFC5234 &rfc5234)
         return rfc5322_base_parsers;
 }
 
-zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
+zw_internal const RFC5322 &make_rfc5322(const ABNF_RFC5234 &abnf,
                                         const RFC5322_Base &rfc5322_base,
                                         const RFC2047 &rfc2047,
                                         const RFC2045 &rfc2045)
@@ -497,8 +496,8 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
         // ## 3.2.3.  Atom
 
         // Printable US-ASCII not including specials, used for atoms.
-        H_RULE(atext, UH_ANY(rfc5234.ALPHA, rfc5234.DIGIT,
-                             UH_IN("!#$%&'*+-/=?^_`{|}~")));
+        H_RULE(atext,
+               UH_ANY(abnf.ALPHA, abnf.DIGIT, UH_IN("!#$%&'*+-/=?^_`{|}~")));
 
         H_RULE(atom,
                h_middle(h_optional(CFWS), h_many1(atext), h_optional(CFWS)));
@@ -512,7 +511,7 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
 
 #if ZWEI_DISABLED
         // Special characters that do not appear in atext
-        H_RULE(specials, UH_ANY(UH_IN("()<>[]:;@\\,."), rfc5234.DQUOTE));
+        H_RULE(specials, UH_ANY(UH_IN("()<>[]:;@\\,."), abnf.DQUOTE));
 #endif
 
         // ## 3.2.5.  Miscellaneous Tokens
@@ -545,8 +544,8 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
                                  UH_ANY(UH_SEQ(rfc2047.encoded_word,
                                                h_many(h_right(
                                                    FWS, rfc2047.encoded_word))),
-                                        rfc5234.VCHAR))),
-                   h_many(rfc5234.WSP)));
+                                        abnf.VCHAR))),
+                   h_many(abnf.WSP)));
 
         // ## 3.3.  Date and Time Specification
         H_RULE(day_name, UH_ANY(UH_IENUM("Mon", 0), UH_IENUM("Tue", 1),
@@ -556,11 +555,11 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
 
         H_RULE(day_of_week, h_right(h_optional(FWS), day_name));
 
-        H_RULE(day, h_action(h_middle(h_optional(FWS),
-                                      UH_SEQ(rfc5234.DIGIT,
-                                             h_optional(rfc5234.DIGIT)),
-                                      FWS),
-                             act_accumulate_base10, NULL));
+        H_RULE(
+            day,
+            h_action(h_middle(h_optional(FWS),
+                              UH_SEQ(abnf.DIGIT, h_optional(abnf.DIGIT)), FWS),
+                     act_accumulate_base10, NULL));
 
         H_ARULE(month, UH_ANY(UH_IENUM("Jan", 0), UH_IENUM("Feb", 1),
                               UH_IENUM("Mar", 2), UH_IENUM("Apr", 3),
@@ -569,25 +568,25 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
                               UH_IENUM("Sep", 8), UH_IENUM("Oct", 9),
                               UH_IENUM("Nov", 10), UH_IENUM("Dec", 11)));
 
-        H_RULE(year, h_action(h_middle(FWS, UH_SEQ(h_repeat_n(rfc5234.DIGIT, 4),
-                                                   h_many(rfc5234.DIGIT)),
+        H_RULE(year, h_action(h_middle(FWS, UH_SEQ(h_repeat_n(abnf.DIGIT, 4),
+                                                   h_many(abnf.DIGIT)),
                                        FWS),
                               act_accumulate_base10, NULL));
 
         H_RULE(date, UH_SEQ(day, month, year));
 
-        H_RULE(hour, h_action(h_repeat_n(rfc5234.DIGIT, 2),
-                              act_accumulate_base10, NULL));
-        H_RULE(minute, h_action(h_repeat_n(rfc5234.DIGIT, 2),
+        H_RULE(hour, h_action(h_repeat_n(abnf.DIGIT, 2), act_accumulate_base10,
+                              NULL));
+        H_RULE(minute, h_action(h_repeat_n(abnf.DIGIT, 2),
                                 act_accumulate_base10, NULL));
-        H_RULE(second, h_action(h_repeat_n(rfc5234.DIGIT, 2),
+        H_RULE(second, h_action(h_repeat_n(abnf.DIGIT, 2),
                                 act_accumulate_base10, NULL));
 
         H_RULE(time_of_day, UH_SEQ(hour, h_right(h_ch(':'), minute),
                                    h_optional(h_right(h_ch(':'), second))));
 
-        H_ARULE(zone, h_right(FWS, UH_SEQ(UH_IN("+-"),
-                                          h_repeat_n(rfc5234.DIGIT, 4))));
+        H_ARULE(zone,
+                h_right(FWS, UH_SEQ(UH_IN("+-"), h_repeat_n(abnf.DIGIT, 4))));
 
         H_RULE(time, UH_SEQ(time_of_day, zone));
 
@@ -638,7 +637,7 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
 
 #define UUH_FIELD(lit, right)                                                  \
         h_middle(h_ascii_itoken((uint8_t *)lit, (sizeof lit) - 1), right,      \
-                 rfc5234.CRLF)
+                 abnf.CRLF)
 
         H_ARULE(orig_date, UUH_FIELD("Date:", date_time));
         H_ARULE(from, UUH_FIELD("From:", mailbox_list));
@@ -692,7 +691,7 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
         H_ARULE(field_name, h_many1(ftext));
 
         H_ARULE(optional_field, UH_SEQ(field_name, h_ignore(h_ch(':')),
-                                       unstructured, rfc5234.CRLF));
+                                       unstructured, abnf.CRLF));
 
         H_RULE(fields,
                UH_SEQ(
@@ -720,10 +719,10 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
         H_RULE(text998, h_many1(text));
 
         H_RULE(body,
-               UH_SEQ(h_many(UH_SEQ(h_many(text998), rfc5234.CRLF)), text998));
+               UH_SEQ(h_many(UH_SEQ(h_many(text998), abnf.CRLF)), text998));
 
-        H_RULE(message, UH_SEQ(fields, h_optional(UH_SEQ(rfc5234.CRLF, body)),
-                               h_end_p()));
+        H_RULE(message,
+               UH_SEQ(fields, h_optional(UH_SEQ(abnf.CRLF, body)), h_end_p()));
 
         // ...RFC5322>
 
@@ -747,7 +746,7 @@ zw_internal const RFC5322 &make_rfc5322(const RFC5234 &rfc5234,
 
 #if ZWEI_UNIT_TESTS
         trace_print("Testing rfc5322 parsers:");
-        CHECK_PARSER2(UH_SEQ(FWS, rfc5234.CRLF), "   \r\n", rfc5322_print_ast);
+        CHECK_PARSER2(UH_SEQ(FWS, abnf.CRLF), "   \r\n", rfc5322_print_ast);
         CHECK_PARSER2(address_list,
                       "mailto:microsound-subscribe@hyperreal.org;",
                       rfc5322_print_ast);

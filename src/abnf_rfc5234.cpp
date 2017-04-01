@@ -1,11 +1,11 @@
-#include "rfc5234.hpp"
+#include "abnf_rfc5234.hpp"
 #include "hammer_utils.hpp"
 
 #include "hammer.hpp"
 
-zw_internal RFC5234 global_rfc5234;
+zw_internal ABNF_RFC5234 global_rfc5234;
 
-const RFC5234 &make_rfc5234()
+const ABNF_RFC5234 &make_abnf_rfc5234()
 {
         // NOTE(nicolas): RFC5234 tokens. Most comments come from the
         // RFC.

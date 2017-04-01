@@ -2,10 +2,10 @@
 
 #include "zwei_inlines.hpp"
 
+#include "abnf_rfc5234.hpp"
 #include "bits.hpp"
 #include "hammer_utils.hpp"
 #include "mime_types.hpp"
-#include "rfc5234.hpp"
 #include "zwei_logging.hpp"
 
 #include "hammer.hpp"
@@ -62,7 +62,7 @@ HAMMER_ACTION(act_content_transfer_encoding)
 
 zw_internal RFC2045 global_rfc2045_parsers;
 
-const RFC2045 &make_rfc2045(const RFC5234 &rfc5234,
+const RFC2045 &make_rfc2045(const ABNF_RFC5234 &abnf,
                             const RFC5322_Base &rfc5322_base)
 {
 
@@ -71,12 +71,12 @@ const RFC2045 &make_rfc2045(const RFC5234 &rfc5234,
 
 #define UUH_FIELD(lit, right)                                                  \
         h_middle(h_ascii_itoken((uint8_t *)lit, (sizeof lit) - 1), right,      \
-                 rfc5234.CRLF)
+                 abnf.CRLF)
 
         // # 6.7.  Quoted-Printable Content-Transfer-Encoding
-        H_ARULE(hex_octet, h_right(h_ch('='), h_repeat_n(rfc5234.HEXDIG, 2)));
+        H_ARULE(hex_octet, h_right(h_ch('='), h_repeat_n(abnf.HEXDIG, 2)));
 
-        H_RULE(lenient_hexdig, UH_ANY(rfc5234.HEXDIG, h_ch_range(0x61, 0x66)));
+        H_RULE(lenient_hexdig, UH_ANY(abnf.HEXDIG, h_ch_range(0x61, 0x66)));
 
         H_ARULE(lenient_hex_octet,
                 h_right(h_ch('='), h_repeat_n(lenient_hexdig, 2)));
@@ -85,17 +85,16 @@ const RFC2045 &make_rfc2045(const RFC5234 &rfc5234,
 
         H_RULE(ptext, UH_ANY(hex_octet, safe_char));
 
-        H_RULE(qp_section, h_many(UH_SEQ(h_many(rfc5234.WSP), ptext)));
+        H_RULE(qp_section, h_many(UH_SEQ(h_many(abnf.WSP), ptext)));
 
-        H_RULE(qp_segment, UH_SEQ(qp_section, h_many(rfc5234.WSP), h_ch('=')));
+        H_RULE(qp_segment, UH_SEQ(qp_section, h_many(abnf.WSP), h_ch('=')));
 
         H_RULE(qp_part, qp_section);
 
-        H_RULE(qp_line,
-               UH_SEQ(h_many(UH_SEQ(qp_segment, rfc5234.CRLF)), qp_part));
+        H_RULE(qp_line, UH_SEQ(h_many(UH_SEQ(qp_segment, abnf.CRLF)), qp_part));
 
         H_RULE(quoted_printable,
-               UH_SEQ(qp_line, h_many(UH_SEQ(rfc5234.CRLF, qp_line))));
+               UH_SEQ(qp_line, h_many(UH_SEQ(abnf.CRLF, qp_line))));
 
         // # 6.1 Content-Transfer-Encoding Syntax
         H_RULE(mechanism,
@@ -107,13 +106,12 @@ const RFC2045 &make_rfc2045(const RFC5234 &rfc5234,
                       UH_IENUM("base64", ContentTransferEncoding_BASE64)));
         H_ARULE(content_transfer_encoding,
                 UUH_FIELD("Content-Transfer-Encoding:",
-                          h_right(h_many(rfc5234.WSP), mechanism)));
+                          h_right(h_many(abnf.WSP), mechanism)));
 
         // # 5.1.  Syntax of the Content-Type Header Field
         H_RULE(tspecials, UH_IN("()<>@,;:\\\"/[]?="));
-        H_RULE(
-            token_char,
-            h_butnot(rfc5234.CHAR, UH_ANY(rfc5234.SP, rfc5234.CTL, tspecials)));
+        H_RULE(token_char,
+               h_butnot(abnf.CHAR, UH_ANY(abnf.SP, abnf.CTL, tspecials)));
         H_RULE(token, h_many1(token_char));
         H_RULE(attribute, h_middle(h_optional(CFWS), token, h_optional(CFWS)));
         H_RULE(value, h_middle(h_optional(CFWS), UH_ANY(token, quoted_string),
@@ -155,7 +153,7 @@ const RFC2045 &make_rfc2045(const RFC5234 &rfc5234,
         CHECK_PARSER(hex_octet, "=CD");
         CHECK_PARSER(hex_octet, "=15");
         CHECK_PARSER(h_many(ptext), "ab=CD=A5");
-        CHECK_PARSER(h_many(UH_ANY(ptext, rfc5234.WSP)), "abcdef =CDab");
+        CHECK_PARSER(h_many(UH_ANY(ptext, abnf.WSP)), "abcdef =CDab");
         CHECK_PARSER(qp_section, "abcdef =CDab");
         CHECK_PARSER(quoted_printable,
                      "nicolas =\r\nwant =\r\na =CAke\r\n and");

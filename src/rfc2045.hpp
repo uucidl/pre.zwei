@@ -6,7 +6,7 @@
 #include "hammer_utils.hpp"
 #include "mail_types.hpp"
 
-struct RFC5234;
+struct ABNF_RFC5234;
 struct RFC5322_Base;
 
 struct RFC2045 {
@@ -32,5 +32,5 @@ zw_internal UserTokenTypeEntry rfc2045_token_types[RFC2045_TT_LAST] = {
 #define RFC2045TokenIs(token, type_name)                                       \
         (token)->token_type == RFC2045HammerTT(type_name)
 
-const RFC2045 &make_rfc2045(const RFC5234 &rfc5234,
+const RFC2045 &make_rfc2045(const ABNF_RFC5234 &abnf,
                             const RFC5322_Base &rfc5322_base);
