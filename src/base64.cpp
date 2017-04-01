@@ -11,35 +11,134 @@
 #include "hammer.hpp"
 #include "hammer_utils.hpp"
 
-// helper: return the numeric value of a parsed base64 digit
-zw_internal uint8_t bsfdig_value(const HParsedToken *p)
-{
-        uint8_t value = 0;
+struct HammerUintTokenSequenceIterator {
+        HParsedToken **token_in_seq;
 
-        if (p && p->token_type == TT_UINT) {
-                uint8_t c = p->uint;
-                if (c >= 0x41 && c <= 0x5A) // A-Z
-                        value = c - 0x41;
-                else if (c >= 0x61 && c <= 0x7A) // a-z
-                        value = c - 0x61 + 26;
-                else if (c >= 0x30 && c <= 0x39) // 0-9
-                        value = c - 0x30 + 52;
-                else if (c == '+')
-                        value = 62;
-                else if (c == '/')
-                        value = 63;
+        friend bool operator==(HammerUintTokenSequenceIterator a,
+                               HammerUintTokenSequenceIterator b)
+        {
+                return a.token_in_seq == b.token_in_seq;
         }
 
-        return value;
+        friend bool operator!=(HammerUintTokenSequenceIterator a,
+                               HammerUintTokenSequenceIterator b)
+        {
+                return !(a == b);
+        }
+
+        friend uint64_t source(HammerUintTokenSequenceIterator x)
+        {
+                auto &token = *(x.token_in_seq);
+                fatal_ifnot(token->token_type == TT_UINT, "not a TT_UINT");
+                return token->uint;
+        }
+
+        friend HammerUintTokenSequenceIterator
+        successor(HammerUintTokenSequenceIterator x)
+        {
+                return {x.token_in_seq + 1};
+        }
 };
 
-zw_internal inline uint32_t add_base64_sextet(uint32_t x,
-                                              HParsedToken *digit_token)
+zw_internal std::pair<uint8_t *, uint8_t>
+gather_8from6bits(uint8_t *f, uint8_t *l, uint8_t *d_f)
 {
-        return (x << 6) | bsfdig_value(digit_token);
+        using algos::source;
+        using algos::sink;
+        using algos::successor;
+
+        auto const min = [](uint8_t a, uint8_t b) { return a < b ? a : b; };
+
+        auto const mask = [](uint8_t x, uint8_t bits) -> uint8_t {
+                unsigned int m = (1 << bits) - 1;
+                return x & m;
+        };
+
+        uint8_t d;
+        int d_bits_f;
+        int d_bits_l;
+
+        d = 0;
+        d_bits_l = 8;
+        d_bits_f = 0;
+
+        uint8_t s;
+        int s_bits_f = 0;
+        int s_bits_l = 0;
+
+        while (f != l) {
+                // NOTE(nicolas): might be useful for later optimizing:
+                //
+                // Repeating pattern:
+                //
+                // | size | ++d | ++s |
+                // |------+-----+-----|
+                // |    6 |     | s   |
+                // |    2 | d   |     |
+                // |    4 |     | s   |
+                // |    4 | d   |     |
+                // |    2 |     | s   |
+                // |    6 | d   | s   |
+                // |------+-----+-----|
+                // |  ... | ... | ... |
+
+                if (s_bits_f == s_bits_l) {
+                        s = source(f);
+                        f = successor(f);
+                        s_bits_l = 6;
+                        s_bits_f = 0;
+                }
+
+                auto const size = min(d_bits_l - d_bits_f, s_bits_l - s_bits_f);
+                auto t = mask(s >> (s_bits_l - size), size);
+                t <<= d_bits_l - size;
+                d |= t;
+
+                s_bits_l -= size;
+                d_bits_l -= size;
+                if (d_bits_f == d_bits_l) {
+                        sink(d_f) = d;
+                        d_f = successor(d_f);
+                        d = 0;
+                        d_bits_l = 8;
+                        d_bits_f = 0;
+                }
+        }
+        return {d_f, d_bits_l};
 }
 
-HAMMER_ACTION(act_base64)
+zw_internal void bsf_decode(uint8_t *first, uint8_t *last)
+{
+        auto const value = [](uint8_t x) -> uint8_t {
+                uint8_t y;
+                if (x >= 0x41 && x <= 0x5A) // A-Z
+                        y = x - 0x41;
+                else if (x >= 0x61 && x <= 0x7A) // a-z
+                        y = x - 0x61 + 26;
+                else if (x >= 0x30 && x <= 0x39) // 0-9
+                        y = x - 0x30 + 52;
+                else if (x == '+')
+                        y = 62;
+                else if (x == '/')
+                        y = 63;
+                else {
+                        fatal("unexpected");
+                        y = 0;
+                }
+                return y;
+        };
+        algos::apply_copy(first, last, first, value);
+}
+
+// encoded digits in [first, last) are turned into bytes [first, return_value)
+zw_internal uint8_t *base64_pipeline(uint8_t *first, uint8_t *last)
+{
+        bsf_decode(first, last); // [first,last) contains sextets
+        auto x = gather_8from6bits(first, last, first);
+        return x.first;
+}
+
+HAMMER_ACTION(base64_action)
 {
         assert(p->ast->token_type == TT_SEQUENCE);
         assert(p->ast->seq->used == 2);
@@ -51,43 +150,26 @@ HAMMER_ACTION(act_base64)
         size_t bytes_size = 3 * (end(b64_3) - begin(b64_3)) + 2;
         uint8_t *const bytes = (uint8_t *)h_arena_malloc(p->arena, bytes_size);
         uint8_t *bytes_last = bytes;
-
         // concatenate base64_3 blocks
-        algos::for_each(
-            begin(b64_3), end(b64_3),
-            [&bytes_last](const HParsedToken *b64_3_element) {
-                    assert(b64_3_element->token_type == TT_SEQUENCE);
-                    HParsedToken **digits = b64_3_element->seq->elements;
-                    uint32_t x = add_base64_sextet(0, digits[0]);
-                    x = add_base64_sextet(x, digits[1]);
-                    x = add_base64_sextet(x, digits[2]);
-                    x = add_base64_sextet(x, digits[3]);
-                    *(bytes_last++) = (x >> 16) & 0xFF;
-                    *(bytes_last++) = (x >> 8) & 0xFF;
-                    *(bytes_last++) = x & 0xFF;
-            });
-
-        // grab and analyze b64 end block (_2 or _1)
+        for (HParsedToken const *token : b64_3) {
+                fatal_ifnot(token->token_type == TT_SEQUENCE, "unexpected");
+                HParsedToken **digits = token->seq->elements;
+                bytes_last = algos::copy(
+                    HammerUintTokenSequenceIterator{digits},
+                    HammerUintTokenSequenceIterator{digits + 4}, bytes_last);
+        }
+        // concatenate b64 end block (_2 or _1) where the '=' sentinel
+        // may indicate a stop
         const HParsedToken *b64_end = p->ast->seq->elements[1];
         if (b64_end->token_type == TT_SEQUENCE) {
-                if (b64_end->seq->elements[2]->uint == '=') {
-                        // base64 _1 block
-                        HParsedToken **digits = b64_end->seq->elements;
-                        uint32_t x;
-                        x = add_base64_sextet(0, digits[0]);
-                        x = add_base64_sextet(x, digits[1]);
-                        *(bytes_last++) = (x >> 4) & 0xFF;
-                } else {
-                        // base64 _2 block
-                        HParsedToken **digits = b64_end->seq->elements;
-                        uint32_t x;
-                        x = add_base64_sextet(0, digits[0]);
-                        x = add_base64_sextet(x, digits[1]);
-                        x = add_base64_sextet(x, digits[2]);
-                        *(bytes_last++) = (x >> 10) & 0xFF;
-                        *(bytes_last++) = (x >> 2) & 0xFF;
-                }
+                HParsedToken **digits = b64_end->seq->elements;
+                int count = digits[2]->uint == '=' ? 2 : 3;
+                bytes_last =
+                    algos::copy(HammerUintTokenSequenceIterator{digits},
+                                HammerUintTokenSequenceIterator{digits + count},
+                                bytes_last);
         }
+        bytes_last = base64_pipeline(bytes, bytes_last);
         return H_MAKE_BYTES(bytes, bytes_last - bytes);
 };
 
@@ -106,6 +188,31 @@ const Base64 &make_base64(ABNF_RFC5234 const &rfc5234)
         HParser *base64_1 = UH_SEQ(bsfdig, bsfdig_2bit, equals, equals);
         HParser *base64 =
             UH_SEQ(h_many(base64_3), h_optional(UH_ANY(base64_2, base64_1)));
-        global_base64.base64 = h_action(base64, act_base64, NULL);
+        global_base64.base64 = h_action(base64, base64_action, NULL);
+#if ZWEI_UNIT_TESTS
+        trace_print("Testing base64 parsers:");
+        auto const print_bytes = [](FILE *file, const HParsedToken *ast,
+                                    int /*offset*/, int /*increment*/) {
+                fatal_ifnot(ast->token_type == TT_BYTES, "expected bytes");
+                fprintf(file, "bytes as ascii: ");
+                algos::for_each_n(
+                    ast->bytes.token, ast->bytes.len,
+                    [file](uint8_t x) { fprintf(file, "%c", x); });
+                fprintf(file, "\n");
+        };
+
+        trace_print("should be equal to `any carnal pleasure.`:");
+        CHECK_PARSER2(global_base64.base64, "YW55IGNhcm5hbCBwbGVhc3VyZS4=",
+                      print_bytes);
+        CHECK_PARSER2(global_base64.base64,
+                      "TWFuIGlzIGRpc3Rpbmd1aXNoZWQsIG5vdCBvbmx5IGJ5IGhpcyByZWFz"
+                      "b24sIGJ1dCBieSB0aGlzIHNpbmd1bGFyIHBhc3Npb24gZnJvbSBvdGhl"
+                      "ciBhbmltYWxzLCB3aGljaCBpcyBhIGx1c3Qgb2YgdGhlIG1pbmQsIHRo"
+                      "YXQgYnkgYSBwZXJzZXZlcmFuY2Ugb2YgZGVsaWdodCBpbiB0aGUgY29u"
+                      "dGludWVkIGFuZCBpbmRlZmF0aWdhYmxlIGdlbmVyYXRpb24gb2Yga25v"
+                      "d2xlZGdlLCBleGNlZWRzIHRoZSBzaG9ydCB2ZWhlbWVuY2Ugb2YgYW55"
+                      "IGNhcm5hbCBwbGVhc3VyZS4=",
+                      print_bytes);
+#endif
         return global_base64;
 }
