@@ -2,8 +2,6 @@
 
 namespace algos
 {
-// Mark a requirement on a type
-#define ConceptRequire(...)
 // <concepts...
 #define BidirectionalIterator typename
 #define BinaryOperation typename

@@ -1,5 +1,7 @@
 #pragma once
 
+// TAG(generic)
+
 #include "algos_concepts.hpp"
 
 #include <cstddef> // for ptrdiff_t
@@ -9,8 +11,10 @@
 
 namespace algos
 {
+
+// @require: TotallyOrdered(T)
 template <typename T>
-ConceptRequire(TotallyOrdered(T)) const T &max(const T &a, const T &b)
+const T &max(const T &a, const T &b)
 {
         if (b < a) {
                 return a;
@@ -132,8 +136,8 @@ bool equal_bounded_unguarded(I0 f0, I0 l0, I1 f1, P1 valid1, R relation)
 }
 
 /**
-@requires Domain(Pred) = ValueType(It)
-*/
+ * @require: Domain(Pred) = ValueType(It)
+ */
 template <Iterator It, UnaryPredicate Pred>
 It find_if(It first, It last, Pred pred)
 {
@@ -148,8 +152,8 @@ It find_if(It first, It last, Pred pred)
 }
 
 /**
-@requires Domain(Pred) = ValueType(It)
-*/
+ * @require: Domain(Pred) = ValueType(It)
+ */
 template <Iterator It, Integral N, UnaryPredicate Pred>
 std::pair<It, N> find_if_n(It first, N count, Pred pred)
 {
@@ -165,9 +169,9 @@ std::pair<It, N> find_if_n(It first, N count, Pred pred)
 }
 
 /**
-@requires Domain(Pred) = ValueType(It)
-@requires Domain(ValidItPred) = ValueType(It)
-*/
+ * @require: Domain(Pred) = ValueType(It)
+ * @require: Domain(ValidItPred) = ValueType(It)
+ */
 template <Iterator It, UnaryPredicate ValidItPred, UnaryPredicate Pred>
 It find_if_unguarded(It first, ValidItPred valid, Pred pred)
 {
@@ -182,8 +186,8 @@ It find_if_unguarded(It first, ValidItPred valid, Pred pred)
 }
 
 /**
-@requires Domain(ValidItPred) = ValueType(It)
-*/
+ * @require: Domain(ValidItPred) = ValueType(It)
+ */
 template <Iterator It, UnaryPredicate ValidItPred>
 It find_unguarded(It first,
                   ValidItPred valid,
@@ -197,9 +201,9 @@ It find_unguarded(It first,
 }
 
 /**
-@requires Domain(Pred) = ValueType(It)
-@requires Domain(ValidItPred) = ValueType(It)
-*/
+ * @require: Domain(Pred) = ValueType(It)
+ * @require: Domain(ValidItPred) = ValueType(It)
+ */
 template <Iterator It, UnaryPredicate ValidItPred, UnaryPredicate Pred>
 It find_last_if_unguarded(It first, ValidItPred valid, Pred pred)
 {
@@ -218,8 +222,8 @@ It find_last_if_unguarded(It first, ValidItPred valid, Pred pred)
 }
 
 /**
-@requires Domain(Pred) = ValueType(It)
-@requires Domain(ValidItPred) = ValueType(It)
+ * @require: Domain(Pred) = ValueType(It)
+ * @require: Domain(ValidItPred) = ValueType(It)
 */
 template <Iterator It, UnaryPredicate ValidItPred>
 It find_last_unguarded(It first,
@@ -234,8 +238,8 @@ It find_last_unguarded(It first,
 }
 
 /**
-@requires Domain(Pred) = ValueType(It)
-*/
+ * @require: Domain(Pred) = ValueType(It)
+ */
 template <BidirectionalIterator It, UnaryPredicate Pred>
 It find_if_backward(It first, It last, Pred pred)
 {
@@ -262,7 +266,7 @@ It find_backward(It first,
 }
 
 /**
- * @requires Domain(R) = Domain(P) = ValueType(I0) = ValueType(I1)
+ * @require: Domain(R) = Domain(P) = ValueType(I0) = ValueType(I1)
  */
 template <InputIterator I0,
           InputIterator I1,
@@ -280,7 +284,7 @@ std::pair<I0, I1> find_mismatch_unguarded(I0 f0, I1 f1, P guard, R r)
 }
 
 /**
- * @requires Domain(R) = Domain(P) = ValueType(I0) = ValueType(I1)
+ * @require: Domain(R) = Domain(P) = ValueType(I0) = ValueType(I1)
  */
 template <InputIterator I0,
           InputIterator I1,
@@ -296,8 +300,8 @@ find_mismatch_bounded_unguarded(I0 f0, I0 l0, I1 f1, P guard1, R r)
         return std::make_pair(f0, f1);
 }
 /**
-   @requires Domain(Op) = ValueType(InputIt)
-*/
+ * @require: Domain(Op) = ValueType(InputIt)
+ */
 template <Iterator InputIt, UnaryFunction Op>
 void for_each(InputIt first, InputIt last, Op operation)
 {
@@ -308,9 +312,9 @@ void for_each(InputIt first, InputIt last, Op operation)
 }
 
 /**
-   @requires Domain(Op) = ValueType(InputIt)
-   @pre n >= 0
-*/
+ * @require: Domain(Op) = ValueType(InputIt)
+ * @pre: n >= 0
+ */
 template <Iterator InputIt, UnaryFunction Op>
 InputIt for_each_n(InputIt first,
                    typename IteratorConcept<InputIt>::difference_type n,
@@ -383,10 +387,10 @@ OutputIt copy_n(InputIt first,
 }
 
 /**
-@requires Domain(Pred) = ValueType(InputIt)
-@requires Domain(Fn) = ValueType(InputIt)
-@requires CoDomain(Fn) = ValueType(OutputIt)
-*/
+ * @require: Domain(Pred) = ValueType(InputIt)
+ * @require: Domain(Fn) = ValueType(InputIt)
+ * @require: CoDomain(Fn) = ValueType(OutputIt)
+ */
 template <Iterator InputIt,
           OutputIterator OutputIt,
           UnaryPredicate Pred,
@@ -427,9 +431,9 @@ std::pair<InputIt, OutputIt> apply_copy_bounded_if(InputIt first,
 }
 
 /**
-@requires Domain(Fn) = ValueType(InputIt)
-@requires CoDomain(Fn) = ValueType(OutputIt)
-*/
+ * @require: Domain(Fn) = ValueType(InputIt)
+ * @require: CoDomain(Fn) = ValueType(OutputIt)
+ */
 template <Iterator InputIt, OutputIterator OutputIt, UnaryFunction Fn>
 OutputIt apply_copy(InputIt first, InputIt last, OutputIt dest_first, Fn fn)
 {
@@ -498,8 +502,10 @@ template <typename I> bool range_empty(I first, I last)
         return first == last;
 }
 
-// apply `fun` to each element in [first, last) and reduce using `op`
-// precondition(!range_empty(first, last));
+/**
+ * apply `fun` to each element in [first, last) and reduce using `op`
+ * @pre: !range_empty(first, last)
+ */
 template <Iterator I, BinaryOperation Op, UnaryFunction F>
 typename BinaryOperationConcept<Op>::type
 apply_reduce_nonempty(I first, I last, F fun, Op op)
@@ -514,8 +520,10 @@ apply_reduce_nonempty(I first, I last, F fun, Op op)
         return result;
 }
 
-// apply `fun` to each element in [first, last) and reduce using `op`
-// precondition(valid_range(first,last))
+/**
+ * apply `fun` to each element in [first, last) and reduce using `op`
+ * @pre: valid_range(first,last)
+ */
 template <Iterator I, BinaryOperation Op, UnaryFunction F>
 typename BinaryOperationConcept<Op>::type
 apply_reduce(I first,
@@ -538,7 +546,7 @@ namespace algos
 /**
  * A generic sink (type that supports assignment) which discards any input
  *
- * MODEL(Sink)
+ * @model: Sink
  */
 struct VoidSink {
         template <typename T> VoidSink const &operator=(const T &x) const
@@ -550,7 +558,7 @@ struct VoidSink {
 /**
  * Adapts an output iterator as an output that will disregard writes made to it.
  *
- * MODEL(OutputIterator)
+ * @model: OutputIterator
  */
 template <typename OutputIt> struct VoidOutputIteratorAdapter {
         using WritableMe = VoidOutputIteratorAdapter;
@@ -558,20 +566,20 @@ template <typename OutputIt> struct VoidOutputIteratorAdapter {
 
         OutputIt iterator;
 
-        // MODEL(Writable)
+        // @model: Writable
         friend VoidSink const &sink(WritableMe &self)
         {
                 static constexpr VoidSink void_sink{};
                 return void_sink;
         }
 
-        // MODEL(Iterator)
+        // @model: Iterator
         friend OutputIteratorMe successor(const OutputIteratorMe &x)
         {
                 return {successor(x.iterator)};
         }
 
-        // REQUIRES(RandomAccessIterator(OutputIt))
+        // @require: RandomAccessIterator(OutputIt)
         friend typename IteratorConcept<OutputIt>::difference_type
         operator-(VoidOutputIteratorAdapter const &x,
                   VoidOutputIteratorAdapter const &y)
