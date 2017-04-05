@@ -2,7 +2,9 @@
 
 #include "zwei_inlines.hpp"
 
-#include "zwei_types.hpp"
+#include <cstddef>
+
+struct ZoeMailStoreFile;
 
 /**
    @file Zoe specific code
