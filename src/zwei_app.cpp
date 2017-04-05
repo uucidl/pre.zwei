@@ -19,6 +19,12 @@
   TODO(nicolas): WIN32 port. (started)
   TODO(nicolas): cross compilation to <powerpc e500 v2> (Synology NAS)
 
+  ## Features
+
+  TODO(nicolas): keep track of when a mail was deleted. Immediately w/o
+  opening suggests spam. After a while can be a mail that contains ephemereal
+  content.
+
   # MIME format
   ## References:
 
