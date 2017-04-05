@@ -10,6 +10,7 @@
    Zoe was an earlier implementation of Zwei.
 */
 
+// @pre: hammer_init()
 zw_internal void zoe_support_init();
 
 // returns 0 on success
