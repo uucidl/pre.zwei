@@ -565,13 +565,10 @@ ZWEI_API GET_MESSAGE_SUMMARY(get_message_summary)
 
 ZWEI_API PARSE_ZOE_MAILSTORE_FILENAME(parse_zoe_mailstore_filename)
 {
-        auto zr = zoe_parse_uuid_filename(filename, cstr_len(filename));
-        if (failed(zr)) {
+        auto zr = zoe_parse_uuid_filename(filename, cstr_len(filename), result);
+        if (zr != 0) {
                 return -1;
         }
-
-        *result = just(zr);
-
         return 0;
 };
 

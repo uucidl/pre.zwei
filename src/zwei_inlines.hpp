@@ -78,38 +78,6 @@ typedef uint32_t bool32;
 
 // ..BASIC integer types>
 
-// <Error handling
-
-// TODO(nicolas): look at std::optional and model some of it after it
-template <typename ValueType> struct MayFail {
-        ValueType value;
-        uint32_t errorcode;
-
-        MayFail() {}
-        MayFail(ValueType x) : value(std::move(x)), errorcode(0) {}
-
-        static MayFail failure(uint32_t errorcode)
-        {
-                MayFail result;
-                result.errorcode = errorcode;
-                return result;
-        }
-
-        operator bool() const { return errorcode == 0; }
-};
-
-template <typename ValueType> bool failed(MayFail<ValueType> const result)
-{
-        return result.errorcode != 0;
-}
-
-template <typename ValueType> ValueType just(MayFail<ValueType> const result)
-{
-        zw_assert(result.errorcode == 0, "valid result");
-        return result.value;
-}
-
-// ..Error handling>
 // <DEFER implementation
 
 template <class Lambda> class AtScopeExit

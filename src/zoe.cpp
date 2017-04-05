@@ -112,17 +112,17 @@ zw_internal void zoe_support_init()
 #endif
 }
 
-zw_internal MayFail<ZoeMailStoreFile>
-zoe_parse_uuid_filename(const char *filename, size_t filename_size)
+zw_internal int zoe_parse_uuid_filename(const char *filename,
+                                        size_t filename_size,
+                                        ZoeMailStoreFile *d_result)
 {
-        using Result = MayFail<ZoeMailStoreFile>;
         auto parse_result = h_parse(zoe_support.uuid_eml_file,
                                     (uint8_t *)filename, filename_size);
         if (!parse_result) {
-                return Result::failure(1);
+                return -1;
         }
 
-        ZoeMailStoreFile result = {};
+        ZoeMailStoreFile &result = *d_result;
 
         using algos::source;
         using algos::begin;
@@ -172,5 +172,5 @@ zoe_parse_uuid_filename(const char *filename, size_t filename_size)
                 }
         }
         result.unix_epoch_millis = unix_epoch_millis;
-        return result;
+        return 0;
 }
