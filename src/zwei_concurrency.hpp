@@ -1,3 +1,11 @@
+#pragma once
+
+/**
+ * @file: concurrency implementation primitives.
+ *
+ * TAG(concurrency)
+ */
+
 #if COMPILER_LLVM
 #define COMPLETE_PREVIOUS_WRITES_BEFORE_FUTURE_WRITES                          \
         asm volatile("" ::: "memory")
