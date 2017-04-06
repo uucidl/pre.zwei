@@ -91,7 +91,6 @@
 #include "zwei_iobuffer.hpp"
 #include "zwei_iobuffer_inlines.hpp"
 #include "zwei_logging.hpp"
-#include "zwei_nicolas.hpp"
 #include "zwei_types.hpp"
 
 // modules:
@@ -100,6 +99,22 @@
 
 #include <cstddef>    // for offsetof
 #include <functional> // for std::cref (TODO(nicolas): can I write it myself?)
+
+struct MacRomanWorkaround {
+        // TODO(nicolas) this is way too low
+        enum { RUNE_COUNT = 64,
+        };
+        uint8_t utf8_output_block[3 * RUNE_COUNT];
+        size_t utf8_output_block_count;
+
+        uint32_t utf8decoder_state;
+        uint32_t utf8decoder_codepoint;
+
+        uint32_t ucs4_codepoints_block[RUNE_COUNT];
+        uint8_t macintosh_chars[RUNE_COUNT];
+        uint32_t macintosh_chars_utf8decoder_state;
+        uint32_t macintosh_chars_utf8decoder_codepoint;
+};
 
 zw_global RFC5322 mail_parsers;
 zw_global bool global_debug_mode;
