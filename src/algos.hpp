@@ -95,19 +95,6 @@ template <Sequence S> bool empty(S s) { return empty(begin(s), end(s)); }
 namespace algos
 {
 
-template <Iterator I, Integral N, UnaryPredicate P>
-bool all_n(I first, N count, P pred)
-{
-        while (count != N(0)) {
-                if (!pred(source(first))) {
-                        return false;
-                }
-                first = successor(first);
-                count = predecessor(count);
-        }
-        return true;
-}
-
 template <Iterator I, UnaryPredicate P, Iterator J>
 J count_unguarded(I f, P p, J j)
 {
@@ -535,6 +522,23 @@ apply_reduce(I first,
                 return zero;
         }
         return apply_reduce_nonempty(first, last, fun, op);
+}
+}
+
+// derived sequence algorithms
+namespace algos
+{
+/**
+ * TAG(degenerate) find_if_n
+ * @requires: Domain(pred) == ValueType(I)
+ */
+template <Iterator I, Integral N, UnaryPredicate P>
+bool all_n(I first, N count, P pred)
+{
+        using ValueType = typename ReadableConcept<I>::value_type;
+        return find_if_n(first, count, [&](ValueType const &x) {
+                       return !pred(x);
+               }).second == N(0);
 }
 }
 
