@@ -223,18 +223,16 @@ zw_internal void process_message(Zwei const &zwei,
 {
         SPDR_SCOPE1(global_spdr, "app", "process_message",
                     SPDR_STR("filepath", filepath));
-        IOBufferIterator file_content;
-        stream_on_memory(&file_content, const_cast<uint8_t *>(full_message),
-                         full_message_last - full_message);
-        uint8_t sha1_result[20];
-        sha1(file_content.start, file_content.end - file_content.start,
-             sha1_result);
-        finish_iobuffer(&file_content);
-
-        zw_assert(countof(destination.sha1_digest) == countof(sha1_result),
-                  "defect");
-        algos::copy_n(sha1_result, countof(sha1_result),
-                      destination.sha1_digest);
+        {
+                uint8_t sha1_result[20];
+                sha1(full_message, full_message_last - full_message,
+                     sha1_result);
+                zw_assert(countof(destination.sha1_digest) ==
+                              countof(sha1_result),
+                          "defect");
+                algos::copy_n(sha1_result, countof(sha1_result),
+                              destination.sha1_digest);
+        }
 
         destination.filename = filename;
         destination.filepath = filepath;
@@ -250,6 +248,7 @@ zw_internal void process_message(Zwei const &zwei,
         // TODO(nicolas): TAG(portability) here we have encoded the
         // path separator, which makes this code non portable
         if (0 == zoefile_errorcode) {
+                auto const os_path_sep = '/'; // TAG(portability)
                 // find predecessor, until you reach
                 // boundary
                 auto pred = [](char const *const first, char const *const pos) {
@@ -259,20 +258,20 @@ zw_internal void process_message(Zwei const &zwei,
                         return pos;
                 };
                 // skip day, month, year
-                auto first = cstr_find_last(filepath, '/');
-                first = *first != '/'
+                auto first = cstr_find_last(filepath, os_path_sep);
+                first = *first != os_path_sep
                             ? first
-                            : algos::find_backward(filepath,
-                                                   pred(filepath, first), '/');
-                first = *first != '/'
+                            : algos::find_backward(
+                                  filepath, pred(filepath, first), os_path_sep);
+                first = *first != os_path_sep
                             ? first
-                            : algos::find_backward(filepath,
-                                                   pred(filepath, first), '/');
-                first = *first != '/'
+                            : algos::find_backward(
+                                  filepath, pred(filepath, first), os_path_sep);
+                first = *first != os_path_sep
                             ? first
-                            : algos::find_backward(filepath,
-                                                   pred(filepath, first), '/');
-                first = *first != '/' ? first : algos::successor(first);
+                            : algos::find_backward(
+                                  filepath, pred(filepath, first), os_path_sep);
+                first = *first != os_path_sep ? first : algos::successor(first);
                 auto last = cstr_find_last(first, '.');
                 destination.zoe_rel_url = {(uint8_t *)first,
                                            size_t(last - first)};

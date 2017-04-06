@@ -101,6 +101,21 @@
 #include <cstddef>    // for offsetof
 #include <functional> // for std::cref (TODO(nicolas): can I write it myself?)
 
+zw_global RFC5322 mail_parsers;
+zw_global bool global_debug_mode;
+zw_global Platform global_platform;
+zw_global SPDR_Context *global_spdr;
+
+// <MacromanWorkaround...
+// NOTE(nicolas) the following is a work around for some bad transcoding that
+// happened in the past. Our corpus contains iso8859/utf8/8bit content that
+// was badly transcoded:
+//
+// original data - interpreted as MacRoman -> re-encoded as UTF-8 when I ran
+// ZOE on OSX. Java used to default to the MacRoman encoding.
+//
+// TODO(nicolas): make a test case for this.
+
 struct MacRomanWorkaround {
         // TODO(nicolas) this is way too low
         enum { RUNE_COUNT = 64,
@@ -117,28 +132,20 @@ struct MacRomanWorkaround {
         uint32_t macintosh_chars_utf8decoder_codepoint;
 };
 
-zw_global RFC5322 mail_parsers;
-zw_global bool global_debug_mode;
-zw_global Platform global_platform;
-zw_global SPDR_Context *global_spdr;
+struct MacRomanWorkaroundBufferedReader : public BufferedReader {
+        struct BufferedReader *source;
+        MacRomanWorkaround state;
+};
 
-// NOTE(nicolas) the following is a work
-// around for some bad transcoding that
-// happened in the past. Our corpus contains
-// iso8859/utf8/8bit content that was badly transcoded:
-//
-// original data - interpreted as MacRoman ->
-// re-encoded as UTF-8 when I ran ZOE on
-// OSX. Java used to default to the MacRoman
-// encoding.
-zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
-                                               uint8_t *block_first,
-                                               uint8_t *block_last)
+zw_internal uint8_t const *
+macroman_workaround_block(struct MacRomanWorkaround *state,
+                          uint8_t const *input_first,
+                          uint8_t const *input_last)
 {
         using algos::begin;
         using algos::end;
 
-        auto decoded_block_last = block_first;
+        auto input_decoded_last = input_first;
         auto codepoint_first = begin(state->ucs4_codepoints_block);
         auto codepoint_buffer_last = end(state->ucs4_codepoints_block);
         auto codepoint_last = codepoint_first;
@@ -150,7 +157,7 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
                                            &state->utf8decoder_codepoint, x);
                 };
                 auto decode_result = algos::apply_copy_bounded_if(
-                    block_first, block_last, codepoint_last,
+                    input_first, input_last, codepoint_last,
                     codepoint_buffer_last,
                     [state](const uint8_t) {
                             return state->utf8decoder_codepoint;
@@ -160,7 +167,7 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
                 if (Utf8DecodeResult_Accept != state->utf8decoder_state) {
                         return nullptr;
                 }
-                decoded_block_last = decode_result.first;
+                input_decoded_last = decode_result.first;
                 codepoint_last = decode_result.second;
         }
 
@@ -222,63 +229,48 @@ zw_internal uint8_t *macroman_workaround_block(struct MacRomanWorkaround *state,
 
         state->utf8_output_block_count = destination_count;
 
-        return decoded_block_last;
+        return input_decoded_last;
+}
+
+BufferedReaderError MacRomanWorkaround_refill(BufferedReader *x)
+{
+        auto &self = *static_cast<MacRomanWorkaroundBufferedReader *>(x);
+        if (self.source->cursor == self.source->end) {
+                auto error = refill_iobuffer(self.source);
+                if (error != BufferedReaderError_NoError) {
+                        return fail(x, error);
+                }
+        }
+
+        auto read_pos = macroman_workaround_block(
+            &self.state, self.source->start, self.source->end);
+        if (!read_pos) {
+                return fail(x, BufferedReaderError_DecodingError);
+        }
+        self.source->cursor = read_pos;
+
+        self.start = &self.state.utf8_output_block[0];
+        self.end = self.start + self.state.utf8_output_block_count;
+        self.cursor = self.start;
+
+        return BufferedReaderError_NoError;
 }
 
 // wraps a stream and transcode using the MacRoman workaround
-zw_internal IOBufferIterator
-macroman_workaround_stream(IOBufferIterator *input, struct MemoryArena *arena)
+zw_internal void
+macroman_workaround_stream(MacRomanWorkaroundBufferedReader *stream,
+                           BufferedReader *source)
 {
-        struct Stream {
-                IOBufferIterator *input;
-                MacRomanWorkaround state;
-        } *stream = push_pointer_rvalue(arena, stream);
-
-        stream->input = input;
+        stream->source = source;
         stream->state.utf8decoder_state = Utf8DecodeResult_Accept;
         stream->state.macintosh_chars_utf8decoder_state =
             Utf8DecodeResult_Accept;
-
-        auto next = [](IOBufferIterator *iobuffer) {
-                struct Stream *stream = reinterpret_cast<struct Stream *>(
-                    iobuffer->start -
-                    offsetof(struct Stream, state.utf8_output_block));
-                IOBufferIterator &input_iobuffer = *stream->input;
-                if (input_iobuffer.cursor >= input_iobuffer.end) {
-                        if (IOBufferIteratorError_NoError !=
-                            refill_iobuffer(&input_iobuffer)) {
-                                return fail(iobuffer, input_iobuffer.error);
-                        }
-                }
-
-                auto input_cursor = macroman_workaround_block(
-                    &stream->state, input_iobuffer.cursor, input_iobuffer.end);
-                if (!input_cursor) {
-                        return fail(iobuffer,
-                                    IOBufferIteratorError_DecodingError);
-                }
-
-                input_iobuffer.cursor = input_cursor;
-
-                iobuffer->start = &stream->state.utf8_output_block[0];
-                iobuffer->end =
-                    iobuffer->start + stream->state.utf8_output_block_count;
-                iobuffer->cursor = iobuffer->start;
-
-                return IOBufferIteratorError_NoError;
-        };
-
-        IOBufferIterator iobuffer = {
-            &stream->state.utf8_output_block[0],
-            &stream->state.utf8_output_block[0],
-            &stream->state.utf8_output_block[0],
-            IOBufferIteratorError_NoError,
-            next,
-        };
-
-        refill_iobuffer(&iobuffer);
-        return iobuffer;
+        stream->start = 0;
+        stream->cursor = 0;
+        stream->end = 0;
+        stream->refill = MacRomanWorkaround_refill;
 }
+// ...MacromanWorkaround>
 
 struct MessageBeingParsed {
         enum { UNPARSED,
@@ -468,25 +460,22 @@ ZWEI_API GET_MESSAGE_SUMMARY(get_message_summary)
         if (must_apply_macroman_workaround) {
                 trace_print("applying MacRoman workaround");
 
-                IOBufferIterator message_iobuffer_memory;
-                IOBufferIterator *message_iobuffer = &message_iobuffer_memory;
-                stream_on_memory(message_iobuffer,
-                                 const_cast<uint8_t *>(full_message),
-                                 full_message_end - full_message);
+                BufferedReader message_iobuffer_memory;
+                BufferedReader *message_iobuffer = &message_iobuffer_memory;
+                iobuffer_read_memory(message_iobuffer, full_message,
+                                     full_message_end);
 
                 /* macroman decoder setup */
-                IOBufferIterator *message_decoder =
+                MacRomanWorkaroundBufferedReader *message_decoder =
                     push_pointer_rvalue(message_arena, message_decoder);
-                *message_decoder =
-                    macroman_workaround_stream(message_iobuffer, message_arena);
+                macroman_workaround_stream(message_decoder, message_iobuffer);
 
                 // @id cfec80a4708df2e90e45023f0d87af7f4eb54a46
                 uint8_t *decoded_message =
                     (uint8_t *)push_bytes(message_arena, 0);
                 uint8_t *decoded_message_end = decoded_message;
 
-                while (message_iobuffer->error ==
-                       IOBufferIteratorError_NoError) {
+                while (message_iobuffer->error == BufferedReaderError_NoError) {
                         zw_assert(decoded_message_end ==
                                       push_bytes(message_arena, 0),
                                   "non contiguous");
@@ -499,7 +488,7 @@ ZWEI_API GET_MESSAGE_SUMMARY(get_message_summary)
                 }
 
                 if (message_iobuffer->error !=
-                    IOBufferIteratorError_ReadPastEnd) {
+                    BufferedReaderError_ReadPastEnd) {
                         error_print("unknown I/O error while parsing message");
                         return 1;
                 }

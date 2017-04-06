@@ -2,17 +2,21 @@
 #include "zwei_inlines.hpp"
 #include "zwei_iobuffer_inlines.hpp"
 
-zw_internal enum IOBufferIteratorError
-fill_next_on_memory_buffer(IOBufferIterator *range)
+zw_internal enum BufferedReaderError
+iobuffer_memory_reader_refill(BufferedReader *range)
 {
-        return fail(range, IOBufferIteratorError_ReadPastEnd);
+        // memory is read all at once, so asking for more is instantly past
+        // the end.
+        return fail(range, BufferedReaderError_ReadPastEnd);
 }
 
-void stream_on_memory(IOBufferIterator *range, uint8_t *mem, size_t const size)
+zw_internal void iobuffer_read_memory(BufferedReader *range,
+                                      uint8_t const *mem,
+                                      size_t const size)
 {
         range->start = mem;
         range->cursor = mem;
         range->end = range->start + size;
-        range->error = IOBufferIteratorError_NoError;
-        range->fill_next = fill_next_on_memory_buffer;
+        range->error = BufferedReaderError_NoError;
+        range->refill = iobuffer_memory_reader_refill;
 }

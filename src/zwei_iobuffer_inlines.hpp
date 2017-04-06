@@ -1,9 +1,8 @@
-// for when you want to write your own IOBufferIterator implementations
+// for when you want to write your own BufferedReader implementations
 
 #pragma once
 
-zw_internal inline enum IOBufferIteratorError
-fill_zeros(IOBufferIterator *range)
+zw_internal inline enum BufferedReaderError fill_zeros(BufferedReader *range)
 {
         zw_local_persist uint8_t const zeros[256] = {0};
 
@@ -14,24 +13,22 @@ fill_zeros(IOBufferIterator *range)
         return range->error;
 }
 
-zw_internal inline enum IOBufferIteratorError
-fail(IOBufferIterator *range, enum IOBufferIteratorError error)
+zw_internal inline enum BufferedReaderError fail(BufferedReader *range,
+                                                 enum BufferedReaderError error)
 {
         range->error = error;
-        range->fill_next = fill_zeros;
-
-        return range->fill_next(range);
+        range->refill = fill_zeros;
+        return range->refill(range);
 }
 
-zw_internal inline IOBufferIteratorError refill_iobuffer(IOBufferIterator *x)
+zw_internal inline BufferedReaderError refill_iobuffer(BufferedReader *x)
 {
-        return x->fill_next(x);
+        return x->refill(x);
 }
 
-zw_internal inline IOBufferIteratorError
-finish_iobuffer(IOBufferIterator *iobuffer)
+zw_internal inline BufferedReaderError finish_iobuffer(BufferedReader *iobuffer)
 {
-        while (iobuffer->error == IOBufferIteratorError_NoError) {
+        while (iobuffer->error == BufferedReaderError_NoError) {
                 refill_iobuffer(iobuffer);
         }
         return iobuffer->error;

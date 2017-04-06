@@ -47,7 +47,7 @@ struct ProgramResources {
         MemoryArena transient_arena; // memory that can go away at any time
 };
 
-struct IOBufferIterator;
+struct BufferedReader;
 struct ZoeMailStoreFile;
 
 #define INIT_APP(name)                                                         \
