@@ -727,8 +727,7 @@ zw_internal const RFC5322 &make_rfc5322(const ABNF_RFC5234 &abnf,
         // ...RFC5322>
 
         /* publish our tokens */
-        allocate_token_types(algos::begin(rfc5322_token_types),
-                             algos::end(rfc5322_token_types));
+        token_types_init(rfc5322_token_types);
 
         /* publish our parsers */
 
@@ -828,7 +827,7 @@ zw_internal std::pair<HTokenType, bool> base_hammer_type(HTokenType token_type)
 
         for (auto const &source : sources) {
                 auto type_match =
-                    match_token_type(source.first, source.second, token_type);
+                    token_type_match(source.first, source.second, token_type);
                 if (type_match.first) {
                         content_type_utf8 = true;
                         base_token_type = type_match.second.second.base_type;
@@ -909,12 +908,12 @@ zw_internal void rfc5322_pprint_node(FILE *stream,
         bool content_type_utf8 = false;
         HTokenType base_token_type = ast->token_type;
         {
-                auto match = match_token_type(rfc5322_token_types, *ast);
+                auto match = token_type_match(rfc5322_token_types, *ast);
                 if (!match.first) {
-                        match = match_token_type(rfc2047_token_types, *ast);
+                        match = token_type_match(rfc2047_token_types, *ast);
                 }
                 if (!match.first) {
-                        match = match_token_type(rfc2045_token_types, *ast);
+                        match = token_type_match(rfc2045_token_types, *ast);
                 }
                 if (match.first) {
                         content_type_utf8 = true;
@@ -990,7 +989,7 @@ zw_internal void rfc5322_pprint_node(FILE *stream,
         } break;
         case TT_USER: {
                 auto &token = *ast;
-                auto match = match_token_type(rfc5322_token_types, token);
+                auto match = token_type_match(rfc5322_token_types, token);
                 if (match.first) {
                         if (match.second.first == RFC5322_TT_DATE_TIME) {
                                 const CivilDateTime &value =
@@ -1082,7 +1081,7 @@ zw_internal bool rfc5322_validate(const HParsedToken *ast,
         };
 
         auto collect = [&flags](HParsedToken const *token) {
-                auto match = match_token_type(rfc5322_token_types, *token);
+                auto match = token_type_match(rfc5322_token_types, *token);
                 if (match.first) {
                         ++flags.counts[match.second.first];
                 }
@@ -1229,7 +1228,7 @@ rfc5322_field_get_mailbox_array_size(HParsedToken const *token)
 
         auto top = rfc5322_top(token);
         auto count = [&result](HParsedToken const *token) {
-                auto match = match_token_type(rfc5322_token_types, *token);
+                auto match = token_type_match(rfc5322_token_types, *token);
                 if (match.first) {
                         auto type = match.second.first;
                         auto type_entry = match.second.second;
@@ -1257,7 +1256,7 @@ zw_internal RawMailbox *rfc5322_field_copy_mailbox_array(
 
                 auto &mailbox = algos::sink(d_first);
 
-                auto match = match_token_type(rfc5322_token_types, token);
+                auto match = token_type_match(rfc5322_token_types, token);
                 if (match.first) {
                         auto type = match.second.first;
                         auto type_entry = match.second.second;

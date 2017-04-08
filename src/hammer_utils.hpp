@@ -67,21 +67,29 @@ struct UserTokenTypeEntry {
 
 zw_internal void hammer_init();
 
-zw_internal void allocate_token_types(UserTokenTypeEntry *first,
-                                      UserTokenTypeEntry *last);
+zw_internal void token_types_init(UserTokenTypeEntry *first,
+                                  UserTokenTypeEntry *last);
+
+template <typename RandomAccessRange>
+void token_types_init(RandomAccessRange &range)
+{
+        using algos::begin;
+        using algos::end;
+        return token_types_init(begin(range), end(range));
+}
 
 zw_internal std::pair<bool, std::pair<int, UserTokenTypeEntry>>
-match_token_type(UserTokenTypeEntry const *first,
+token_type_match(UserTokenTypeEntry const *first,
                  UserTokenTypeEntry const *last,
                  HTokenType token_type);
 
 template <typename RandomAccessRange>
 std::pair<bool, std::pair<int, UserTokenTypeEntry>>
-match_token_type(RandomAccessRange const &range, HParsedToken const &token)
+token_type_match(RandomAccessRange const &range, HParsedToken const &token)
 {
         using algos::begin;
         using algos::end;
-        return match_token_type(begin(range), end(range), token.token_type);
+        return token_type_match(begin(range), end(range), token.token_type);
 }
 // ...TOKEN TYPES>
 

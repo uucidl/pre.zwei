@@ -170,8 +170,7 @@ const RFC2047 &make_rfc2047(const ABNF_RFC5234 &abnf,
                                               encoded_text))),
                          UH_TOKEN("?=")));
 
-        allocate_token_types(algos::begin(rfc2047_token_types),
-                             algos::end(rfc2047_token_types));
+        token_types_init(rfc2047_token_types);
 
         global_rfc2047_parsers.encoded_word = encoded_word;
 

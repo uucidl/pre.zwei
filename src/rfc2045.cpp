@@ -137,8 +137,7 @@ const RFC2045 &make_rfc2045(const ABNF_RFC5234 &abnf,
                          UH_SEQ(type, h_ch('/'), subtype,
                                 h_many(UH_SEQ(h_ch(';'), parameter)))));
 
-        allocate_token_types(algos::begin(rfc2045_token_types),
-                             algos::end(rfc2045_token_types));
+        token_types_init(rfc2045_token_types);
         global_rfc2045_parsers.hex_octet = hex_octet;
         global_rfc2045_parsers.lenient_hex_octet = lenient_hex_octet;
         global_rfc2045_parsers.quoted_printable = quoted_printable;

@@ -107,8 +107,8 @@ zw_internal void hammer_init()
                   "expected to be the first");
 }
 
-zw_internal void allocate_token_types(UserTokenTypeEntry *first,
-                                      UserTokenTypeEntry *last)
+zw_internal void token_types_init(UserTokenTypeEntry *first,
+                                  UserTokenTypeEntry *last)
 {
         algos::for_each(first, last, [](UserTokenTypeEntry &entry) {
                 entry.registered_type =
@@ -119,7 +119,7 @@ zw_internal void allocate_token_types(UserTokenTypeEntry *first,
 }
 
 zw_internal std::pair<bool, std::pair<int, UserTokenTypeEntry>>
-match_token_type(UserTokenTypeEntry const *first,
+token_type_match(UserTokenTypeEntry const *first,
                  UserTokenTypeEntry const *last,
                  HTokenType token_type)
 {
