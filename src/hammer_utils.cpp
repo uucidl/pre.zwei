@@ -135,6 +135,8 @@ match_token_type(UserTokenTypeEntry const *first,
 
         if (offset >= 0 && offset < max_distance) {
                 auto &type_entry = source(first + offset);
+                fatal_ifnot(token_type == type_entry.registered_type,
+                            "mismatch");
                 return std::make_pair(true, std::make_pair(offset, type_entry));
         }
 
