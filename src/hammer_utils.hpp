@@ -67,6 +67,7 @@ struct UserTokenTypeEntry {
 
 zw_internal void hammer_init();
 
+// [first,last) must remain valid for as long as hammer is used
 zw_internal void token_types_init(UserTokenTypeEntry *first,
                                   UserTokenTypeEntry *last);
 
@@ -78,19 +79,14 @@ void token_types_init(RandomAccessRange &range)
         return token_types_init(begin(range), end(range));
 }
 
-zw_internal std::pair<bool, std::pair<int, UserTokenTypeEntry>>
+zw_internal std::pair<bool, UserTokenTypeEntry const *>
+token_type_find(HTokenType token_type);
+
+zw_internal std::pair<bool, UserTokenTypeEntry const *>
 token_type_match(UserTokenTypeEntry const *first,
                  UserTokenTypeEntry const *last,
                  HTokenType token_type);
 
-template <typename RandomAccessRange>
-std::pair<bool, std::pair<int, UserTokenTypeEntry>>
-token_type_match(RandomAccessRange const &range, HParsedToken const &token)
-{
-        using algos::begin;
-        using algos::end;
-        return token_type_match(begin(range), end(range), token.token_type);
-}
 // ...TOKEN TYPES>
 
 #if ZWEI_UNIT_TESTS

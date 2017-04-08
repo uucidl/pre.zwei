@@ -101,6 +101,17 @@ zw_internal HParsedToken *uuh_flatten_sequence(HParseResult const *p,
 
 // <TOKEN TYPES...
 
+struct TokenTypeSource {
+        UserTokenTypeEntry *first;
+        UserTokenTypeEntry *last;
+};
+
+enum { TOKEN_TYPES_SOURCES_N = 8,
+};
+
+zw_global TokenTypeSource token_types_sources[TOKEN_TYPES_SOURCES_N] = {};
+zw_global size_t token_types_sources_size = 0;
+
 zw_internal void hammer_init()
 {
         zw_assert(TT_USER == h_allocate_token_type("_user_"),
@@ -116,19 +127,19 @@ zw_internal void token_types_init(UserTokenTypeEntry *first,
                 zw_assert(entry.registered_type > TT_USER,
                           "TT_USER is reserved");
         });
+        auto source_index = token_types_sources_size;
+        auto &source_entry = token_types_sources[source_index];
+        ++token_types_sources_size;
+        source_entry.first = first;
+        source_entry.last = last;
 }
 
-zw_internal std::pair<bool, std::pair<int, UserTokenTypeEntry>>
+zw_internal std::pair<bool, UserTokenTypeEntry const *>
 token_type_match(UserTokenTypeEntry const *first,
                  UserTokenTypeEntry const *last,
                  HTokenType token_type)
 {
         using algos::source;
-
-        if (first == last) {
-                return std::make_pair(
-                    false, std::pair<int, UserTokenTypeEntry>(0, {}));
-        }
 
         auto max_distance = last - first;
         auto offset = token_type - source(first).registered_type;
@@ -137,10 +148,24 @@ token_type_match(UserTokenTypeEntry const *first,
                 auto &type_entry = source(first + offset);
                 fatal_ifnot(token_type == type_entry.registered_type,
                             "mismatch");
-                return std::make_pair(true, std::make_pair(offset, type_entry));
+                return std::make_pair(true, first + offset);
         }
 
-        return std::make_pair(false, std::pair<int, UserTokenTypeEntry>(0, {}));
+        return std::make_pair(false, last);
+}
+
+zw_internal std::pair<bool, UserTokenTypeEntry const *>
+token_type_find(HTokenType token_type)
+{
+        std::pair<bool, UserTokenTypeEntry const *> result = {};
+        auto source_first = token_types_sources;
+        auto const source_last = token_types_sources + token_types_sources_size;
+        while (!result.first && source_first != source_last) {
+                auto const &defs = algos::source(source_first);
+                result = token_type_match(defs.first, defs.last, token_type);
+                source_first = algos::successor(source_first);
+        }
+        return result;
 }
 
 // ..TOKEN TYPES>
