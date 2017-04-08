@@ -57,8 +57,8 @@ HAMMER_ACTION(uuh_act_bytes_from_sequence);
 
 // <TOKEN TYPES...
 /**
-   Represents a user token type
-*/
+ * Represents a user token type
+ */
 struct UserTokenTypeEntry {
         HTokenType base_type;
         char const *name_literal;
