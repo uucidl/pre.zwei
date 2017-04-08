@@ -104,7 +104,7 @@ HAMMER_ACTION(act_charset)
 {
         // NOTE(nicolas): charset names are case independent they come
         // from the IANA database.
-        auto result = uuh_uint8_sequence_to_tagged_bytes(
+        auto result = uuh_make_tagged_bytes_from_sequence(
             p->ast, RFC2047HammerTT(CHARSET), p->arena);
 
         // casting away the constness to apply a lower case function to array
@@ -117,7 +117,7 @@ HAMMER_ACTION(act_charset)
 
 HAMMER_ACTION(act_encoded_text)
 {
-        return uuh_uint8_sequence_to_tagged_bytes(p->ast, TT_BYTES, p->arena);
+        return uuh_act_bytes_from_sequence(p, user_data);
 }
 
 // # 4.2 The Q Encoding
@@ -127,7 +127,7 @@ HAMMER_ACTION(act_qp_underscore) { return H_MAKE_UINT(0x20); }
 
 HAMMER_ACTION(act_qp_encoded_text)
 {
-        return uuh_uint8_sequence_to_tagged_bytes(p->ast, TT_BYTES, p->arena);
+        return uuh_act_bytes_from_sequence(p, user_data);
 }
 
 HAMMER_ACTION(act_encoded_word)

@@ -37,12 +37,12 @@ zw_internal HParsedToken *act_tag_sequence(const HParseResult *p,
 zw_internal HParsedToken *act_flatten_bytes_tagged(
     const HParseResult *p, RFC5322TokenType rfc5322_token_type, void *user_data)
 {
-        HTokenType token_type =
-            rfc5322_token_types[rfc5322_token_type].registered_type;
         HParsedToken *content = h_act_flatten(p, user_data);
 
-        return uuh_uint8_sequence_to_tagged_bytes(content, token_type,
-                                                  p->arena);
+        HTokenType const token_type =
+            rfc5322_token_types[rfc5322_token_type].registered_type;
+        return uuh_make_tagged_bytes_from_sequence(content, token_type,
+                                                   p->arena);
 }
 
 // NOTE(nicolas) basic action for unstructured field content
