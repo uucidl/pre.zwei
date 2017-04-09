@@ -179,6 +179,13 @@ zw_internal void rfc5322_print_ast(FILE *stream,
                                    int indent_delta);
 zw_internal RFC5322TreeCoordinate rfc5322_top(HParsedToken const *&ast);
 
+zw_internal CivilDateTime *
+rfc5322_field_copy_date_time(HParsedToken const *token,
+                             CivilDateTime *d_date_time);
+
+// TODO(nicolas): figure out a generic way to deal w/ these count/copy pairs.
+// Something like an iterator perhaps?
+
 /**
  * Grabbing bytes out of a field. Returns the total bytes count
  */
@@ -195,10 +202,6 @@ zw_internal uint8_t *rfc5322_field_copy_bytes(HParsedToken const *token,
  */
 zw_internal ArrayAllocationSize
 rfc5322_field_get_bytes_array_size(HParsedToken const *token);
-
-zw_internal CivilDateTime *
-rfc5322_field_copy_date_time(HParsedToken const *token,
-                             CivilDateTime *d_date_time);
 
 /**
    @pre dest must point at an area >= allocation_size as returned by
