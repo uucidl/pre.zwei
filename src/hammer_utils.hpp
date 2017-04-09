@@ -79,6 +79,8 @@ void token_types_init(RandomAccessRange &range)
         return token_types_init(begin(range), end(range));
 }
 
+zw_internal HTokenType token_type_base(HTokenType derived_type);
+
 zw_internal std::pair<bool, UserTokenTypeEntry const *>
 token_type_find(HTokenType token_type);
 

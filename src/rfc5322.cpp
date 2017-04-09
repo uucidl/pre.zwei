@@ -806,38 +806,6 @@ zw_internal const RFC5322 &make_rfc5322(const ABNF_RFC5234 &abnf,
         return rfc5322_parsers;
 }
 
-// TODO(nil): all uses of this either need to check whether a given token is a
-// byte or sequence token
-// these queries should be made explicit and fast. Tokens could preserve that
-// information at construction time,
-// and accessible in linear time.
-zw_internal std::pair<HTokenType, bool> base_hammer_type(HTokenType token_type)
-{
-        HTokenType base_token_type = token_type;
-        bool content_type_utf8 = false;
-
-        std::pair<UserTokenTypeEntry *, UserTokenTypeEntry *> sources[]{
-            {algos::begin(rfc5322_token_types),
-             algos::end(rfc5322_token_types)},
-            {algos::begin(rfc2047_token_types),
-             algos::end(rfc2047_token_types)},
-            {algos::begin(rfc2045_token_types),
-             algos::end(rfc2045_token_types)},
-        };
-
-        for (auto const &source : sources) {
-                auto type_match =
-                    token_type_match(source.first, source.second, token_type);
-                if (type_match.first) {
-                        content_type_utf8 = true;
-                        base_token_type = type_match.second->base_type;
-                        break;
-                }
-        }
-
-        return std::make_pair(base_token_type, content_type_utf8);
-}
-
 bool has_descendants(RFC5322TreeCoordinate c)
 {
         using algos::source;
@@ -845,7 +813,7 @@ bool has_descendants(RFC5322TreeCoordinate c)
         // cheap
         // operation, because we're doing this check pretty often.
         auto is_sequence =
-            TT_SEQUENCE == base_hammer_type(source(c)->token_type).first;
+            TT_SEQUENCE == token_type_base(source(c)->token_type);
         return is_sequence && source(c)->seq->used > 0;
 }
 
@@ -1130,12 +1098,12 @@ O copy_all_token_bytes(RFC5322TreeCoordinate const &top, O d_first)
                 // TODO(nicolas): statistical property is approximatively 50% of
                 // all nodes
                 // are byte nodes that must be copied. In this case calling
-                // `base_hammer_type`
+                // `token_type_base`
                 // seems wasteful. Why can't the nodes at construction time keep
                 // that
                 // knowledge somehow.
                 auto contain_bytes =
-                    TT_BYTES == base_hammer_type(token->token_type).first;
+                    TT_BYTES == token_type_base(token->token_type);
                 SPDR_EVENT1(global_spdr, "stats", "copy_all_token_bytes.token",
                             SPDR_INT("is_copied", int(contain_bytes)));
                 if (contain_bytes) {
@@ -1168,8 +1136,7 @@ rfc5322_field_get_bytes_array_size(const HParsedToken *token)
 
         auto top = rfc5322_top(token);
         auto count = [&result](HParsedToken const *token) {
-
-                if (TT_BYTES == base_hammer_type(token->token_type).first) {
+                if (TT_BYTES == token_type_base(token->token_type)) {
                         ++result.count;
                         result.extra_bytes_count += token->bytes.len;
                 }
@@ -1186,7 +1153,7 @@ rfc5322_field_copy_bytes_array(const HParsedToken *token,
 {
         auto top = rfc5322_top(token);
         auto collect = [&d_first, &d_bytes_first](HParsedToken const *token) {
-                if (TT_BYTES == base_hammer_type(token->token_type).first) {
+                if (TT_BYTES == token_type_base(token->token_type)) {
                         auto &range = algos::sink(d_first);
                         range.first = d_bytes_first;
                         range.count = token->bytes.len;

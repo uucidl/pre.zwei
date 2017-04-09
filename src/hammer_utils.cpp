@@ -141,17 +141,17 @@ token_type_match(UserTokenTypeEntry const *first,
 {
         using algos::source;
 
-        auto max_distance = last - first;
-        auto offset = token_type - source(first).registered_type;
+        auto min_token = source(first).registered_type;
+        auto max_token = last - first + min_token;
 
-        if (offset >= 0 && offset < max_distance) {
-                auto &type_entry = source(first + offset);
-                fatal_ifnot(token_type == type_entry.registered_type,
-                            "mismatch");
-                return std::make_pair(true, first + offset);
+        if (token_type < min_token || token_type >= max_token) {
+                return {};
         }
 
-        return std::make_pair(false, last);
+        auto offset = token_type - source(first).registered_type;
+        auto &type_entry = source(first + offset);
+        fatal_ifnot(token_type == type_entry.registered_type, "mismatch");
+        return {true, first + offset};
 }
 
 zw_internal std::pair<bool, UserTokenTypeEntry const *>
@@ -166,6 +166,16 @@ token_type_find(HTokenType token_type)
                 source_first = algos::successor(source_first);
         }
         return result;
+}
+
+zw_internal HTokenType token_type_base(HTokenType derived_type)
+{
+        auto type_match = token_type_find(derived_type);
+        if (!type_match.first) {
+                return derived_type;
+        }
+
+        return type_match.second->base_type;
 }
 
 // ..TOKEN TYPES>
