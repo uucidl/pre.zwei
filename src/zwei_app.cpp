@@ -84,6 +84,7 @@
 #endif
 #include "abnf_rfc5234.hpp"
 #include "base64.hpp"
+#include "mail_rfc5322_base.hpp"
 #include "rfc2045.hpp"
 #include "rfc2047.hpp"
 #include "rfc5322.hpp"

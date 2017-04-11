@@ -6,6 +6,7 @@
 #include "bits.hpp"
 #include "hammer_defines.hpp"
 #include "hammer_utils.hpp"
+#include "mail_rfc5322_base.hpp"
 #include "mime_types.hpp"
 #include "zwei_logging.hpp"
 
@@ -63,16 +64,16 @@ HAMMER_ACTION(act_content_transfer_encoding)
 
 zw_internal RFC2045 global_rfc2045_parsers;
 
+#define UUH_FIELD(lit, right)                                                  \
+        h_middle(h_ascii_itoken((uint8_t *)lit, (sizeof lit) - 1), right,      \
+                 abnf.CRLF)
+
 const RFC2045 &make_rfc2045(const ABNF_RFC5234 &abnf,
                             const RFC5322_Base &rfc5322_base)
 {
 
         auto CFWS = rfc5322_base.CFWS;
         auto quoted_string = rfc5322_base.quoted_string;
-
-#define UUH_FIELD(lit, right)                                                  \
-        h_middle(h_ascii_itoken((uint8_t *)lit, (sizeof lit) - 1), right,      \
-                 abnf.CRLF)
 
         // # 6.7.  Quoted-Printable Content-Transfer-Encoding
         H_ARULE(hex_octet, h_right(h_ch('='), h_repeat_n(abnf.HEXDIG, 2)));
@@ -190,6 +191,8 @@ const RFC2045 &make_rfc2045(const ABNF_RFC5234 &abnf,
 
         return global_rfc2045_parsers;
 }
+
+#undef UUH_FIELD
 
 // TODO(nicolas): NEXT implement querying for media type
 #if ZWEI_DISABLED

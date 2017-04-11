@@ -161,23 +161,16 @@ zw_internal UserTokenTypeEntry rfc5322_token_types[RFC5322_TT_LAST] = {
     {TT_SEQUENCE, "optional-field", TT_INVALID},
 };
 
-struct RFC5322_Base {
-        HParser *FWS;
-        HParser *CFWS;
-        HParser *quoted_string;
-};
-
 struct RFC5322 {
         HParser *message;
         HParser *fields;
 };
 
-zw_internal const RFC5322_Base &
-make_rfc5322_base(const ABNF_RFC5234 &abnf_rfc5234);
 zw_internal const RFC5322 &make_rfc5322(const ABNF_RFC5234 &abnf,
                                         const RFC5322_Base &rfc5322_base,
                                         const RFC2047 &rfc2047,
                                         const RFC2045 &rfc2045);
+
 zw_internal bool rfc5322_validate(const HParsedToken *ast,
                                   MemoryArena work_arena);
 zw_internal void rfc5322_print_ast(FILE *stream,
