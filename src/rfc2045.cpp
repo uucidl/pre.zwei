@@ -4,6 +4,7 @@
 
 #include "abnf_rfc5234.hpp"
 #include "bits.hpp"
+#include "hammer_defines.hpp"
 #include "hammer_utils.hpp"
 #include "mime_types.hpp"
 #include "zwei_logging.hpp"

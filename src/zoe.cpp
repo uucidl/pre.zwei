@@ -1,6 +1,7 @@
 #include "zoe.hpp"
 
 #include "bits.hpp"
+#include "hammer_defines.hpp"
 #include "hammer_iterators.hpp"
 #include "hammer_utils.hpp"
 #include "zwei_logging.hpp"

@@ -1,4 +1,5 @@
 #include "abnf_rfc5234.hpp"
+#include "hammer_defines.hpp"
 #include "hammer_utils.hpp"
 
 #include "hammer.hpp"

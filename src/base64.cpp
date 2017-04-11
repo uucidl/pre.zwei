@@ -9,6 +9,7 @@
 #include "abnf_rfc5234.hpp"
 
 #include "hammer.hpp"
+#include "hammer_defines.hpp"
 #include "hammer_utils.hpp"
 
 struct HammerUintTokenSequenceIterator {
