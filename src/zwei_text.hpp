@@ -7,6 +7,9 @@
 
 /**
  * Container of commands for outputting (formatted) text.
+ *
+ * Character data is in general only lazily copied, that is, it must be kept
+ * alive by the user.
  */
 struct TextOutputGroup;
 

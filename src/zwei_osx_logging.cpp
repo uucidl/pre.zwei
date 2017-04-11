@@ -3,8 +3,6 @@
 
 #include "algos.hpp"
 
-#include "../modules/uu.spdr/include/spdr/spdr.hh"
-
 #include <sys/uio.h>
 
 inline void sync_print(int filedesc, char const *message, size_t message_size)
@@ -15,45 +13,36 @@ inline void sync_print(int filedesc, char const *message, size_t message_size)
         writev(filedesc, iovecs, countof(iovecs));
 }
 
-extern zw_global SPDR_Context *global_spdr;
+#define IOVECS_CAPACITY 64
 
 void text_output_group_print(int filedesc, TextOutputGroup const &group)
 {
-        SPDR_SCOPE1(global_spdr, "logging", __FUNCTION__,
-                    SPDR_INT("filedesc", filedesc));
-        SPDR_EVENT3(global_spdr, "variables", "TextOutputGroup",
-                    SPDR_INT("entries-count", int(group.last - group.first)),
-                    SPDR_INT("entries-bytes", int(sizeof *group.first *
-                                                  (group.last - group.first))),
-                    SPDR_INT("bytes", int(group.bytes_arena.used)));
-
-#define IOVECS_CAPACITY 64
         struct iovec iovecs[IOVECS_CAPACITY];
-        uint8_t iovecs_n = 0;
+        auto iovecs_next = iovecs;
+        auto const iovecs_last = iovecs + IOVECS_CAPACITY;
 
-        // TODO(nicolas): what is this pattern? we have an operation
-        // that we wish to do (writev) which takes a number of iovec
-        // we want to call this thing every now and then so we create
-        // a buffer of iovec that we write to
-        //
-        // If I had a buffered output iterator that would
-        // automatically flush the buffer to get to the next buffer as
-        // things get copied to it, then we could use a copy
-        // algorithm.
-        auto next_iovec = [filedesc, &iovecs, &iovecs_n]() -> iovec & {
-                if (iovecs_n >= IOVECS_CAPACITY) {
-                        writev(filedesc, iovecs, iovecs_n);
-                        iovecs_n = 0;
+        auto const write_iovecs = [&iovecs_next, &iovecs, filedesc]() {
+                if (iovecs_next != iovecs) {
+                        writev(filedesc, iovecs, int(iovecs_next - iovecs));
+                        iovecs_next = iovecs;
                 }
-                iovec *entry = iovecs + iovecs_n;
-                ++iovecs_n;
+        };
+
+        auto next_iovec = [&iovecs_next, iovecs_last,
+                           write_iovecs]() -> iovec & {
+                if (iovecs_next == iovecs_last) {
+                        write_iovecs();
+                }
+
+                iovec *entry = iovecs_next;
+                ++iovecs_next;
                 return *entry;
         };
 
         auto first_entry = group.first;
         auto const last_entry = group.last;
         algos::for_each(first_entry, last_entry,
-                        [next_iovec](TextOutputGroupEntry &x) {
+                        [next_iovec](TextOutputGroupEntry const &x) {
                                 auto &iovec = next_iovec();
                                 iovec.iov_base = (void *)(x.first);
                                 iovec.iov_len = x.count;
@@ -68,10 +57,10 @@ void text_output_group_print(int filedesc, TextOutputGroup const &group)
         auto &iovec = next_iovec();
         iovec.iov_base = (void *)"\n";
         iovec.iov_len = 1;
-        SPDR_BEGIN(global_spdr, "logging", "writev");
-        writev(filedesc, iovecs, iovecs_n);
-        SPDR_END(global_spdr, "logging", "writev");
+        write_iovecs();
 }
+
+#undef IOVECS_CAPACITY
 
 void error_print(char const *message)
 {
