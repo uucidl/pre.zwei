@@ -1,4 +1,5 @@
 #include "zwei_logging.hpp"
+#include "zwei_textoutputgroup.hpp"
 
 #include "algos.hpp"
 
@@ -89,14 +90,14 @@ void trace_print_n(char const *message, size_t message_len)
         sync_print(1, message, message_len);
 }
 
-void trace(TextOutputGroup &group)
+void trace(TextOutputGroup *group)
 {
-        text_output_group_print(1, group);
+        text_output_group_print(1, *group);
         clear(group);
 }
 
-void error(TextOutputGroup &group)
+void error(TextOutputGroup *group)
 {
-        text_output_group_print(2, group);
+        text_output_group_print(2, *group);
         clear(group);
 }

@@ -79,8 +79,8 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
 {
         // FEATURE(nicolas): print raw content of From: To: CC
         // Sender: Message-Id: In-Reply-To: Subject:
-        TextOutputGroup text_output_group = {};
-        allocate(text_output_group, &transient_arena, KILOBYTES(16));
+        auto text_output_group =
+            textoutputgroup_allocate(&transient_arena, KILOBYTES(16));
 
         // TODO(nicolas): having a delimited table printing abstraction
         // would help with these (and the app)
@@ -88,11 +88,11 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
         auto print_field = [&text_output_group](const char *name,
                                                 struct ByteCountedRange value) {
                 if (value.first) {
-                        push_back_tab(text_output_group);
-                        push_back_cstr(text_output_group, name);
-                        push_back_tab(text_output_group);
-                        push_back_extent(text_output_group, value.first,
-                                         value.count);
+                        push_tab(text_output_group);
+                        push_cstr(text_output_group, name);
+                        push_tab(text_output_group);
+                        push_extent(text_output_group, value.first,
+                                    value.count);
                         trace(text_output_group);
                 }
         };
@@ -102,14 +102,14 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                         return;
                 }
 
-                push_back_tab(text_output_group);
-                push_back_cstr(text_output_group, name);
-                push_back_tab(text_output_group);
-                algos::for_each_n(
-                    values, count, [&](const ByteCountedRange &range) {
-                            push_back_extent(text_output_group, range.first,
-                                             range.count);
-                    });
+                push_tab(text_output_group);
+                push_cstr(text_output_group, name);
+                push_tab(text_output_group);
+                algos::for_each_n(values, count,
+                                  [&](const ByteCountedRange &range) {
+                                          push_extent(text_output_group,
+                                                      range.first, range.count);
+                                  });
                 trace(text_output_group);
         };
         // TODO(nicolas): mailboxes could be stored sorted,
@@ -124,51 +124,50 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                 if (mailboxes_count == 0) {
                         return;
                 }
-                push_back_tab(text_output_group);
-                push_back_cstr(text_output_group, name);
-                push_back_tab(text_output_group);
+                push_tab(text_output_group);
+                push_cstr(text_output_group, name);
+                push_tab(text_output_group);
 
-                auto push_back_mailbox = [](TextOutputGroup &text_output_group,
-                                            RawMailbox const &mailbox) {
-                        push_back_cstr(text_output_group, "<mailbox ");
+                auto push_mailbox = [](TextOutputGroup *text_output_group,
+                                       RawMailbox const &mailbox) {
+                        push_cstr(text_output_group, "<mailbox ");
                         if (mailbox.display_name_bytes.count > 0) {
-                                push_back_cstr(text_output_group, "\"");
-                                push_back_extent(
-                                    text_output_group,
-                                    mailbox.display_name_bytes.first,
-                                    mailbox.display_name_bytes.count);
-                                push_back_cstr(text_output_group, "\" ");
+                                push_cstr(text_output_group, "\"");
+                                push_extent(text_output_group,
+                                            mailbox.display_name_bytes.first,
+                                            mailbox.display_name_bytes.count);
+                                push_cstr(text_output_group, "\" ");
                         }
-                        push_back_extent(text_output_group,
-                                         mailbox.local_part_bytes.first,
-                                         mailbox.local_part_bytes.count);
-                        push_back_cstr(text_output_group, "@");
-                        push_back_extent(text_output_group,
-                                         mailbox.domain_bytes.first,
-                                         mailbox.domain_bytes.count);
-                        push_back_cstr(text_output_group, ">");
+                        push_extent(text_output_group,
+                                    mailbox.local_part_bytes.first,
+                                    mailbox.local_part_bytes.count);
+                        push_cstr(text_output_group, "@");
+                        push_extent(text_output_group,
+                                    mailbox.domain_bytes.first,
+                                    mailbox.domain_bytes.count);
+                        push_cstr(text_output_group, ">");
                 };
 
                 if (mailboxes_count > 0) {
-                        push_back_mailbox(text_output_group, *mailboxes);
+                        push_mailbox(text_output_group, *mailboxes);
                         ++mailboxes;
                         --mailboxes_count;
                 }
 
                 algos::for_each_n(
                     mailboxes, mailboxes_count, [&](const RawMailbox &mailbox) {
-                            push_back_cstr(text_output_group, ", ");
-                            push_back_mailbox(text_output_group, mailbox);
+                            push_cstr(text_output_group, ", ");
+                            push_mailbox(text_output_group, mailbox);
                     });
 
                 trace(text_output_group);
         };
 
         if (!message_summary.valid_rfc5322) {
-                push_back_tab(text_output_group);
-                push_back_cstr(text_output_group, "RFC5322");
-                push_back_tab(text_output_group);
-                push_back_cstr(text_output_group, "false");
+                push_tab(text_output_group);
+                push_cstr(text_output_group, "RFC5322");
+                push_tab(text_output_group);
+                push_cstr(text_output_group, "false");
                 trace(text_output_group);
         }
 
@@ -177,17 +176,17 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
             "SENDER", &message_summary.sender_mailbox,
             message_summary.sender_mailbox.domain_bytes.count > 0 ? 1 : 0);
         {
-                push_back_tab(text_output_group);
-                push_back_cstr(text_output_group, "ORIG_DATE");
-                push_back_tab(text_output_group);
+                push_tab(text_output_group);
+                push_cstr(text_output_group, "ORIG_DATE");
+                push_tab(text_output_group);
                 CivilDateTime const &value = message_summary.orig_date;
-                push_back_formatted(
-                    text_output_group, "<%d-%02d-%02dT%02d:%02d:%"
-                                       "02d%c%02d:%02d>",
-                    value.year, value.month_count, value.day_count, value.hour,
-                    value.minute, value.seconds,
-                    value.zone_hour_offset >= 0 ? '+' : '-',
-                    abs(value.zone_hour_offset), value.zone_minute_offset);
+                push_formatted(text_output_group, "<%d-%02d-%02dT%02d:%02d:%"
+                                                  "02d%c%02d:%02d>",
+                               value.year, value.month_count, value.day_count,
+                               value.hour, value.minute, value.seconds,
+                               value.zone_hour_offset >= 0 ? '+' : '-',
+                               abs(value.zone_hour_offset),
+                               value.zone_minute_offset);
                 trace(text_output_group);
         }
         print_mailbox_list_field("FROM", message_summary.from_mailboxes,
@@ -201,12 +200,12 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                                message_summary.in_reply_to_msg_ids_count);
         print_field("SUBJECT", message_summary.subject_field_bytes);
         {
-                push_back_tab(text_output_group);
-                push_back_cstr(text_output_group, "CONTENT_TRANSFER_ENCODING");
-                push_back_tab(text_output_group);
-                push_back_cstr(text_output_group,
-                               ContentTransferEncodingType_string(
-                                   message_summary.content_transfer_encoding));
+                push_tab(text_output_group);
+                push_cstr(text_output_group, "CONTENT_TRANSFER_ENCODING");
+                push_tab(text_output_group);
+                push_cstr(text_output_group,
+                          ContentTransferEncodingType_string(
+                              message_summary.content_transfer_encoding));
                 trace(text_output_group);
         }
         print_field("FIRST_LINE", message_summary.first_line_bytes);
@@ -296,19 +295,17 @@ print_processed_message(ProcessedMessage const &processed_message,
                     SPDR_STR("filepath", processed_message.filepath),
                     SPDR_INT("fileindex", int(processed_message.fileindex)));
         char const *filepath = processed_message.filepath;
-        TextOutputGroup traceg = {};
-        allocate(traceg, &transient_arena, KILOBYTES(1));
+        auto traceg = textoutputgroup_allocate(&transient_arena, KILOBYTES(1));
         {
-                push_back_cstr(traceg, "FILE");
-                push_back_formatted(traceg, "%lld",
-                                    processed_message.fileindex);
-                push_back_cstr(traceg, " ");
-                push_back_cstr(traceg, filepath);
-                push_back_cstr(traceg, ":");
+                push_cstr(traceg, "FILE");
+                push_formatted(traceg, "%lld", processed_message.fileindex);
+                push_cstr(traceg, " ");
+                push_cstr(traceg, filepath);
+                push_cstr(traceg, ":");
                 trace(traceg);
         }
-        push_back_cstr(traceg, "SHA1");
-        push_back_tab(traceg);
+        push_cstr(traceg, "SHA1");
+        push_tab(traceg);
 
         auto const &sha1_digest = processed_message.sha1_digest;
         char byteToHexChar[] = {
@@ -318,52 +315,51 @@ print_processed_message(ProcessedMessage const &processed_message,
         for (size_t byteIndex = 0; byteIndex < countof(sha1_digest);
              byteIndex++) {
                 uint8_t const byte = sha1_digest[byteIndex];
-                push_back_formatted(traceg, "%c%c", byteToHexChar[byte >> 4],
-                                    byteToHexChar[byte & 0xF]);
+                push_formatted(traceg, "%c%c", byteToHexChar[byte >> 4],
+                               byteToHexChar[byte & 0xF]);
         }
         trace(traceg);
 
         if (processed_message.success) {
                 // FEATURE(nicolas): print filing timestamp
-                push_back_cstr(traceg, "PATH");
-                push_back_tab(traceg);
-                push_back_cstr(traceg, filepath);
+                push_cstr(traceg, "PATH");
+                push_tab(traceg);
+                push_cstr(traceg, filepath);
                 trace(traceg);
 
-                push_back_cstr(traceg, "SIZE");
-                push_back_tab(traceg);
-                push_back_u64(traceg, processed_message.filesize);
-                push_back_tab(traceg);
+                push_cstr(traceg, "SIZE");
+                push_tab(traceg);
+                push_u64(traceg, processed_message.filesize);
+                push_tab(traceg);
                 trace(traceg);
 
                 if (processed_message.zoefile.maildir_flags &
                     MaildirFlag_Trashed) {
-                        push_back_cstr(traceg, "TRASHED");
-                        push_back_tab(traceg);
-                        push_back_cstr(traceg, "true");
+                        push_cstr(traceg, "TRASHED");
+                        push_tab(traceg);
+                        push_cstr(traceg, "true");
                         trace(traceg);
                 }
 
-                push_back_cstr(traceg, "ZOE_REL_URL");
-                push_back_tab(traceg);
-                push_back_extent(traceg, processed_message.zoe_rel_url.first,
-                                 processed_message.zoe_rel_url.count);
+                push_cstr(traceg, "ZOE_REL_URL");
+                push_tab(traceg);
+                push_extent(traceg, processed_message.zoe_rel_url.first,
+                            processed_message.zoe_rel_url.count);
                 trace(traceg);
                 // ID(a94812)
-                push_back_cstr(traceg, "UUID");
-                push_back_tab(traceg);
+                push_cstr(traceg, "UUID");
+                push_tab(traceg);
                 for (size_t i = 0; i < countof(processed_message.zoefile.uuid);
                      i++) {
-                        push_back_formatted(traceg, "%x",
-                                            processed_message.zoefile.uuid[i]);
+                        push_formatted(traceg, "%x",
+                                       processed_message.zoefile.uuid[i]);
                 }
                 trace(traceg);
 
-                push_back_cstr(traceg, "UNIX TIMESTAMP");
-                push_back_tab(traceg);
-                push_back_formatted(
-                    traceg, "%llu",
-                    processed_message.zoefile.unix_epoch_millis);
+                push_cstr(traceg, "UNIX TIMESTAMP");
+                push_tab(traceg);
+                push_formatted(traceg, "%llu",
+                               processed_message.zoefile.unix_epoch_millis);
                 trace(traceg);
 
                 print_message_summary(processed_message.message_summary,

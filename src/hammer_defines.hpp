@@ -1,5 +1,7 @@
 #pragma once
 
+#include "zwei_text.hpp"
+
 // <PARSERS...
 
 #define UH_SEQ(...) h_sequence(__VA_ARGS__, NULL)
@@ -59,28 +61,27 @@ check_parser_do_test(HParser *parser, uint8_t *data, size_t data_size, P astfn)
 {
         char memory[512];
         auto arena = memory_arena(memory, sizeof memory);
-        auto traceg = TextOutputGroup{};
-        allocate(traceg, &arena, 28);
-        push_back_cstr(traceg, "input: ");
-        push_back_extent(traceg, data, data_size);
+        auto traceg = textoutputgroup_allocate(&arena, 28);
+        push_cstr(traceg, "input: ");
+        push_extent(traceg, data, data_size);
         trace(traceg);
         if (h_compile(parser, PB_MIN, NULL) < 0) {
-                push_back_cstr(traceg, "problem with parser compile");
+                push_cstr(traceg, "problem with parser compile");
                 error(traceg);
         }
         HParseResult *hr = h_parse(parser, data, data_size);
         if (!hr) {
-                push_back_cstr(traceg, "FAIL: could not parse!");
+                push_cstr(traceg, "FAIL: could not parse!");
                 error(traceg);
                 exit(1);
         } else {
                 if (!astfn(hr->ast)) {
-                        push_back_cstr(traceg, "FAIL: could not parse!");
+                        push_cstr(traceg, "FAIL: could not parse!");
                         error(traceg);
                         exit(1);
                 }
                 fflush(stdout);
-                push_back_cstr(traceg, "SUCCESS: managed to parse!");
+                push_cstr(traceg, "SUCCESS: managed to parse!");
                 trace(traceg);
                 h_parse_result_free(hr);
         }

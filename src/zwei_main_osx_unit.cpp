@@ -21,6 +21,7 @@
 #include "zwei_iobuffer.hpp"
 #include "zwei_iobuffer_inlines.hpp"
 #include "zwei_logging.hpp"
+#include "zwei_text.hpp"
 #include "zwei_textapp.cpp"
 #include "zwei_types.hpp"
 
@@ -164,8 +165,7 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
         FSEntry *entry = push_directory();
         entry->path = root_dir_path;
 
-        TextOutputGroup trace_output = {};
-        allocate(trace_output, &work_arena, KILOBYTES(1));
+        auto trace_output = textoutputgroup_allocate(&work_arena, KILOBYTES(1));
 
         auto trace_optionally = [&trace_output, trace_on]() {
                 if (trace_on) {
@@ -226,18 +226,18 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
 
                 uint64_t physical_offset = 0;
                 {
-                        push_back_cstr(trace_output, name);
-                        push_back_tab(trace_output);
+                        push_cstr(trace_output, name);
+                        push_tab(trace_output);
                         if (entry->obj_type == VREG) {
-                                push_back_cstr(trace_output, "[f]");
+                                push_cstr(trace_output, "[f]");
                         } else if (entry->obj_type == VDIR) {
-                                push_back_cstr(trace_output, "[d]");
+                                push_cstr(trace_output, "[d]");
                         } else {
                                 // not a file, not a directory
-                                push_back_formatted(trace_output, "[%d]",
-                                                    entry->obj_type);
+                                push_formatted(trace_output, "[%d]",
+                                               entry->obj_type);
                         }
-                        push_back_tab(trace_output);
+                        push_tab(trace_output);
 
                         // NOTE(nicolas) non native file systems
                         // (AFP/CIFS) are problematic not only for
@@ -250,51 +250,49 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
                         bool mounted_share = false;
                         bool supports_semicolon = false;
                         if (entry->obj_tag == VT_NFS) {
-                                push_back_cstr(trace_output, "NFS");
+                                push_cstr(trace_output, "NFS");
                                 supports_semicolon = true;
                         } else if (entry->obj_tag == VT_HFS) {
-                                push_back_cstr(trace_output, "HFS");
+                                push_cstr(trace_output, "HFS");
                                 supports_semicolon = true;
                         } else if (entry->obj_tag == VT_AFP) {
-                                push_back_cstr(trace_output, "AFP");
+                                push_cstr(trace_output, "AFP");
                                 mounted_share = true;
                         } else if (entry->obj_tag == VT_CIFS) {
-                                push_back_cstr(trace_output, "CIFS");
+                                push_cstr(trace_output, "CIFS");
                                 mounted_share = true;
                         } else {
-                                push_back_u32(trace_output, entry->obj_tag);
+                                push_u32(trace_output, entry->obj_tag);
                         }
 
                         if (mounted_share) {
                                 MemoryArena temp_arena = work_arena;
-                                auto errorg = TextOutputGroup{};
-                                allocate(errorg, &temp_arena, KILOBYTES(1));
-                                push_back_cstr(errorg, "path '");
-                                push_back_cstr(errorg, path);
-                                push_back_cstr(errorg, "' is a mounted share.");
+                                auto errorg = textoutputgroup_allocate(
+                                    &temp_arena, KILOBYTES(1));
+                                push_cstr(errorg, "path '");
+                                push_cstr(errorg, path);
+                                push_cstr(errorg, "' is a mounted share.");
                                 error(errorg);
                         }
 
                         if (entry->obj_type == VREG) {
-                                push_back_tab(trace_output);
-                                push_back_u32(trace_output,
-                                              entry->file_ioblocksize);
-                                push_back_tab(trace_output);
-                                push_back_u64(trace_output,
-                                              entry->file_totalsize);
+                                push_tab(trace_output);
+                                push_u32(trace_output, entry->file_ioblocksize);
+                                push_tab(trace_output);
+                                push_u64(trace_output, entry->file_totalsize);
 
                                 if (!supports_semicolon &&
                                     global_can_ignore_file) {
                                         if (':' == *cstr_find(path, ':')) {
                                                 MemoryArena temp_arena =
                                                     work_arena;
-                                                auto errorg = TextOutputGroup{};
-                                                allocate(errorg, &temp_arena,
-                                                         KILOBYTES(1));
-                                                push_back_cstr(errorg,
-                                                               "path: '");
-                                                push_back_cstr(errorg, path);
-                                                push_back_cstr(
+                                                auto errorg =
+                                                    textoutputgroup_allocate(
+                                                        &temp_arena,
+                                                        KILOBYTES(1));
+                                                push_cstr(errorg, "path: '");
+                                                push_cstr(errorg, path);
+                                                push_cstr(
                                                     errorg,
                                                     "'  contains a colon, "
                                                     "which is not supported "
@@ -333,9 +331,8 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
                                         } else {
                                                 physical_offset =
                                                     filephys.l2p_devoffset;
-                                                push_back_cstr(trace_output,
-                                                               "\t");
-                                                push_back_u64(
+                                                push_cstr(trace_output, "\t");
+                                                push_u64(
                                                     trace_output,
                                                     filephys.l2p_devoffset);
                                         }
@@ -370,34 +367,33 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
                         dir_fd = open(dir_path, O_RDONLY, 0);
                         if (dir_fd < 0) {
                                 MemoryArena temp_arena = work_arena;
-                                TextOutputGroup errorg = {};
-                                allocate(errorg, &temp_arena, KILOBYTES(1));
-                                push_back_cstr(errorg,
-                                               "could not find directory: ");
-                                push_back_cstr(errorg, dir_path);
+                                auto errorg = textoutputgroup_allocate(
+                                    &temp_arena, KILOBYTES(1));
+                                push_cstr(errorg, "could not find directory: ");
+                                push_cstr(errorg, dir_path);
                                 error(errorg);
                                 return nullptr;
                         }
                 }
                 DEFER({ close(dir_fd); });
 
-                push_back_newline(trace_output);
-                push_back_cstr(trace_output, "listing directory: ");
-                push_back_cstr(trace_output, dir_path);
+                push_newline(trace_output);
+                push_cstr(trace_output, "listing directory: ");
+                push_cstr(trace_output, dir_path);
                 trace_optionally();
 
                 // TODO(nicolas): push sep by "\t"
-                push_back_cstr(trace_output, "name");
-                push_back_tab(trace_output);
-                push_back_cstr(trace_output, "type");
-                push_back_tab(trace_output);
-                push_back_cstr(trace_output, "tag");
-                push_back_tab(trace_output);
-                push_back_cstr(trace_output, "ioblocksize");
-                push_back_tab(trace_output);
-                push_back_cstr(trace_output, "size");
-                push_back_tab(trace_output);
-                push_back_cstr(trace_output, "physical location");
+                push_cstr(trace_output, "name");
+                push_tab(trace_output);
+                push_cstr(trace_output, "type");
+                push_tab(trace_output);
+                push_cstr(trace_output, "tag");
+                push_tab(trace_output);
+                push_cstr(trace_output, "ioblocksize");
+                push_tab(trace_output);
+                push_cstr(trace_output, "size");
+                push_tab(trace_output);
+                push_cstr(trace_output, "physical location");
                 trace_optionally();
 
                 uint32_t entrycount = 0;
@@ -440,9 +436,9 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
                         file_count++;
                 }
 
-                push_back_cstr(trace_output, "found ");
-                push_back_u64(trace_output, file_count);
-                push_back_cstr(trace_output, " files");
+                push_cstr(trace_output, "found ");
+                push_u64(trace_output, file_count);
+                push_cstr(trace_output, " files");
                 trace_optionally();
 
                 entry_array_count = file_count;
@@ -534,12 +530,12 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
         }
 
         for (size_t i = 0; i < entry_array_count; i++) {
-                push_back_cstr(trace_output, "FILE");
-                push_back_u64(trace_output, i);
-                push_back_tab(trace_output);
-                push_back_u64(trace_output, entry_array[i].physical_offset);
-                push_back_tab(trace_output);
-                push_back_cstr(trace_output, entry_array[i].path);
+                push_cstr(trace_output, "FILE");
+                push_u64(trace_output, i);
+                push_tab(trace_output);
+                push_u64(trace_output, entry_array[i].physical_offset);
+                push_tab(trace_output);
+                push_cstr(trace_output, entry_array[i].path);
                 trace_optionally();
         }
 
@@ -759,12 +755,11 @@ int main(int argc, char **argv)
                         pop_unused(*transient_arena, dc_arena);
                         {
                                 MemoryArena temp_arena = *transient_arena;
-                                TextOutputGroup traceg = {};
-                                allocate(traceg, &temp_arena, KILOBYTES(1));
-                                push_back_cstr(traceg,
-                                               "Bytes used after query: ");
-                                push_back_formatted(traceg, "%lld",
-                                                    transient_arena->used);
+                                auto traceg = textoutputgroup_allocate(
+                                    &temp_arena, KILOBYTES(1));
+                                push_cstr(traceg, "Bytes used after query: ");
+                                push_formatted(traceg, "%lld",
+                                               transient_arena->used);
                                 trace(traceg);
                         }
                 }
@@ -1004,11 +999,10 @@ int main(int argc, char **argv)
         }
         {
                 MemoryArena temp_arena = *permanent_arena;
-                auto tog = TextOutputGroup{};
-                allocate(tog, &temp_arena, 512);
-                push_back_cstr(tog, "reporting traces to file: ");
-                push_back_cstr(tog, trace_file);
-                push_back_newline(tog);
+                auto tog = textoutputgroup_allocate(&temp_arena, 512);
+                push_cstr(tog, "reporting traces to file: ");
+                push_cstr(tog, trace_file);
+                push_newline(tog);
                 trace(tog);
         }
         int fd = open(trace_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
@@ -1018,10 +1012,9 @@ int main(int argc, char **argv)
                             MemoryArena stack =
                                 memory_arena(buffer, sizeof buffer);
                             int *fd_ptr = static_cast<int *>(user_data);
-                            auto tog = TextOutputGroup{};
-                            allocate(tog, &stack, 64);
-                            push_back_cstr(tog, string);
-                            text_output_group_print(*fd_ptr, tog);
+                            auto tog = textoutputgroup_allocate(&stack, 64);
+                            push_cstr(tog, string);
+                            text_output_group_print(*fd_ptr, *tog);
                     },
                     &fd);
         close(fd);
@@ -1038,7 +1031,7 @@ int main(int argc, char **argv)
 
 #include "zwei_iobuffer.cpp"
 #include "zwei_osx_logging.cpp"
-#include "zwei_textoutputgroup.cpp"
+#include "zwei_text.cpp"
 #define ZWEI_TEXTAPP_IMPLEMENTATION
 #include "secure_hash_standard.cpp"
 #include "zwei_textapp.cpp"
