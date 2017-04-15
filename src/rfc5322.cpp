@@ -720,6 +720,10 @@ zw_internal const RFC5322 &make_rfc5322(const ABNF_RFC5234 &abnf,
         CHECK_PARSER2(fields, "From: Nicolas =?UTF-8?B?TMOpdmVpbGzDqQ==?= "
                               "<nicolas.leveille@free.fr>\r\n",
                       rfc5322_print_ast);
+        // An 'encoded-word' MUST NOT appear within a 'quoted-string':
+        CHECK_PARSER2(fields, "From: \"=?utf-8?B?RGFzc2F1bHQgU3lzdMOobWVz?=\" "
+                              "<dassault@jkyg.espmp-cufr.net>\r\n",
+                      rfc5322_print_ast);
         CHECK_PARSER2(fields, "subject:\r\n", rfc5322_print_ast);
 
         // Testing unstructured text fields
