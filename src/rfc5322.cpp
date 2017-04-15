@@ -141,18 +141,23 @@ HAMMER_ACTION(act_display_name)
         uint8_t *bytes_last = bytes;
         bool is_first = true;
 
-        auto copy_bytes = [&bytes_last, &is_first](HParsedToken const *token) {
+        auto sep = [&is_first](uint8_t *d_bytes) {
                 if (!is_first) {
-                        sink(bytes_last) = ' ';
-                        bytes_last = successor(bytes_last);
+                        sink(d_bytes) = ' ';
+                        d_bytes = successor(d_bytes);
                 }
                 is_first = false;
+                return d_bytes;
+        };
+
+        auto copy_bytes = [&bytes_last, &sep](HParsedToken const *token) {
                 if (RFC5322TokenIs(token, WORD)) {
-                        bytes_last = algos::copy_n(
-                            token->bytes.token, token->bytes.len, bytes_last);
+                        bytes_last =
+                            algos::copy_n(token->bytes.token, token->bytes.len,
+                                          sep(bytes_last));
                 } else if (RFC2047TokenIs(token, ENCODED_WORD)) {
                         bytes_last =
-                            rfc2047_copy_encoded_word(token, bytes_last);
+                            rfc2047_copy_encoded_word(token, sep(bytes_last));
                 }
         };
         algos::traverse_each(rfc5322_top(ast), std::cref(copy_bytes));
