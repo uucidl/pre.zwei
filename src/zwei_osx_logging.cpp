@@ -1,29 +1,26 @@
 #include "zwei_logging.hpp"
 
-// TODO(nicolas): trace/error should feature a timestamp for
-// auditing.
-
+#include "zwei_inlines.hpp"
 #include "zwei_textoutputgroup.hpp"
 
 #include "algos.hpp"
 
 #include <sys/uio.h>
-
-zw_internal void sync_print(int filedesc,
-                            char const *prefix,
-                            size_t prefix_size,
-                            char const *message,
-                            size_t message_size)
-{
-        struct iovec iovecs[] = {
-            {(void *)prefix, prefix_size},
-            {(void *)message, message_size},
-            {(void *)"\n", 1},
-        };
-        writev(filedesc, iovecs, countof(iovecs));
-}
+#include <time.h>
 
 #define IOVECS_CAPACITY (128 >= IOV_MAX ? IOV_MAX : 128)
+
+zw_internal char *isodate_now(char *isodate_buffer, size_t isodate_buffer_size)
+{
+        auto clock = time(NULL);
+        struct tm instant_tm;
+        if (gmtime_r(&clock, &instant_tm)) {
+                auto res = strftime(isodate_buffer, isodate_buffer_size,
+                                    "%Y-%m-%dT%H:%M%z", &instant_tm);
+                return isodate_buffer + res;
+        }
+        return isodate_buffer;
+}
 
 zw_internal void
 iovecs_write(iovec **iovecs_next_ptr, iovec *iovecs, int filedesc)
@@ -48,13 +45,12 @@ zw_internal iovec &iovecs_push(iovec **iovecs_next_ptr,
         return *entry;
 };
 
-zw_internal void text_output_group_print(int filedesc,
-                                         iovec *iovecs,
-                                         iovec *iovecs_last,
-                                         TextOutputGroup const &group)
+zw_internal iovec *text_output_group_print(int filedesc,
+                                           iovec *iovecs,
+                                           iovec *iovecs_next,
+                                           iovec *iovecs_last,
+                                           TextOutputGroup const &group)
 {
-        auto iovecs_next = iovecs;
-
         algos::for_each(
             group.first, group.last, [&](TextOutputGroupEntry const &x) {
                     auto &iovec = iovecs_push(&iovecs_next, iovecs, iovecs_last,
@@ -69,58 +65,74 @@ zw_internal void text_output_group_print(int filedesc,
                 iovec.iov_base = (void *)"…";
                 iovec.iov_len = sizeof("…") - 1;
         }
-
-        auto &iovec = iovecs_push(&iovecs_next, iovecs, iovecs_last, filedesc);
-        iovec.iov_base = (void *)"\n";
-        iovec.iov_len = 1;
         iovecs_write(&iovecs_next, iovecs, filedesc);
+        return iovecs_next;
 }
 
 void text_output_group_print(int filedesc, TextOutputGroup const &group)
 {
         struct iovec iovecs[IOVECS_CAPACITY];
         auto const iovecs_last = iovecs + IOVECS_CAPACITY;
-        text_output_group_print(filedesc, iovecs, iovecs_last, group);
+        text_output_group_print(filedesc, iovecs, iovecs, iovecs_last, group);
 }
 
-void error_print(char const *message)
+zw_internal TextOutputGroup *
+trace_prefix(char const *category, char *buffer, size_t buffer_size)
 {
-        auto message_size = cstr_len(message);
-        char const *prefix = "ERROR: ";
-        sync_print(2, prefix, cstr_len(prefix), message, message_size);
+        auto stack_arena = memory_arena(buffer, buffer_size);
+        auto tog = textoutputgroup_allocate(
+            &stack_arena, sizeof "TRACE:YYYY-MM-DDTHH:MM+zz:yy");
+        push_cstr(tog, "TRACE:");
+        auto isodate_buffer_size = 1 + sizeof "YYYY-MM-DDTHH:MM+zz:yy";
+        auto isodate_buffer =
+            textoutputgroup_allocate_str(tog, isodate_buffer_size);
+        auto isodate_last = isodate_now(isodate_buffer, isodate_buffer_size);
+        push_extent(tog, reinterpret_cast<uint8_t *>(isodate_buffer),
+                    isodate_last - isodate_buffer);
+        push_cstr(tog, ":");
+        return tog;
 }
 
-void trace_print(char const *message)
-{
-        auto message_size = cstr_len(message);
-        char const *prefix = "TRACE: ";
-        sync_print(1, prefix, cstr_len(prefix), message, message_size);
-}
-
-void trace(TextOutputGroup *group)
+zw_internal void
+trace_print(int filedesc, char const *category, char const *message)
 {
         struct iovec iovecs[IOVECS_CAPACITY];
-        auto const iovecs_last = iovecs + IOVECS_CAPACITY;
+        auto iovecs_first = algos::begin(iovecs);
+        auto const iovecs_last = algos::end(iovecs);
 
-        char const *prefix = "TRACE: ";
-        iovecs[0].iov_base = (void *)prefix;
-        iovecs[0].iov_len = cstr_len(prefix);
+        char buffer[4096];
+        auto tog = trace_prefix(category, buffer, sizeof buffer);
+        push_cstr(tog, message);
+        push_newline(tog);
+        iovecs_first = text_output_group_print(filedesc, iovecs, iovecs_first,
+                                               iovecs_last, *tog);
+        writev(2, iovecs, int(iovecs_first - iovecs));
+}
 
-        text_output_group_print(1, iovecs + 1, iovecs_last, *group);
+void error_print(char const *message) { trace_print(2, "ERROR:", message); }
+
+void trace_print(char const *message) { trace_print(1, "TRACE:", message); }
+
+zw_internal void
+trace(int filedesc, char const *category, TextOutputGroup *group)
+{
+        struct iovec iovecs[IOVECS_CAPACITY];
+        auto iovecs_first = algos::begin(iovecs);
+        auto const iovecs_last = algos::end(iovecs);
+
+        char buffer[8192];
+        auto tog = trace_prefix(category, buffer, sizeof buffer);
+        iovecs_first = text_output_group_print(filedesc, iovecs, iovecs_first,
+                                               iovecs_last, *tog);
+
+        push_newline(group);
+        iovecs_first = text_output_group_print(filedesc, iovecs, iovecs_first,
+                                               iovecs_last, *group);
         clear(group);
 }
 
-void error(TextOutputGroup *group)
-{
-        struct iovec iovecs[IOVECS_CAPACITY];
-        auto const iovecs_last = iovecs + IOVECS_CAPACITY;
+void trace(TextOutputGroup *group) { trace(1, "TRACE:", group); }
 
-        char const *prefix = "ERROR: ";
-        iovecs[0].iov_base = (void *)prefix;
-        iovecs[0].iov_len = cstr_len(prefix);
-
-        text_output_group_print(2, iovecs + 1, iovecs_last, *group);
-        clear(group);
-}
+void error(TextOutputGroup *group) { trace(2, "ERROR:", group); }
 
 #undef IOVECS_CAPACITY
