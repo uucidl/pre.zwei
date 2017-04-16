@@ -15,6 +15,7 @@ TextOutputGroup *textoutputgroup_allocate(MemoryArena *arena,
         size_t entries_size = 9 * memory_size / 10;
 
         auto &group = *result;
+        group = {};
         group.first = reinterpret_cast<TextOutputGroupEntry *>(memory);
         group.last = group.first;
         group.entries_capacity = entries_size / sizeof(TextOutputGroupEntry);
