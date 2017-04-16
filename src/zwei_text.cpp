@@ -30,6 +30,7 @@ void clear(TextOutputGroup *group)
 {
         group->last = group->first;
         group->bytes_arena.used = 0;
+        group->truncated = false;
 }
 
 // unsafe in the sense that it lets control characters through
