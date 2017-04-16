@@ -26,6 +26,12 @@ TextOutputGroup *textoutputgroup_allocate(MemoryArena *arena,
         return result;
 }
 
+char *textoutputgroup_allocate_str(TextOutputGroup *group, size_t size)
+{
+        char *buffer = push_array_rvalue(&group->bytes_arena, buffer, size);
+        return buffer;
+}
+
 void clear(TextOutputGroup *group)
 {
         group->last = group->first;
@@ -73,8 +79,8 @@ void push_extent(TextOutputGroup *group, uint8_t const *first, size_t n)
                         size_t const dest_size =
                             2 * (control_char_last -
                                  control_char_first); // we prepend ^
-                        uint8_t *const dest = push_array_rvalue(
-                            &group->bytes_arena, dest, dest_size);
+                        uint8_t *const dest = reinterpret_cast<uint8_t *>(
+                            textoutputgroup_allocate_str(group, dest_size));
                         if (!dest) {
                                 return; // NOTE(nicolas): out of memory
                         }
@@ -126,8 +132,7 @@ void push_formatted(TextOutputGroup *group, char const *fmt, ...)
         }
 
         size_t buffer_size = 1 + non_null_count;
-        char *buffer =
-            push_array_rvalue(&group->bytes_arena, buffer, buffer_size);
+        char *buffer = textoutputgroup_allocate_str(group, buffer_size);
         if (!buffer) {
                 return;
         }

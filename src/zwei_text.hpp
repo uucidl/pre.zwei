@@ -36,3 +36,6 @@ void push_cstr(TextOutputGroup *group, char const *cstr);
 void push_formatted(TextOutputGroup *group, char const *fmt, ...);
 void push_u32(TextOutputGroup *group, uint32_t x);
 void push_u64(TextOutputGroup *group, uint64_t x);
+
+// allocate space for a string
+char *textoutputgroup_allocate_str(TextOutputGroup *group, size_t size);
