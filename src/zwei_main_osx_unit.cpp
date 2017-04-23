@@ -795,7 +795,6 @@ int main(int argc, char **argv)
                             all_files->entries_first + all_files->entries_size;
                         auto const below_limit = [file_size_limit](
                             PlatformFileList::Entry const &x) {
-                                std::fprintf(stdout, "f:%llu\n", x.filesize);
                                 return x.filesize < file_size_limit;
                         };
 
