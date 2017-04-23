@@ -476,7 +476,6 @@ static tcp_ip_connection::Error tcp_ip_open(tcp_ip_connection *connection,
 {
         *connection = {};
 
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
         struct addrinfo *addrinfo = nullptr;
         char port_buffer[64];
         std::snprintf(port_buffer, sizeof port_buffer, "%d", port);
@@ -488,6 +487,7 @@ static tcp_ip_connection::Error tcp_ip_open(tcp_ip_connection *connection,
                     connection, tcp_ip_connection::Error_CannotFindAddress);
         }
 
+        int sock = socket(addrinfo->ai_family, SOCK_STREAM, 0);
         auto connect_res =
             connect(sock, addrinfo->ai_addr, addrinfo->ai_addrlen);
         freeaddrinfo(addrinfo);
