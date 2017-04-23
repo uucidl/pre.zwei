@@ -135,4 +135,16 @@ void trace(TextOutputGroup *group) { trace(1, "TRACE:", group); }
 
 void error(TextOutputGroup *group) { trace(2, "ERROR:", group); }
 
+void console(TextOutputGroup* group)
+{
+        struct iovec iovecs[IOVECS_CAPACITY];
+        auto iovecs_first = algos::begin(iovecs);
+        auto const iovecs_last = algos::end(iovecs);
+
+        push_newline(group);
+        iovecs_first = text_output_group_print(1, iovecs, iovecs_first,
+                                               iovecs_last, *group);
+        clear(group);
+}
+
 #undef IOVECS_CAPACITY

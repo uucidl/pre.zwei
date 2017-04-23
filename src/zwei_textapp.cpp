@@ -93,7 +93,7 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                         push_tab(text_output_group);
                         push_extent(text_output_group, value.first,
                                     value.count);
-                        trace(text_output_group);
+                        console(text_output_group);
                 }
         };
         auto print_bytes_list_field = [&text_output_group](
@@ -110,7 +110,7 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                                           push_extent(text_output_group,
                                                       range.first, range.count);
                                   });
-                trace(text_output_group);
+                console(text_output_group);
         };
         // TODO(nicolas): mailboxes could be stored sorted,
         // since there is not a lot of semantic attached to them
@@ -160,7 +160,7 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                             push_mailbox(text_output_group, mailbox);
                     });
 
-                trace(text_output_group);
+                console(text_output_group);
         };
 
         if (!message_summary.valid_rfc5322) {
@@ -168,7 +168,7 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                 push_cstr(text_output_group, "RFC5322");
                 push_tab(text_output_group);
                 push_cstr(text_output_group, "false");
-                trace(text_output_group);
+                console(text_output_group);
         }
 
         print_field("MESSAGE-ID", message_summary.message_id_bytes);
@@ -187,7 +187,7 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                                value.zone_hour_offset >= 0 ? '+' : '-',
                                abs(value.zone_hour_offset),
                                value.zone_minute_offset);
-                trace(text_output_group);
+                console(text_output_group);
         }
         print_mailbox_list_field("FROM", message_summary.from_mailboxes,
                                  message_summary.from_mailboxes_count);
@@ -206,7 +206,7 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                 push_cstr(text_output_group,
                           ContentTransferEncodingType_string(
                               message_summary.content_transfer_encoding));
-                trace(text_output_group);
+                console(text_output_group);
         }
         print_field("FIRST_LINE", message_summary.first_line_bytes);
 }
@@ -302,7 +302,7 @@ print_processed_message(ProcessedMessage const &processed_message,
                 push_cstr(traceg, " ");
                 push_cstr(traceg, filepath);
                 push_cstr(traceg, ":");
-                trace(traceg);
+                console(traceg);
         }
         push_cstr(traceg, "SHA1");
         push_tab(traceg);
@@ -318,34 +318,34 @@ print_processed_message(ProcessedMessage const &processed_message,
                 push_formatted(traceg, "%c%c", byteToHexChar[byte >> 4],
                                byteToHexChar[byte & 0xF]);
         }
-        trace(traceg);
+        console(traceg);
 
         if (processed_message.success) {
                 // FEATURE(nicolas): print filing timestamp
                 push_cstr(traceg, "PATH");
                 push_tab(traceg);
                 push_cstr(traceg, filepath);
-                trace(traceg);
+                console(traceg);
 
                 push_cstr(traceg, "SIZE");
                 push_tab(traceg);
                 push_u64(traceg, processed_message.filesize);
                 push_tab(traceg);
-                trace(traceg);
+                console(traceg);
 
                 if (processed_message.zoefile.maildir_flags &
                     MaildirFlag_Trashed) {
                         push_cstr(traceg, "TRASHED");
                         push_tab(traceg);
                         push_cstr(traceg, "true");
-                        trace(traceg);
+                        console(traceg);
                 }
 
                 push_cstr(traceg, "ZOE_REL_URL");
                 push_tab(traceg);
                 push_extent(traceg, processed_message.zoe_rel_url.first,
                             processed_message.zoe_rel_url.count);
-                trace(traceg);
+                console(traceg);
                 // ID(a94812)
                 push_cstr(traceg, "UUID");
                 push_tab(traceg);
@@ -354,13 +354,13 @@ print_processed_message(ProcessedMessage const &processed_message,
                         push_formatted(traceg, "%x",
                                        processed_message.zoefile.uuid[i]);
                 }
-                trace(traceg);
+                console(traceg);
 
                 push_cstr(traceg, "UNIX TIMESTAMP");
                 push_tab(traceg);
                 push_formatted(traceg, "%llu",
                                processed_message.zoefile.unix_epoch_millis);
-                trace(traceg);
+                console(traceg);
 
                 print_message_summary(processed_message.message_summary,
                                       transient_arena);
