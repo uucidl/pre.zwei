@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hammer_fwd.hpp"
 #include "hammer_utils.hpp"
 
 extern "C" {

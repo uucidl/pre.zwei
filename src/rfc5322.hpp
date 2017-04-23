@@ -3,6 +3,7 @@
 #include "zwei_inlines.hpp"
 
 #include "hammer.hpp"
+#include "hammer_fwd.hpp"
 #include "hammer_iterators.hpp"
 #include "zwei_types.hpp"
 
