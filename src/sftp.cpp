@@ -397,12 +397,12 @@ static bool module_open(module *module,
                         std::size_t source_dirs_size)
 {
         // TODO(nicolas): address portablity
-        auto path_sep = "/"; // TAG(portability) TAG(POSIX)
+        auto path_sep = "/";        // TAG(portability) TAG(POSIX)
         auto lib_suffix = ".dylib"; // TAG(portability) TAG(MacOS)
         auto const load = [=](char const *prefix, char const *name) {
                 std::string path{prefix};
                 if (!path.empty()) {
-                        path += path_sep; 
+                        path += path_sep;
                 }
                 path += name;
                 path += lib_suffix;

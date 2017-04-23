@@ -13,8 +13,7 @@ namespace algos
 {
 
 // @require: TotallyOrdered(T)
-template <typename T>
-const T &max(const T &a, const T &b)
+template <typename T> const T &max(const T &a, const T &b)
 {
         if (b < a) {
                 return a;
