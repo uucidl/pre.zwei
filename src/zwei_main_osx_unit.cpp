@@ -788,7 +788,7 @@ int main(int argc, char **argv)
                 // That's less true if we're taking the data from the network?
 
                 size_t file_size_limit = MEGABYTES(128);
-                auto const detect_exclude_large_files = [](
+                auto const detect_exclude_unwanted_files = [zwei](
                     PlatformFileList *all_files, size_t file_size_limit) {
                         auto f = all_files->entries_first;
                         auto const l =
@@ -798,18 +798,27 @@ int main(int argc, char **argv)
                                 std::fprintf(stdout, "f:%llu\n", x.filesize);
                                 return x.filesize < file_size_limit;
                         };
+
+                        auto const wanted =
+                            [zwei](PlatformFileList::Entry const &x) {
+                                    return !should_skip_message_file(
+                                        zwei, x.filename, x.path);
+                            };
+                        auto wanted_last = std::stable_partition(f, l, wanted);
                         auto below_limit_last =
                             std::stable_partition(f, l, below_limit);
 
-                        if (!global_can_ignore_file && below_limit_last != l) {
-                                zw_assert(
-                                    false,
-                                    "large files"); // inspect below_limit_last
+                        if (!global_can_ignore_file &&
+                            below_limit_last != wanted_last) {
+                                zw_assert(false,
+                                          "ignored too large file"); // inspect
+                                // below_limit_last
                         }
-                        all_files->entries_size = below_limit_last - f;
+                        all_files->entries_size = wanted_last - f;
                 };
                 if (all_files)
-                        detect_exclude_large_files(all_files, file_size_limit);
+                        detect_exclude_unwanted_files(all_files,
+                                                      file_size_limit);
                 size_t local_file_count =
                     all_files ? all_files->entries_size : 0;
                 auto file_loader_arena = push_sub_arena(
