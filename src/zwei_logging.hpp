@@ -11,7 +11,7 @@ void trace(TextOutputGroup *group);
 void error(TextOutputGroup *group);
 
 /** print to the user console */
-void console(TextOutputGroup* group);
+void console(TextOutputGroup *group);
 
 void error_print(char const *message);
 void trace_print(char const *message);

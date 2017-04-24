@@ -135,7 +135,7 @@ void trace(TextOutputGroup *group) { trace(1, "TRACE:", group); }
 
 void error(TextOutputGroup *group) { trace(2, "ERROR:", group); }
 
-void console(TextOutputGroup* group)
+void console(TextOutputGroup *group)
 {
         struct iovec iovecs[IOVECS_CAPACITY];
         auto iovecs_first = algos::begin(iovecs);
