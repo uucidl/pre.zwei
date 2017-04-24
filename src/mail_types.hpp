@@ -23,4 +23,5 @@ ContentTransferEncodingType_string(ContentTransferEncodingType x)
         case ContentTransferEncoding_BASE64:
                 return "ContentTransferEncoding_BASE64";
         }
+        return "<ContentTransferEncoding_Unknown>";
 }
