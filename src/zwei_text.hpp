@@ -39,3 +39,10 @@ void push_u64(TextOutputGroup *group, uint64_t x);
 
 // allocate space for a string
 char *textoutputgroup_allocate_str(TextOutputGroup *group, size_t size);
+
+zw_internal inline void
+push_bounded(TextOutputGroup *group, char const *first, char const *last)
+{
+        return push_extent(group, reinterpret_cast<uint8_t const *>(first),
+                           last - first);
+}
