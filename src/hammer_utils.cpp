@@ -11,17 +11,19 @@
 // insensitive version of the h_token parser. Note that this case
 // insensitivity would only be supported for US-ASCII.
 
-HParser *h_ascii_itoken(const uint8_t *str, const size_t len)
+HParser *
+h_ascii_itoken__m(HAllocator *mm_, const uint8_t *str, const size_t len)
 {
         // NOTE(nicolas): I suspect this will be inefficient compared to a
         // version
         // that can do tolower(...) in the backend, but we'll try with
         // this first.
 
-        HParser *choices[len + 1];
+        HParser **choices = reinterpret_cast<HParser **>(
+            h_alloc(mm_, (len + 1) * sizeof(*choices)));
 
-        auto sentinel = algos::apply_copy(
-            str, str + len, (HParser **)&choices, [](const uint8_t &c) {
+        auto sentinel =
+            algos::apply_copy(str, str + len, choices, [](const uint8_t &c) {
                     if (c >= 0x61 && c <= 0x7a) {
                             // in [a-z]
                             return UH_ANY(h_ch(c), h_ch(0x41 + (c - 0x61)));
@@ -33,8 +35,18 @@ HParser *h_ascii_itoken(const uint8_t *str, const size_t len)
                     }
             });
         algos::sink(sentinel) = nullptr;
+        HParser *sequence = h_sequence__a((void **)choices);
+        mm_->free(mm_, choices);
+        return sequence;
+}
 
-        return h_sequence__a((void **)choices);
+// TODO(nicolas): TAG(workaround) hammer internals, probably should not
+// be used.
+extern "C" HAllocator system_allocator;
+
+HParser *h_ascii_itoken(const uint8_t *str, const size_t len)
+{
+        return h_ascii_itoken__m(&system_allocator, str, len);
 }
 
 zw_internal HParsedToken *uuh_act_integer(const HParseResult *p,
