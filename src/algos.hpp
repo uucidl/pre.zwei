@@ -11,6 +11,11 @@
 
 namespace algos
 {
+template <typename T> T assign(T &x, T const y)
+{
+        x = y;
+        return x;
+}
 
 // @require: TotallyOrdered(T)
 template <typename T> const T &max(const T &a, const T &b)
