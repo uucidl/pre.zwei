@@ -156,7 +156,7 @@ macroman_workaround_block(struct MacRomanWorkaround *state,
                                utf8_decode(&state->utf8decoder_state,
                                            &state->utf8decoder_codepoint, x);
                 };
-                auto decode_result = algos::apply_copy_bounded_if(
+                auto decode_result = algos::apply_copy_to_bounded_if(
                     input_first, input_last, codepoint_last,
                     codepoint_buffer_last,
                     [state](const uint8_t) {
@@ -193,7 +193,7 @@ macroman_workaround_block(struct MacRomanWorkaround *state,
         size_t destination_count = 0;
 
         if (is_already_utf8) {
-                auto result = algos::copy_bounded(
+                auto result = algos::copy_to_bounded(
                     begin(state->macintosh_chars), end(state->macintosh_chars),
                     destination_first, destination_last);
                 zw_assert(result.first == end(state->macintosh_chars),
@@ -551,7 +551,7 @@ ZWEI_API GET_MESSAGE_SUMMARY(get_message_summary)
                 size_t first_line_max_count = 200;
                 uint8_t *first_line = push_array_rvalue(
                     result_arena, first_line, first_line_max_count);
-                auto copy_end = algos::copy_bounded(
+                auto copy_end = algos::copy_to_bounded(
                     body_first, full_message_end, first_line,
                     first_line + first_line_max_count);
                 message_parsed.message_summary.first_line_bytes.first =

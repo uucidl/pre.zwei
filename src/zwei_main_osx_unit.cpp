@@ -1476,7 +1476,7 @@ int main(int argc, char **argv)
 
                 {
                         auto error = load_error_files(files_loader);
-                        zw_assert(algos::empty(begin(error), end(error)),
+                        zw_assert(algos::range_empty(begin(error), end(error)),
                                   "expected no loading error");
 
                         // TODO(nicolas): check that no file in error

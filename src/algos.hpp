@@ -90,50 +90,52 @@ template <typename T, size_t N> constexpr T *end(T (&array)[N])
 }
 }
 
+// # algorithms on ranges.
+//
+// Ranges can be bounded [first, last), counted [[first, count)) and #
+// guarded [first, <sentinel>) ranges.
 namespace algos
 {
-template <Iterator I> bool empty(I x, I y) { return x == y; }
-template <Sequence S> bool empty(S s) { return empty(begin(s), end(s)); }
+
+template <typename I> bool range_empty(I first, I last)
+{
+        return first == last;
 }
 
-// # algorithms
-namespace algos
+template <Iterator I, Iterator J>
+J advance_until(I f,
+                typename ReadableConcept<I>::value_type sentinel,
+                J counter)
 {
-
-template <Iterator I, UnaryPredicate P, Iterator J>
-J count_unguarded(I f, P p, J j)
-{
-        while (p(source(f))) {
-                j = successor(j);
+        while (sentinel != source(f)) {
+                counter = successor(counter);
                 f = successor(f);
         }
 
-        return j;
+        return counter;
 }
 
-template <Iterator I, UnaryPredicate P>
-typename IteratorConcept<I>::difference_type count_unguarded(I f, P p)
+template <Iterator I>
+I bound_guarded(I f, typename ReadableConcept<I>::value_type sentinel)
 {
-        return count_unguarded(f, p,
-                               typename IteratorConcept<I>::difference_type(0));
+        return advance_until(f, sentinel, f);
 }
 
-template <Iterator I0, Iterator I1, UnaryPredicate P1, BinaryPredicate R>
-bool equal_bounded_unguarded(I0 f0, I0 l0, I1 f1, P1 valid1, R relation)
+template <Iterator I>
+typename IteratorConcept<I>::difference_type
+count_guarded(I f, typename ReadableConcept<I>::value_type sentinel)
 {
-        auto mismatch =
-            find_mismatch_bounded_unguarded(f0, l0, f1, valid1, relation);
-        return mismatch.first == l0 && !valid1(mismatch.second);
+        return advance_until(f, sentinel,
+                             typename IteratorConcept<I>::difference_type(0));
 }
 
 /**
- * @require: Domain(Pred) = ValueType(It)
+ * @require: Domain(Pred) = ValueType(I)
  */
-template <Iterator It, UnaryPredicate Pred>
-It find_if(It first, It last, Pred pred)
+template <Iterator I, UnaryPredicate Pred> I find_if(I first, I last, Pred pred)
 {
         while (first != last) {
-                if (pred(*first)) {
+                if (pred(source(first))) {
                         break;
                 }
                 first = successor(first);
@@ -143,31 +145,32 @@ It find_if(It first, It last, Pred pred)
 }
 
 /**
- * @require: Domain(Pred) = ValueType(It)
+ * @require: Domain(Pred) = ValueType(I)
  */
-template <Iterator It, Integral N, UnaryPredicate Pred>
-std::pair<It, N> find_if_n(It first, N count, Pred pred)
+template <Iterator I, Integral N, UnaryPredicate Pred>
+std::pair<I, N> find_if_n(I first, N count, Pred pred)
 {
         while (count) {
-                if (pred(*first)) {
+                if (pred(source(first))) {
                         break;
                 }
                 first = successor(first);
-                --count;
+                count = predecessor(count);
         }
 
         return {first, count};
 }
 
 /**
- * @require: Domain(Pred) = ValueType(It)
- * @require: Domain(ValidItPred) = ValueType(It)
+ * @require: Domain(Pred) = ValueType(I)
  */
-template <Iterator It, UnaryPredicate ValidItPred, UnaryPredicate Pred>
-It find_if_unguarded(It first, ValidItPred valid, Pred pred)
+template <Iterator I, UnaryPredicate Pred>
+I find_if_guarded(I first,
+                  typename ReadableConcept<I>::value_type sentinel,
+                  Pred pred)
 {
-        while (valid(*first)) {
-                if (pred(*first)) {
+        while (sentinel != source(first)) {
+                if (pred(source(first))) {
                         break;
                 }
                 first = successor(first);
@@ -176,53 +179,65 @@ It find_if_unguarded(It first, ValidItPred valid, Pred pred)
         return first;
 }
 
-/**
- * @require: Domain(ValidItPred) = ValueType(It)
- */
-template <Iterator It, UnaryPredicate ValidItPred>
-It find_unguarded(It first,
-                  ValidItPred valid,
-                  typename ReadableConcept<It>::value_type const &x)
+template <Iterator I>
+I find_guarded(I first,
+               typename ReadableConcept<I>::value_type sentinel,
+               typename ReadableConcept<I>::value_type const &x)
 {
-        return find_if_unguarded(
-            first, valid,
-            [x](typename ReadableConcept<It>::value_type const &y) {
+        return find_if_guarded(
+            first, sentinel,
+            [x](typename ReadableConcept<I>::value_type const &y) {
                     return x == y;
             });
 }
 
 /**
- * @require: Domain(Pred) = ValueType(It)
- * @require: Domain(ValidItPred) = ValueType(It)
+ * @requires Domain(Pred) = ValueType(I)
  */
-template <Iterator It, UnaryPredicate ValidItPred, UnaryPredicate Pred>
-It find_last_if_unguarded(It first, ValidItPred valid, Pred pred)
+template <Iterator I, UnaryPredicate Pred>
+std::pair<I, I> find_adjacent_if_guarded(
+    I f0, typename ReadableConcept<I>::value_type sentinel, Pred pred)
 {
-        It y_prime = find_if_unguarded(first, valid, pred);
-        if (!valid(source(y_prime))) {
-                return y_prime;
-        }
+        using ValueType = typename ReadableConcept<I>::value_type;
+        auto const inverse_pred = [pred](ValueType const &x) {
+                return !pred(x);
+        };
 
-        It y;
-        do {
-                y = y_prime;
-                y_prime = find_if_unguarded(successor(y), valid, pred);
-        } while (valid(source(y_prime)));
-
-        return y;
+        auto adjacent_first = find_if_guarded(f0, sentinel, pred);
+        auto adjacent_last =
+            find_if_guarded(adjacent_first, sentinel, inverse_pred);
+        return {adjacent_first, adjacent_last};
 }
 
 /**
  * @require: Domain(Pred) = ValueType(It)
- * @require: Domain(ValidItPred) = ValueType(It)
  */
-template <Iterator It, UnaryPredicate ValidItPred>
-It find_last_unguarded(It first,
-                       ValidItPred valid,
-                       typename ReadableConcept<It>::value_type const &x)
+template <Iterator I, UnaryPredicate Pred>
+I find_last_if_guarded(I first,
+                       typename ReadableConcept<I>::value_type sentinel,
+                       Pred pred)
 {
-        return find_last_if_unguarded(
-            first, valid,
+        I y_prime = find_if_guarded(first, sentinel, pred);
+        if (sentinel == source(y_prime)) {
+                return y_prime;
+        }
+
+        I y;
+        do {
+                y = y_prime;
+                y_prime = find_if_guarded(successor(y), sentinel, pred);
+        } while (sentinel != source(y_prime));
+
+        return y;
+}
+
+template <Iterator It>
+It find_last_guarded(It first,
+                     typename ReadableConcept<It>::value_type sentinel,
+                     typename ReadableConcept<It>::value_type const &x)
+{
+        return find_last_if_guarded(
+            first, sentinel,
             [x](typename ReadableConcept<It>::value_type const &y) {
                     return x == y;
             });
@@ -236,7 +251,7 @@ It find_if_backward(It first, It last, Pred pred)
 {
         while (first != last) {
                 last = predecessor(last);
-                if (pred(*last)) {
+                if (pred(source(last))) {
                         return last;
                 }
         }
@@ -257,15 +272,13 @@ It find_backward(It first,
 }
 
 /**
- * @require: Domain(R) = Domain(P) = ValueType(I0) = ValueType(I1)
+ * @require: ValueType(I0) = ValueType(I1)
  */
-template <InputIterator I0,
-          InputIterator I1,
-          UnaryPredicate P,
-          BinaryPredicate R>
-std::pair<I0, I1> find_mismatch_unguarded(I0 f0, I1 f1, P guard, R r)
+template <InputIterator I0, InputIterator I1, BinaryPredicate R>
+std::pair<I0, I1> find_mismatch_guarded(
+    I0 f0, I1 f1, typename ReadableConcept<I0>::value_type sentinel, R r)
 {
-        while (guard(source(f0)) && guard(source(f1)) &&
+        while (sentinel != source(f0) && sentinel != source(f1) &&
                r(source(f0), source(f1))) {
                 f0 = successor(f0);
                 f1 = successor(f1);
@@ -275,26 +288,25 @@ std::pair<I0, I1> find_mismatch_unguarded(I0 f0, I1 f1, P guard, R r)
 }
 
 /**
- * @require: Domain(R) = Domain(P) = ValueType(I0) = ValueType(I1)
+ * @require: Domain(R) = ValueType(I0) = ValueType(I1)
  */
-template <InputIterator I0,
-          InputIterator I1,
-          UnaryPredicate P,
-          BinaryPredicate R>
-std::pair<I0, I1>
-find_mismatch_bounded_unguarded(I0 f0, I0 l0, I1 f1, P guard1, R r)
+template <InputIterator I0, InputIterator I1, BinaryPredicate R>
+std::pair<I0, I1> find_mismatch_bounded_guarded(
+    I0 f0, I0 l0, I1 f1, typename ReadableConcept<I0>::value_type sentinel, R r)
 {
-        while (f0 != l0 && guard(source(f1)) && r(source(f0), source(f1))) {
+        while (f0 != l0 && sentinel != source(f1) &&
+               r(source(f0), source(f1))) {
                 f0 = successor(f0);
                 f1 = successor(f1);
         }
         return std::make_pair(f0, f1);
 }
+
 /**
- * @require: Domain(Op) = ValueType(InputIt)
+ * @require: Domain(Op) = ValueType(I)
  */
-template <Iterator InputIt, UnaryFunction Op>
-void for_each(InputIt first, InputIt last, Op operation)
+template <Iterator I, UnaryFunction Op>
+void for_each(I first, I last, Op operation)
 {
         while (first != last) {
                 operation(source(first));
@@ -303,13 +315,13 @@ void for_each(InputIt first, InputIt last, Op operation)
 }
 
 /**
- * @require: Domain(Op) = ValueType(InputIt)
+ * @require: Domain(Op) = ValueType(I)
  * @pre: n >= 0
  */
-template <Iterator InputIt, UnaryFunction Op>
-InputIt for_each_n(InputIt first,
-                   typename IteratorConcept<InputIt>::difference_type n,
-                   Op operation)
+template <Iterator I, UnaryFunction Op>
+I for_each_n(I first,
+             typename IteratorConcept<I>::difference_type n,
+             Op operation)
 {
         while (!zero(n)) {
                 operation(source(first));
@@ -320,16 +332,14 @@ InputIt for_each_n(InputIt first,
         return first;
 }
 
-template <Iterator InputIt, OutputIterator OutputIt>
-void copy_step(InputIt &f_i, OutputIt &f_o)
+template <Iterator I, OutputIterator O> void copy_step(I &f_i, O &f_o)
 {
         sink(f_o) = source(f_i);
         f_o = successor(f_o);
         f_i = successor(f_i);
 }
 
-template <Iterator InputIt, OutputIterator OutputIt>
-OutputIt copy(InputIt first, InputIt last, OutputIt dest_first)
+template <Iterator I, OutputIterator O> O copy(I first, I last, O dest_first)
 {
         while (first != last) {
                 copy_step(first, dest_first);
@@ -338,34 +348,10 @@ OutputIt copy(InputIt first, InputIt last, OutputIt dest_first)
         return dest_first;
 }
 
-template <Iterator InputIt, OutputIterator OutputIt>
-std::pair<InputIt, OutputIt> copy_bounded(InputIt first,
-                                          InputIt last,
-                                          OutputIt dest_first,
-                                          OutputIt dest_last)
-{
-        while (first != last && dest_first != dest_last) {
-                copy_step(first, dest_first);
-        }
-        return std::make_pair(first, dest_first);
-}
-
-template <Iterator InputIt, UnaryPredicate Pred, OutputIterator OutputIt>
-std::pair<InputIt, OutputIt> copy_bounded_unguarded(InputIt first,
-                                                    Pred pred,
-                                                    OutputIt dest_first,
-                                                    OutputIt dest_last)
-{
-        while (pred(source(first)) && dest_first != dest_last) {
-                copy_step(first, dest_first);
-        }
-        return std::make_pair(first, dest_first);
-}
-
-template <Iterator InputIt, OutputIterator OutputIt>
-OutputIt copy_n(InputIt first,
-                typename IteratorConcept<InputIt>::difference_type count,
-                OutputIt dest_first)
+template <Iterator InputIt, OutputIterator O>
+O copy_n(InputIt first,
+         typename IteratorConcept<InputIt>::difference_type count,
+         O dest_first)
 {
         while (count) {
                 sink(dest_first) = source(first);
@@ -377,56 +363,34 @@ OutputIt copy_n(InputIt first,
         return dest_first;
 }
 
-/**
- * @require: Domain(Pred) = ValueType(InputIt)
- * @require: Domain(Fn) = ValueType(InputIt)
- * @require: CoDomain(Fn) = ValueType(OutputIt)
- */
-template <Iterator InputIt,
-          OutputIterator OutputIt,
-          UnaryPredicate Pred,
-          UnaryFunction Fn>
-OutputIt apply_copy_if(
-    InputIt first, InputIt last, OutputIt dest_first, Fn fn, Pred pred)
-{
-        while (first != last) {
-                if (pred(source(first))) {
-                        sink(dest_first) = fn(source(first));
-                        dest_first = successor(dest_first);
-                }
-                first = successor(first);
-        }
-
-        return dest_first;
-}
-
-template <Iterator InputIt,
-          OutputIterator OutputIt,
-          UnaryFunction Fn,
-          UnaryPredicate Pred>
-std::pair<InputIt, OutputIt> apply_copy_bounded_if(InputIt first,
-                                                   InputIt last,
-                                                   OutputIt dest_first,
-                                                   OutputIt dest_last,
-                                                   Fn fn,
-                                                   Pred pred)
+template <Iterator I, OutputIterator O>
+std::pair<I, O> copy_to_bounded(I first, I last, O dest_first, O dest_last)
 {
         while (first != last && dest_first != dest_last) {
-                if (pred(source(first))) {
-                        sink(dest_first) = fn(source(first));
-                        dest_first = successor(dest_first);
-                }
-                first = successor(first);
+                copy_step(first, dest_first);
+        }
+        return {first, dest_first};
+}
+
+template <Iterator I, OutputIterator O>
+std::pair<I, O>
+copy_guarded_to_bounded(I first,
+                        typename ReadableConcept<I>::value_type sentinel,
+                        O dest_first,
+                        O dest_last)
+{
+        while (sentinel != source(first) && dest_first != dest_last) {
+                copy_step(first, dest_first);
         }
         return std::make_pair(first, dest_first);
 }
 
 /**
- * @require: Domain(Fn) = ValueType(InputIt)
- * @require: CoDomain(Fn) = ValueType(OutputIt)
+ * @require: Domain(Fn) = ValueType(I)
+ * @require: CoDomain(Fn) = ValueType(O)
  */
-template <Iterator InputIt, OutputIterator OutputIt, UnaryFunction Fn>
-OutputIt apply_copy(InputIt first, InputIt last, OutputIt dest_first, Fn fn)
+template <Iterator I, OutputIterator O, UnaryFunction Fn>
+O apply_copy(I first, I last, O dest_first, Fn fn)
 {
         while (first != last) {
                 sink(dest_first) = fn(source(first));
@@ -437,11 +401,11 @@ OutputIt apply_copy(InputIt first, InputIt last, OutputIt dest_first, Fn fn)
         return dest_first;
 }
 
-template <Iterator InputIt, OutputIterator OutputIt, UnaryFunction Fn>
-OutputIt apply_copy_n(InputIt first,
-                      typename IteratorConcept<InputIt>::difference_type count,
-                      OutputIt dest_first,
-                      Fn fn)
+template <Iterator I, OutputIterator O, UnaryFunction Fn>
+O apply_copy_n(I first,
+               typename IteratorConcept<I>::difference_type count,
+               O dest_first,
+               Fn fn)
 {
         while (count) {
                 sink(dest_first) = fn(source(first));
@@ -453,17 +417,37 @@ OutputIt apply_copy_n(InputIt first,
         return dest_first;
 }
 
-template <InputIterator I0, InputIterator I1>
-bool equal_n_m(I0 f0,
-               typename IteratorConcept<I0>::difference_type n0,
-               I1 f1,
-               typename IteratorConcept<I1>::difference_type n1)
+/**
+ * @require: Domain(Pred) = ValueType(I)
+ * @require: Domain(Fn) = ValueType(I)
+ * @require: CoDomain(Fn) = ValueType(O)
+ */
+template <Iterator I, OutputIterator O, UnaryPredicate Pred, UnaryFunction Fn>
+O apply_copy_if(I first, I last, O dest_first, Fn fn, Pred pred)
 {
-        while (n0 && n1 && *f0 == *f1) {
-                --n0;
-                --n1;
+        while (first != last) {
+                if (pred(source(first))) {
+                        sink(dest_first) = fn(source(first));
+                        dest_first = successor(dest_first);
+                }
+                first = successor(first);
         }
-        return n0 == 0 && n1 == 0;
+
+        return dest_first;
+}
+
+template <Iterator I, OutputIterator O, UnaryFunction Fn, UnaryPredicate Pred>
+std::pair<I, O> apply_copy_to_bounded_if(
+    I first, I last, O dest_first, O dest_last, Fn fn, Pred pred)
+{
+        while (first != last && dest_first != dest_last) {
+                if (pred(source(first))) {
+                        sink(dest_first) = fn(source(first));
+                        dest_first = successor(dest_first);
+                }
+                first = successor(first);
+        }
+        return {first, dest_first};
 }
 }
 
@@ -487,11 +471,6 @@ template <typename T> struct maximum {
 template <typename T> struct BinaryOperationConcept<maximum<T>> {
         using type = T;
 };
-
-template <typename I> bool range_empty(I first, I last)
-{
-        return first == last;
-}
 
 /**
  * apply `fun` to each element in [first, last) and reduce using `op`
@@ -533,6 +512,9 @@ apply_reduce(I first,
 // derived sequence algorithms
 namespace algos
 {
+
+template <Sequence S> bool empty(S s) { return range_empty(begin(s), end(s)); }
+
 /**
  * TAG(degenerate) find_if_n
  * @requires: Domain(pred) == ValueType(I)
@@ -544,6 +526,45 @@ bool all_n(I first, N count, P pred)
         return find_if_n(first, count,
                          [&](ValueType const &x) { return !pred(x); })
                    .second == N(0);
+}
+
+template <InputIterator I0, InputIterator I1>
+bool equal_n_m(I0 f0,
+               typename IteratorConcept<I0>::difference_type n0,
+               I1 f1,
+               typename IteratorConcept<I1>::difference_type n1)
+{
+        while (n0 && n1 && source(f0) == source(f1)) {
+                --n0;
+                --n1;
+        }
+        return n0 == 0 && n1 == 0;
+}
+
+template <Iterator I0, Iterator I1, BinaryPredicate R>
+bool equal_bounded_guarded(I0 f0,
+                           I0 l0,
+                           I1 f1,
+                           typename ReadableConcept<I0>::value_type sentinel,
+                           R relation)
+{
+        auto mismatch =
+            find_mismatch_bounded_guarded(f0, l0, f1, sentinel, relation);
+        return mismatch.first == l0 && sentinel == source(mismatch.second);
+}
+
+/**
+ * @require: Domain(P) == ValueType(I0) == ValueType(I1)
+ */
+template <Iterator I0, Iterator I1, BinaryPredicate R>
+bool equal_guarded(I0 f0,
+                   I1 f1,
+                   typename ReadableConcept<I0>::value_type sentinel,
+                   R relation)
+{
+        auto mismatch = find_mismatch_guarded(f0, f1, sentinel, relation);
+        return sentinel == source(mismatch.first) &&
+               sentinel == source(mismatch.second);
 }
 }
 
@@ -568,11 +589,11 @@ struct VoidSink {
  *
  * @model: OutputIterator
  */
-template <typename OutputIt> struct VoidOutputIteratorAdapter {
+template <typename O> struct VoidOutputIteratorAdapter {
         using WritableMe = VoidOutputIteratorAdapter;
         using OutputIteratorMe = VoidOutputIteratorAdapter;
 
-        OutputIt iterator;
+        O iterator;
 
         // @model: Writable
         friend VoidSink const &sink(WritableMe &self)
@@ -587,8 +608,8 @@ template <typename OutputIt> struct VoidOutputIteratorAdapter {
                 return {successor(x.iterator)};
         }
 
-        // @require: RandomAccessIterator(OutputIt)
-        friend typename IteratorConcept<OutputIt>::difference_type
+        // @require: RandomAccessIterator(O)
+        friend typename IteratorConcept<O>::difference_type
         operator-(VoidOutputIteratorAdapter const &x,
                   VoidOutputIteratorAdapter const &y)
         {
@@ -647,7 +668,7 @@ typename TreeCoordinateConcept<C>::WeightType height_recursive(const C &c)
         auto last = descendants_end(c);
         while (first != last) {
                 auto branch_height = height_recursive(source(first));
-                height = algos::max(height, branch_height);
+                height = max(height, branch_height);
                 first = successor(first);
         }
 

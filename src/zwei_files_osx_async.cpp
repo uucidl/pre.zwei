@@ -347,8 +347,7 @@ char const *get_filename(FileLoader &file_loader,
         // @copypaste 206be8ebf9339bd5062d0b719eb50ef771a48afa
         char const *path = get_filepath(file_loader, file_handle);
         // TODO(nicolas): this really belongs to a OSX/Unix path library fn
-        char const *pos = algos::find_last_unguarded(
-            path, [](char const &x) { return x; }, '/');
+        char const *pos = algos::find_last_guarded(path, '\0', '/');
         if (*pos == '/') {
                 pos = pos + 1;
         }
