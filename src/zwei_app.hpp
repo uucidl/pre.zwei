@@ -26,6 +26,7 @@ struct PlatformFileList {
         size_t entries_size;
 };
 
+// TODO(nicolas): trace_on -> enum
 #define PLATFORM_QUERY_ALL_FILES(name)                                         \
         struct PlatformFileList *name(char const *root_dir_path,               \
                                       bool trace_on, MemoryArena work_arena,   \
