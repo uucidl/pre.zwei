@@ -63,7 +63,7 @@ gather_8from6bits(uint8_t *f, uint8_t *l, uint8_t *d_f)
         d_bits_l = 8;
         d_bits_f = 0;
 
-        uint8_t s;
+        uint8_t s = 0 /* necessary for MSVC */;
         int s_bits_f = 0;
         int s_bits_l = 0;
 
