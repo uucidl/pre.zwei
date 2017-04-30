@@ -1,7 +1,5 @@
 #pragma once
 
-// TODO(nicolas) NEXT modularize and rename
-
 #include "hammer_fwd.hpp"
 
 struct ABNF_RFC5234 {
