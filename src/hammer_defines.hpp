@@ -56,8 +56,10 @@
 
 /// ValueType(UnaryPredicate) == const HParsedToken*
 template <UnaryPredicate P>
-zw_internal void
-check_parser_do_test(HParser *parser, uint8_t *data, size_t data_size, P astfn)
+zw_internal void check_parser_do_test(HParser *parser,
+                                      uint8_t const *data,
+                                      size_t data_size,
+                                      P astfn)
 {
         char memory[512];
         auto arena = memory_arena(memory, sizeof memory);

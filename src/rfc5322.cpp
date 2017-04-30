@@ -726,6 +726,29 @@ zw_internal const RFC5322 &make_rfc5322(const ABNF_RFC5234 &abnf,
                       rfc5322_print_ast);
         CHECK_PARSER2(fields, "subject:\r\n", rfc5322_print_ast);
 
+        // Some test strings for addresses
+        {
+                char const *valid_addresses[] = {
+                    "\"Abc\\@def\"@example.com",
+                    "\"Fred\\ Bloggs\"@example.com",
+                    "\"Joe.\\\\Blow\"@example.com",
+                    "\"Abc@def\"@example.com",
+                    "\"Fred Bloggs\"@example.com",
+                    "customer/department=shipping@example.com",
+                    "$A12345@example.com",
+                    "!def!xyz%abc@example.com",
+                    "_somename@example.com",
+                };
+                for (auto x : valid_addresses) {
+                        check_parser_do_test(
+                            addr_spec, reinterpret_cast<uint8_t const *>(x),
+                            cstr_len(x), [=](HParsedToken const *ast) {
+                                    rfc5322_print_ast(stdout, ast, 0, 4);
+                                    return true;
+                            });
+                }
+        }
+
         // Testing unstructured text fields
         CHECK_PARSER2(unstructured, "Gene Structure\r\n", rfc5322_print_ast);
         CHECK_PARSER2(unstructured, "\r\n", rfc5322_print_ast);
