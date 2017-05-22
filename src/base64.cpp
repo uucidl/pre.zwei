@@ -147,9 +147,10 @@ HAMMER_ACTION(base64_action)
         const HParsedToken *b64_3 = p->ast->seq->elements[0];
         assert(b64_3->token_type == TT_SEQUENCE);
 
-        // max size necessary for the array is: 3*size(b64_3) + 2
-        size_t bytes_size = 3 * (end(b64_3) - begin(b64_3)) + 2;
+        // max size necessary for the array is:
+        size_t bytes_size = 4 * (end(b64_3) - begin(b64_3)) + 3;
         uint8_t *const bytes = (uint8_t *)h_arena_malloc(p->arena, bytes_size);
+        uint8_t *const bytes_end = bytes + bytes_size;
         uint8_t *bytes_last = bytes;
         // concatenate base64_3 blocks
         for (HParsedToken const *token : b64_3) {
@@ -158,6 +159,7 @@ HAMMER_ACTION(base64_action)
                 bytes_last = algos::copy(
                     HammerUintTokenSequenceIterator{digits},
                     HammerUintTokenSequenceIterator{digits + 4}, bytes_last);
+                zw_assert(bytes_last <= bytes_end, "overrun");
         }
         // concatenate b64 end block (_2 or _1) where the '=' sentinel
         // may indicate a stop
@@ -169,6 +171,7 @@ HAMMER_ACTION(base64_action)
                     algos::copy(HammerUintTokenSequenceIterator{digits},
                                 HammerUintTokenSequenceIterator{digits + count},
                                 bytes_last);
+                zw_assert(bytes_last <= bytes_end, "overrun");
         }
         bytes_last = base64_pipeline(bytes, bytes_last);
         return H_MAKE_BYTES(bytes, bytes_last - bytes);
