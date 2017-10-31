@@ -25,9 +25,11 @@ struct Zwei {
         ParseZoeMailstoreFilenameFn parse_zoe_mailstore_filename;
 };
 
-zw_internal bool should_skip_message_file(Zwei const &zwei,
-                                          char const *filename,
-                                          char const *filepath);
+zw_internal bool
+should_skip_message_file(Zwei const &zwei,
+                         char const *filename,
+                         char const *filepath,
+                         uint64_t filing_date_min_unix_epoch_millis);
 
 zw_internal void process_message(Zwei const &zwei,
                                  char const *filename,
@@ -53,14 +55,21 @@ print_processed_message(ProcessedMessage const &processed_message,
 #include "../modules/uu.spdr/include/spdr/spdr.hh"
 extern SPDR_Context *global_spdr;
 
-zw_internal bool should_skip_message_file(Zwei const &zwei,
-                                          char const *filename,
-                                          char const *filepath)
+zw_internal bool
+should_skip_message_file(Zwei const &zwei,
+                         char const *filename,
+                         char const *filepath,
+                         uint64_t filing_date_min_unix_epoch_millis)
 {
         ZoeMailStoreFile zoefile = {};
         auto zoefile_errorcode =
             zwei.parse_zoe_mailstore_filename(&zoefile, filename);
         if (0 != zoefile_errorcode && !cstr_endswith(filepath, ".eml")) {
+                return true;
+        }
+
+        // FEATURE(nicolas): filtering by filing date
+        if (zoefile.unix_epoch_millis < filing_date_min_unix_epoch_millis) {
                 return true;
         }
 

@@ -1,3 +1,7 @@
+static constexpr auto USAGE = "<program> "
+                              "[--help|--ls|--can-ignore|--debug|--date-first "
+                              "<YYYY-MM-DD>] --root-dir <root-dir>";
+
 /**
    NOTE(nicolas)
 
@@ -36,6 +40,7 @@
 #include <algorithm>
 #include <cstdarg>
 #include <cstdio>
+#include <ctime>
 
 zw_global SPDR_Context *global_spdr = nullptr;
 zw_global bool global_can_ignore_file = false;
@@ -593,18 +598,55 @@ zw_internal bool refresh_library(struct LoadedLibrary *library)
         return false;
 }
 
+static int digits_count(char const *cp)
+{
+        int n = 0;
+        while (*cp) {
+                auto delta = ((unsigned)*cp) - (unsigned)'0';
+                if (delta > 9) {
+                        break;
+                }
+                ++n;
+                ++cp;
+        }
+        return n;
+}
+
+template <typename I0, typename I1> I0 ascii_to_integer(I0 first, I1 *dest)
+{
+        int d10_n = digits_count(first);
+        if (d10_n > std::numeric_limits<I1>::digits10) {
+                return first; // error
+        }
+        *dest = 0;
+        while (d10_n--) {
+                auto delta = ((unsigned)*first) - (unsigned)'0';
+                if (delta > 9) {
+                        break;
+                }
+                *dest *= 10;
+                *dest += delta;
+                ++first;
+        }
+        return first;
+}
+
 int main(int argc, char **argv)
 {
+        char trace_buffer[16384];
+        MemoryArena trace_arena =
+            memory_arena(trace_buffer, sizeof trace_buffer);
+        auto trace_output =
+            textoutputgroup_allocate(&trace_arena, KILOBYTES(1));
         zw_assert(argc > 0, "unexpected argc");
+
         DEFER(trace_print("done"));
         char const *root_dir_path = nullptr;
-
-        auto USAGE = "<program> [--help|--ls|--can-ignore|--debug] --root-dir "
-                     "<root-dir>";
-
         auto directory_listing_on = false;
         auto debug_mode_on = false;
         auto current_arg = 1;
+        CivilDateTime date_first;
+        date_first = {};
         while (current_arg < argc) {
                 if (cstr_equals(argv[current_arg], "--root-dir")) {
                         current_arg++;
@@ -625,6 +667,34 @@ int main(int argc, char **argv)
                 } else if (cstr_equals(argv[current_arg], "--debug")) {
                         current_arg++;
                         debug_mode_on = true;
+                } else if (cstr_equals(argv[current_arg], "--date-first")) {
+                        current_arg++;
+                        if (current_arg == argc) {
+                                error_print("expected date");
+                                trace_print(USAGE);
+                                return 1;
+                        }
+                        auto date_string = argv[current_arg];
+                        ++current_arg;
+
+                        auto cp = date_string;
+                        auto &d = date_first;
+                        cp = ascii_to_integer(cp, &d.year);
+                        if (*cp == '-') {
+                                ++cp;
+                                cp = ascii_to_integer(cp, &d.month_count);
+                                if (*cp == '-') {
+                                        ++cp;
+                                        cp = ascii_to_integer(cp, &d.day_count);
+                                }
+                        }
+                        CivilDateTime null_time = {};
+                        if (*cp || date_first == null_time) {
+                                error_print("expected date at: ");
+                                error_print(date_string);
+                                trace_print(USAGE);
+                                return 1;
+                        }
                 } else {
                         error_print("unexpected argument");
                         trace_print(USAGE);
@@ -632,6 +702,11 @@ int main(int argc, char **argv)
                         current_arg++;
                 }
         }
+
+        push_formatted(trace_output, "date range <%d-%02d-%02d>",
+                       date_first.year, date_first.month_count,
+                       date_first.day_count);
+        trace(trace_output);
 
         void *permanent_storage = nullptr;
         auto permanent_storage_memory_size = GIGABYTES(1);
@@ -783,7 +858,7 @@ int main(int argc, char **argv)
                 // That's less true if we're taking the data from the network?
 
                 size_t file_size_limit = MEGABYTES(128);
-                auto const detect_exclude_unwanted_files = [zwei](
+                auto const detect_exclude_unwanted_files = [zwei, date_first](
                     PlatformFileList *all_files, size_t file_size_limit) {
                         auto f = all_files->entries_first;
                         auto const l =
@@ -793,11 +868,21 @@ int main(int argc, char **argv)
                                 return x.filesize < file_size_limit;
                         };
 
-                        auto const wanted =
-                            [zwei](PlatformFileList::Entry const &x) {
-                                    return !should_skip_message_file(
-                                        zwei, x.filename, x.path);
-                            };
+                        uint64_t filing_date_first = 0;
+                        if (date_first.year >= 1970) {
+                                std::tm tm_value = {};
+                                tm_value.tm_mday = date_first.day_count;
+                                tm_value.tm_mon = date_first.month_count - 1;
+                                tm_value.tm_year = date_first.year - 1900;
+                                filing_date_first = 1000 * mktime(&tm_value);
+                        }
+
+                        auto const wanted = [zwei, filing_date_first](
+                            PlatformFileList::Entry const &x) {
+                                return !should_skip_message_file(
+                                    zwei, x.filename, x.path,
+                                    filing_date_first);
+                        };
                         auto wanted_last = std::stable_partition(f, l, wanted);
                         auto below_limit_last =
                             std::stable_partition(f, l, below_limit);
@@ -831,6 +916,7 @@ int main(int argc, char **argv)
                                           entry.filesize, (uint32_t)file_index);
                         }
                 }
+
                 // iterates over every file in the stream. the loop
                 // can never reach the end if you don't release files
                 // and memory is too constrained to load them all in
@@ -949,7 +1035,6 @@ int main(int argc, char **argv)
                                         return;
                                 if (!x.message_task.result.success)
                                         return;
-
                                 print_processed_message(x.message_task.result,
                                                         *transient_arena);
                         });
