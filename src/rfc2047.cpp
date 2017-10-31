@@ -37,6 +37,7 @@ Charset parse_charset_name_n(uint8_t const *charset_name,
             {LITE("iso-8859-1"), Charset_ISO_8859_1},
             {LITE("iso-8859-15"), Charset_ISO_8859_15},
             {LITE("utf-8"), Charset_UTF_8},
+            {LITE("windows-1252"), Charset_WINDOWS_1252},
         };
 
         using algos::begin;
@@ -188,6 +189,8 @@ const RFC2047 &make_rfc2047(const ABNF_RFC5234 &abnf,
         CHECK_PARSER(encoded_word,
                      "=?US-ASCII?B?bXkgZ2FyZGVuIGlzIHNvIHNwZWNpYWw=?=");
         CHECK_PARSER(encoded_word, "=?UTF-8?B?T2lhIFBhcmZ1bXMg4oCTICBETQ==?=");
+        CHECK_PARSER(encoded_word, "=?Windows-1252?Q?Des_japanophiles_cr=E9ent_"
+                                   "un_sak=E9_100%_made_in_France?=");
         CHECK_PARSER(encoded_word,
                      "=?iso-8859-15?Q?Euro:_=A4,=A6,=A8,=B4,=B8,=BC,=BD,=BE?=");
         {
@@ -206,6 +209,32 @@ const RFC2047 &make_rfc2047(const ABNF_RFC5234 &abnf,
 #endif
 
         return global_rfc2047_parsers;
+}
+
+template <OutputIterator O>
+O encode_codepoint_to_utf8(uint32_t codepoint, O d_first)
+{
+        using algos::sink;
+        using algos::successor;
+#define MASK(a, bits) ((a) & ((1 << bits) - 1))
+        if (codepoint < 0x0080) {
+                sink(d_first) = MASK(codepoint, 7);
+                d_first = successor(d_first);
+        } else if (codepoint < 0x800) {
+                sink(d_first) = 0xc0 | MASK(codepoint >> 6, 5);
+                d_first = successor(d_first);
+                sink(d_first) = 0x80 | MASK(codepoint >> 0, 6);
+                d_first = successor(d_first);
+        } else if (codepoint < 0x10000) {
+                sink(d_first) = 0xE0 | MASK(codepoint >> 12, 4);
+                d_first = successor(d_first);
+                sink(d_first) = 0x80 | MASK(codepoint >> 6, 6);
+                d_first = successor(d_first);
+                sink(d_first) = 0x80 | MASK(codepoint >> 0, 6);
+                d_first = successor(d_first);
+        }
+#undef MASK
+        return d_first;
 }
 
 /**
@@ -271,26 +300,32 @@ O transcode_encoded_word_to_utf8_n(
                         } else {
                                 codepoint = byte;
                         }
-
-#define MASK(a, bits) ((a) & ((1 << bits) - 1))
-
-                        if (codepoint < 0x0080) {
-                                sink(d_first) = MASK(codepoint, 7);
-                                d_first = successor(d_first);
-                        } else if (codepoint < 0x800) {
-                                sink(d_first) = 0xc0 | MASK(codepoint >> 6, 5);
-                                d_first = successor(d_first);
-                                sink(d_first) = 0x80 | MASK(codepoint >> 0, 6);
-                                d_first = successor(d_first);
-                        } else if (codepoint < 0x10000) {
-                                sink(d_first) = 0xE0 | MASK(codepoint >> 12, 4);
-                                d_first = successor(d_first);
-                                sink(d_first) = 0x80 | MASK(codepoint >> 6, 6);
-                                d_first = successor(d_first);
-                                sink(d_first) = 0x80 | MASK(codepoint >> 0, 6);
-                                d_first = successor(d_first);
+                        d_first = encode_codepoint_to_utf8(codepoint, d_first);
+                        first = successor(first);
+                        --n;
+                }
+        } else if (charset == Charset_WINDOWS_1252) {
+                // URL(http://www.unicode.org/Public/MAPPINGS/VENDORS/MICSFT/WindowsBestFit/bestfit1252.txt)
+                while (n) {
+                        uint8_t byte = source(first);
+                        uint32_t codepoint = 0;
+                        if (byte < 0x80) {
+                                codepoint = byte;
+                        } else if (byte >= 0xa0) {
+                                codepoint = byte;
+                        } else if (byte >= 0x80 && byte < 0xa0) {
+                                uint32_t segment[] = {
+                                    0x20ac, 0x0081, 0x201a, 0x0192, 0x201e,
+                                    0x2026, 0x2020, 0x2021, 0x02c6, 0x2030,
+                                    0x0160, 0x2039, 0x0152, 0x008d, 0x017d,
+                                    0x008f, 0x0090, 0x2018, 0x2019, 0x201c,
+                                    0x201d, 0x2022, 0x2013, 0x2014, 0x02dc,
+                                    0x2122, 0x0161, 0x203a, 0x0153, 0x009d,
+                                    0x017e, 0x0178,
+                                };
+                                codepoint = segment[byte - 0x80];
                         }
-#undef MASK
+                        d_first = encode_codepoint_to_utf8(codepoint, d_first);
                         first = successor(first);
                         --n;
                 }
