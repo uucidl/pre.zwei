@@ -27,7 +27,7 @@ struct CivilDateTime {
         uint8_t minute;             /// minute in [0,60)
         uint8_t seconds;            /// second in [0,60)
 
-        CivilDateTime() {}
+        CivilDateTime() = default;
         CivilDateTime(const RegularMe &x) = default;
         RegularMe &operator=(const RegularMe &x) = default;
 
