@@ -29,7 +29,8 @@ zw_internal bool
 should_skip_message_file(Zwei const &zwei,
                          char const *filename,
                          char const *filepath,
-                         uint64_t filing_date_min_unix_epoch_millis);
+                         uint64_t filing_date_first_unix_epoch_millis,
+                         uint64_t filing_date_last_unix_epoch_millis);
 
 zw_internal void process_message(Zwei const &zwei,
                                  char const *filename,
@@ -59,7 +60,8 @@ zw_internal bool
 should_skip_message_file(Zwei const &zwei,
                          char const *filename,
                          char const *filepath,
-                         uint64_t filing_date_min_unix_epoch_millis)
+                         uint64_t filing_date_first_unix_epoch_millis,
+                         uint64_t filing_date_last_unix_epoch_millis)
 {
         ZoeMailStoreFile zoefile = {};
         auto zoefile_errorcode =
@@ -69,7 +71,10 @@ should_skip_message_file(Zwei const &zwei,
         }
 
         // FEATURE(nicolas): filtering by filing date
-        if (zoefile.unix_epoch_millis < filing_date_min_unix_epoch_millis) {
+        if (zoefile.unix_epoch_millis < filing_date_first_unix_epoch_millis) {
+                return true;
+        }
+        if (zoefile.unix_epoch_millis >= filing_date_last_unix_epoch_millis) {
                 return true;
         }
 

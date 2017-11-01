@@ -12,7 +12,6 @@ static constexpr auto USAGE = "<program> "
 
    We extract features from these files in memory.
 
-   TODO(nicolas): FEATURE search timeline ranges [date-start,date-end)
    TODO(nicolas): FEATURE on OSX, use open command or similar to open a mail in
    Mail.app
    TODO(nicolas): control parallelism using sysctl to obtain
@@ -615,20 +614,49 @@ static int digits_count(char const *cp)
 template <typename I0, typename I1> I0 ascii_to_integer(I0 first, I1 *dest)
 {
         int d10_n = digits_count(first);
-        if (d10_n > std::numeric_limits<I1>::digits10) {
+        if (d10_n == 0 || d10_n > std::numeric_limits<I1>::digits10) {
                 return first; // error
         }
-        *dest = 0;
+        int result = 0;
         while (d10_n--) {
                 auto delta = ((unsigned)*first) - (unsigned)'0';
                 if (delta > 9) {
                         break;
                 }
-                *dest *= 10;
-                *dest += delta;
+                result *= 10;
+                result += delta;
                 ++first;
         }
+        *dest = result;
         return first;
+}
+
+static char const *parse_date(char const *cp, CivilDateTime *result_)
+{
+        auto &result = *result_;
+        cp = ascii_to_integer(cp, &result.year);
+        if (*cp == '-') {
+                ++cp;
+                cp = ascii_to_integer(cp, &result.month_count);
+                if (*cp == '-') {
+                        ++cp;
+                        cp = ascii_to_integer(cp, &result.day_count);
+                }
+        }
+        return cp;
+}
+
+static uint64_t unix_epoch_millis_from_civil_date(CivilDateTime civil_date)
+{
+        uint64_t result = 0;
+        if (civil_date.year >= 1970) {
+                std::tm tm_value = {};
+                tm_value.tm_mday = civil_date.day_count;
+                tm_value.tm_mon = civil_date.month_count - 1;
+                tm_value.tm_year = civil_date.year - 1900;
+                result = 1000 * mktime(&tm_value);
+        }
+        return result;
 }
 
 int main(int argc, char **argv)
@@ -645,8 +673,9 @@ int main(int argc, char **argv)
         auto directory_listing_on = false;
         auto debug_mode_on = false;
         auto current_arg = 1;
-        CivilDateTime date_first;
-        date_first = {};
+        CivilDateTime date_first = {};
+        CivilDateTime date_last = {};
+        date_last.year = 9999;
         while (current_arg < argc) {
                 if (cstr_equals(argv[current_arg], "--root-dir")) {
                         current_arg++;
@@ -674,20 +703,12 @@ int main(int argc, char **argv)
                                 trace_print(USAGE);
                                 return 1;
                         }
-                        auto date_string = argv[current_arg];
+                        auto date_string =
+                            const_cast<char const *>(argv[current_arg]);
                         ++current_arg;
 
                         auto cp = date_string;
-                        auto &d = date_first;
-                        cp = ascii_to_integer(cp, &d.year);
-                        if (*cp == '-') {
-                                ++cp;
-                                cp = ascii_to_integer(cp, &d.month_count);
-                                if (*cp == '-') {
-                                        ++cp;
-                                        cp = ascii_to_integer(cp, &d.day_count);
-                                }
-                        }
+                        cp = parse_date(cp, &date_first);
                         CivilDateTime null_time = {};
                         if (*cp || date_first == null_time) {
                                 error_print("expected date at: ");
@@ -695,6 +716,7 @@ int main(int argc, char **argv)
                                 trace_print(USAGE);
                                 return 1;
                         }
+                        cp = parse_date(cp, &date_last);
                 } else {
                         error_print("unexpected argument");
                         trace_print(USAGE);
@@ -703,9 +725,10 @@ int main(int argc, char **argv)
                 }
         }
 
-        push_formatted(trace_output, "date range <%d-%02d-%02d>",
-                       date_first.year, date_first.month_count,
-                       date_first.day_count);
+        push_formatted(
+            trace_output, "Selected date range <%d-%02d-%02d> <%d-%02d-%02d>",
+            date_first.year, date_first.month_count, date_first.day_count,
+            date_last.year, date_last.month_count, date_last.day_count);
         trace(trace_output);
 
         void *permanent_storage = nullptr;
@@ -858,7 +881,8 @@ int main(int argc, char **argv)
                 // That's less true if we're taking the data from the network?
 
                 size_t file_size_limit = MEGABYTES(128);
-                auto const detect_exclude_unwanted_files = [zwei, date_first](
+                auto const detect_exclude_unwanted_files = [zwei, date_first,
+                                                            date_last](
                     PlatformFileList *all_files, size_t file_size_limit) {
                         auto f = all_files->entries_first;
                         auto const l =
@@ -868,20 +892,17 @@ int main(int argc, char **argv)
                                 return x.filesize < file_size_limit;
                         };
 
-                        uint64_t filing_date_first = 0;
-                        if (date_first.year >= 1970) {
-                                std::tm tm_value = {};
-                                tm_value.tm_mday = date_first.day_count;
-                                tm_value.tm_mon = date_first.month_count - 1;
-                                tm_value.tm_year = date_first.year - 1900;
-                                filing_date_first = 1000 * mktime(&tm_value);
-                        }
+                        uint64_t filing_date_first =
+                            unix_epoch_millis_from_civil_date(date_first);
+                        uint64_t filing_date_last =
+                            unix_epoch_millis_from_civil_date(date_last);
 
-                        auto const wanted = [zwei, filing_date_first](
+                        auto const wanted = [zwei, filing_date_first,
+                                             filing_date_last](
                             PlatformFileList::Entry const &x) {
                                 return !should_skip_message_file(
-                                    zwei, x.filename, x.path,
-                                    filing_date_first);
+                                    zwei, x.filename, x.path, filing_date_first,
+                                    filing_date_last);
                         };
                         auto wanted_last = std::stable_partition(f, l, wanted);
                         auto below_limit_last =
