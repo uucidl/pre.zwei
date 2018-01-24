@@ -702,6 +702,8 @@ int main(int argc, char **argv)
                         current_arg++;
                         debug_mode_on = true;
                 } else if (cstr_equals(argv[current_arg], "--date-first")) {
+                        // FEATURE(nicolas): only process messages filed after
+                        // the given date.
                         current_arg++;
                         if (current_arg == argc) {
                                 error_print("expected date");
