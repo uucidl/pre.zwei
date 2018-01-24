@@ -440,7 +440,10 @@ static void module_close(module *module)
 static const char *enum_description(tcp_ip_connection::Error x)
 {
         static char const *descs[] = {
-            "None", "CannotCreateSocket", "CannotFindAddress", "CannotConnect",
+            "None",
+            "CannotCreateSocket",
+            "CannotFindAddress",
+            "CannotConnect",
         };
         static_assert(countof(descs) == tcp_ip_connection::ErrorCount, "sync");
         return descs[x];
@@ -524,8 +527,9 @@ static bool sftp_init(SFTPConfig const &config)
                 auto const required_version = 0x010208;
                 char const *version_string = version(required_version);
                 if (!version_string) {
-                        std::fprintf(stderr, "version: '%s' not recent enough, "
-                                             "need at least %d.%d.%d\n",
+                        std::fprintf(stderr,
+                                     "version: '%s' not recent enough, "
+                                     "need at least %d.%d.%d\n",
                                      version(0),
                                      ((required_version >> 16) & 0xff),
                                      ((required_version >> 8) & 0xff),
@@ -777,9 +781,10 @@ SFTPClient::Error SFTPClientOpen(SFTPClient *client)
                         if (ssh2_error == 0) {
                                 prev_key = current_key;
                                 ssh2_error = global_sftp.agent.userauth(
-                                    agent, cstring(client->username,
-                                                   client->username_size)
-                                               .first,
+                                    agent,
+                                    cstring(client->username,
+                                            client->username_size)
+                                        .first,
                                     current_key);
                                 if (ssh2_error == 0) {
                                         auth_state = agent_done;
@@ -1225,9 +1230,10 @@ int main(int argc, char **argv)
                         reader.path_size = file.path.size();
                         auto reader_error =
                             SFTPClientStreamReaderOpen(&reader, &sftp_client);
-                        std::fprintf(stderr, "reader_error:%"
-                                             "s (%d) for "
-                                             "path %.*s\n",
+                        std::fprintf(stderr,
+                                     "reader_error:%"
+                                     "s (%d) for "
+                                     "path %.*s\n",
                                      enum_description(reader_error),
                                      reader_error, int(reader.path_size),
                                      reader.path);
@@ -1238,9 +1244,10 @@ int main(int argc, char **argv)
                                         sftp_client.error);
                                 if (sftp_client.error ==
                                     sftp::SFTPClient::Error_SFTP) {
-                                        fprintf(stderr, "sftp "
-                                                        "status:%s "
-                                                        "(%d)\n",
+                                        fprintf(stderr,
+                                                "sftp "
+                                                "status:%s "
+                                                "(%d)\n",
                                                 enum_description(
                                                     sftp_client.sftp_status),
                                                 sftp_client.sftp_status);

@@ -10,7 +10,8 @@
 void test_bits()
 {
         uint8_t byte[] = {
-            0xCC, 0xDD,
+            0xCC,
+            0xDD,
         };
         auto first_nibble = AssignableNibble(&byte[0], 0);
         auto second_nibble = AssignableNibble(&byte[0], 4);

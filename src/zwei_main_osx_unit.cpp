@@ -181,10 +181,14 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
 
         // what we are asking getattrlistbulk
         struct attrlist query_attributes = {
-            ATTR_BIT_MAP_COUNT, 0,
+            ATTR_BIT_MAP_COUNT,
+            0,
             (ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_ERROR | ATTR_CMN_NAME |
              ATTR_CMN_OBJTYPE | ATTR_CMN_OBJTAG),
-            0, 0, ATTR_FILE_TOTALSIZE | ATTR_FILE_IOBLOCKSIZE, 0,
+            0,
+            0,
+            ATTR_FILE_TOTALSIZE | ATTR_FILE_IOBLOCKSIZE,
+            0,
         };
 
         uint64_t query_options =
@@ -211,7 +215,8 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
         auto record_directory_entry = [&trace_output, trace_optionally,
                                        &work_arena, push_file, push_directory,
                                        trace_on](
-            char const *dir_path, DirEntryAttributes const *entry) {
+                                          char const *dir_path,
+                                          DirEntryAttributes const *entry) {
                 char const *name = (char *)((uint8_t *)&entry->nameinfo) +
                                    entry->nameinfo.attr_dataoffset;
 
@@ -881,41 +886,45 @@ int main(int argc, char **argv)
                 // That's less true if we're taking the data from the network?
 
                 size_t file_size_limit = MEGABYTES(128);
-                auto const detect_exclude_unwanted_files = [zwei, date_first,
-                                                            date_last](
-                    PlatformFileList *all_files, size_t file_size_limit) {
-                        auto f = all_files->entries_first;
-                        auto const l =
-                            all_files->entries_first + all_files->entries_size;
-                        auto const below_limit = [file_size_limit](
-                            PlatformFileList::Entry const &x) {
-                                return x.filesize < file_size_limit;
-                        };
+                auto const detect_exclude_unwanted_files =
+                    [zwei, date_first, date_last](PlatformFileList *all_files,
+                                                  size_t file_size_limit) {
+                            auto f = all_files->entries_first;
+                            auto const l = all_files->entries_first +
+                                           all_files->entries_size;
+                            auto const below_limit =
+                                [file_size_limit](
+                                    PlatformFileList::Entry const &x) {
+                                        return x.filesize < file_size_limit;
+                                };
 
-                        uint64_t filing_date_first =
-                            unix_epoch_millis_from_civil_date(date_first);
-                        uint64_t filing_date_last =
-                            unix_epoch_millis_from_civil_date(date_last);
+                            uint64_t filing_date_first =
+                                unix_epoch_millis_from_civil_date(date_first);
+                            uint64_t filing_date_last =
+                                unix_epoch_millis_from_civil_date(date_last);
 
-                        auto const wanted = [zwei, filing_date_first,
-                                             filing_date_last](
-                            PlatformFileList::Entry const &x) {
-                                return !should_skip_message_file(
-                                    zwei, x.filename, x.path, filing_date_first,
-                                    filing_date_last);
-                        };
-                        auto wanted_last = std::stable_partition(f, l, wanted);
-                        auto below_limit_last =
-                            std::stable_partition(f, l, below_limit);
+                            auto const wanted =
+                                [zwei, filing_date_first, filing_date_last](
+                                    PlatformFileList::Entry const &x) {
+                                        return !should_skip_message_file(
+                                            zwei, x.filename, x.path,
+                                            filing_date_first,
+                                            filing_date_last);
+                                };
+                            auto wanted_last =
+                                std::stable_partition(f, l, wanted);
+                            auto below_limit_last =
+                                std::stable_partition(f, l, below_limit);
 
-                        if (!global_can_ignore_file &&
-                            below_limit_last != wanted_last) {
-                                zw_assert(false,
-                                          "ignored too large file"); // inspect
-                                // below_limit_last
-                        }
-                        all_files->entries_size = wanted_last - f;
-                };
+                            if (!global_can_ignore_file &&
+                                below_limit_last != wanted_last) {
+                                    zw_assert(
+                                        false,
+                                        "ignored too large file"); // inspect
+                                    // below_limit_last
+                            }
+                            all_files->entries_size = wanted_last - f;
+                    };
                 if (all_files)
                         detect_exclude_unwanted_files(all_files,
                                                       file_size_limit);
@@ -1042,23 +1051,24 @@ int main(int argc, char **argv)
                 };
 
                 auto process_and_print = [&task_run, transient_arena](
-                    Task *first, Task *last) {
+                                             Task *first, Task *last) {
                         dispatch_queue_t queue = dispatch_get_global_queue(
                             DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
 
                         dispatch_apply_f(last - first, queue, first, task_run);
 
-                        algos::for_each(first, last, [transient_arena](
-                                                         Task const &x) {
-                                if (x.type != Task::MESSAGE)
-                                        return;
-                                if (!x.done)
-                                        return;
-                                if (!x.message_task.result.success)
-                                        return;
-                                print_processed_message(x.message_task.result,
-                                                        *transient_arena);
-                        });
+                        algos::for_each(
+                            first, last, [transient_arena](Task const &x) {
+                                    if (x.type != Task::MESSAGE)
+                                            return;
+                                    if (!x.done)
+                                            return;
+                                    if (!x.message_task.result.success)
+                                            return;
+                                    print_processed_message(
+                                        x.message_task.result,
+                                        *transient_arena);
+                            });
                 };
 
                 while (count_pending_files(files_loader) > 0) {

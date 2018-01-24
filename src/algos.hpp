@@ -210,7 +210,7 @@ It find_last_if_unguarded(It first, ValidItPred valid, Pred pred)
 /**
  * @require: Domain(Pred) = ValueType(It)
  * @require: Domain(ValidItPred) = ValueType(It)
-*/
+ */
 template <Iterator It, UnaryPredicate ValidItPred>
 It find_last_unguarded(It first,
                        ValidItPred valid,
@@ -536,9 +536,9 @@ template <Iterator I, Integral N, UnaryPredicate P>
 bool all_n(I first, N count, P pred)
 {
         using ValueType = typename ReadableConcept<I>::value_type;
-        return find_if_n(first, count, [&](ValueType const &x) {
-                       return !pred(x);
-               }).second == N(0);
+        return find_if_n(first, count,
+                         [&](ValueType const &x) { return !pred(x); })
+                   .second == N(0);
 }
 }
 

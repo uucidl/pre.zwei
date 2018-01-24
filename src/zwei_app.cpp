@@ -200,8 +200,8 @@ macroman_workaround_block(struct MacRomanWorkaround *state,
                           "stepped out of destination");
                 destination_count = result.second - destination_first;
         } else {
-                using algos::source;
                 using algos::sink;
+                using algos::source;
                 using algos::successor;
 
                 // it's not, assume it's latin1
@@ -390,7 +390,8 @@ zw_internal void fill_message_summary(MessageSummary *message_summary,
                                       bytes_count,
                                   "unexpected byte count");
                         *d_bytes_range = {
-                            arena_bytes, bytes_count,
+                            arena_bytes,
+                            bytes_count,
                         };
                 } break;
                 case MAILBOX_LIST: {
@@ -498,7 +499,8 @@ ZWEI_API GET_MESSAGE_SUMMARY(get_message_summary)
         }
 
         struct MessageBeingParsed message_parsed = {
-            MessageBeingParsed::UNPARSED, {},
+            MessageBeingParsed::UNPARSED,
+            {},
         };
         // Hammer parsing
         {

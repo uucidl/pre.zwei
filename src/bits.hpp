@@ -18,8 +18,8 @@ struct AssignableNibble {
 
         template <Integral I> AssignableNibble &operator=(I x)
         {
-                *byte =
-                    (*byte & ~((0xF << bitoffset))) | (x & 0xF) << bitoffset;
+                *byte = (*byte & ~((0xF << bitoffset))) | (x & 0xF)
+                                                              << bitoffset;
                 return *this;
         }
 };

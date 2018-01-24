@@ -125,10 +125,10 @@ zw_internal int zoe_parse_uuid_filename(const char *filename,
 
         ZoeMailStoreFile &result = *d_result;
 
-        using algos::source;
         using algos::begin;
-        using algos::end;
         using algos::copy_n;
+        using algos::end;
+        using algos::source;
 
         auto token_first = begin(parse_result->ast);
         auto const &uuid_token = source(token_first);

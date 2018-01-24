@@ -84,9 +84,9 @@ HAMMER_ACTION(act_unstructured)
                 uint32_t decoder_state = Utf8DecodeResult_Accept;
                 uint32_t codepoint = 0;
                 uint8_t last_byte = 0; // useful for debugging
-                bool can_decode_all =
-                    algos::all_n(bytes, byte_count, [&codepoint, &decoder_state,
-                                                     &last_byte](uint8_t x) {
+                bool can_decode_all = algos::all_n(
+                    bytes, byte_count,
+                    [&codepoint, &decoder_state, &last_byte](uint8_t x) {
                             last_byte = x;
                             return Utf8DecodeResult_Reject !=
                                    utf8_decode(&decoder_state, &codepoint, x);
@@ -336,8 +336,8 @@ HAMMER_ACTION(act_date_time)
 {
         using algos::begin;
         using algos::end;
-        using algos::successor;
         using algos::source;
+        using algos::successor;
 
         auto first = begin(p->ast);
         auto const last = end(p->ast);
@@ -511,8 +511,9 @@ zw_internal const RFC5322 &make_rfc5322(const ABNF_RFC5234 &abnf,
                               UH_IENUM("Sep", 8), UH_IENUM("Oct", 9),
                               UH_IENUM("Nov", 10), UH_IENUM("Dec", 11)));
 
-        H_RULE(year, h_action(h_middle(FWS, UH_SEQ(h_repeat_n(abnf.DIGIT, 4),
-                                                   h_many(abnf.DIGIT)),
+        H_RULE(year, h_action(h_middle(FWS,
+                                       UH_SEQ(h_repeat_n(abnf.DIGIT, 4),
+                                              h_many(abnf.DIGIT)),
                                        FWS),
                               act_accumulate_base10, NULL));
 
@@ -576,7 +577,7 @@ zw_internal const RFC5322 &make_rfc5322(const ABNF_RFC5234 &abnf,
 
         H_RULE(address_list, h_sepBy1(address, h_ch(',')));
 
-// ## 3.6.  Field Definitions
+        // ## 3.6.  Field Definitions
 
 #define UUH_FIELD(lit, right)                                                  \
         h_middle(h_ascii_itoken((uint8_t *)lit, (sizeof lit) - 1), right,      \
@@ -704,25 +705,29 @@ zw_internal const RFC5322 &make_rfc5322(const ABNF_RFC5234 &abnf,
                       rfc5322_print_ast);
         CHECK_PARSER2(mailbox, "=?UTF-8?Q?Nicolas_L=c3=a9veill=c3=a9?= <a@b.c>",
                       rfc5322_print_ast);
-        CHECK_PARSER2(from, "From: \"Schmidt, Christian, MD6042\" "
-                            "<Christian.Schmidt@MDM.MDemag.com>\r\n",
+        CHECK_PARSER2(from,
+                      "From: \"Schmidt, Christian, MD6042\" "
+                      "<Christian.Schmidt@MDM.MDemag.com>\r\n",
                       rfc5322_print_ast);
         CHECK_PARSER2(mailbox_list, "\"Muji\" <muji@b2d1.espmp-agfr.net> \r\n",
                       rfc5322_print_ast);
         CHECK_PARSER2(from, "From: \"Muji\" <muji@b2d1.espmp-agfr.net> \r\n",
                       rfc5322_print_ast);
-        CHECK_PARSER2(message, "From: Nicolas(with a comment \\( (inside)) "
-                               "<nicolas@uucidl.com>\r\nSubject: I am "
-                               "testing this\r\n",
+        CHECK_PARSER2(message,
+                      "From: Nicolas(with a comment \\( (inside)) "
+                      "<nicolas@uucidl.com>\r\nSubject: I am "
+                      "testing this\r\n",
                       rfc5322_print_ast);
         CHECK_PARSER2(fields, "fROm: nicolas@uucidl.com\r\n",
                       rfc5322_print_ast);
-        CHECK_PARSER2(fields, "From: Nicolas =?UTF-8?B?TMOpdmVpbGzDqQ==?= "
-                              "<nicolas.leveille@free.fr>\r\n",
+        CHECK_PARSER2(fields,
+                      "From: Nicolas =?UTF-8?B?TMOpdmVpbGzDqQ==?= "
+                      "<nicolas.leveille@free.fr>\r\n",
                       rfc5322_print_ast);
         // An 'encoded-word' MUST NOT appear within a 'quoted-string':
-        CHECK_PARSER2(fields, "From: \"=?utf-8?B?RGFzc2F1bHQgU3lzdMOobWVz?=\" "
-                              "<dassault@jkyg.espmp-cufr.net>\r\n",
+        CHECK_PARSER2(fields,
+                      "From: \"=?utf-8?B?RGFzc2F1bHQgU3lzdMOobWVz?=\" "
+                      "<dassault@jkyg.espmp-cufr.net>\r\n",
                       rfc5322_print_ast);
         CHECK_PARSER2(fields, "subject:\r\n", rfc5322_print_ast);
 
@@ -927,8 +932,9 @@ zw_internal void rfc5322_pprint_node(FILE *stream,
                             &rfc5322_token_types[RFC5322_TT_DATE_TIME]) {
                                 const CivilDateTime &value =
                                     *(CivilDateTime *)token.user;
-                                fprintf(stdout, "<%d-%02d-%02dT%02d:%02d:%"
-                                                "02d%c%02d:%02d>\n",
+                                fprintf(stdout,
+                                        "<%d-%02d-%02dT%02d:%02d:%"
+                                        "02d%c%02d:%02d>\n",
                                         value.year, value.month_count,
                                         value.day_count, value.hour,
                                         value.minute, value.seconds,
@@ -964,8 +970,9 @@ zw_internal void rfc5322_print_ast(FILE *stream,
                 algos::weight_recursive(top), algos::height_recursive(top));
 
         int next_indent = indent;
-        auto print_node = [&next_indent, stream, indent_delta](
-            algos::VisitType visit, const RFC5322TreeCoordinate &coord) {
+        auto print_node = [&next_indent, stream,
+                           indent_delta](algos::VisitType visit,
+                                         const RFC5322TreeCoordinate &coord) {
                 if (visit == algos::PRE) {
                         next_indent += indent_delta;
                 }
@@ -1190,8 +1197,9 @@ zw_internal RawMailbox *rfc5322_field_copy_mailbox_array(
 {
         auto top = rfc5322_top(token);
         bool mailbox_child = false;
-        auto grab_data = [&d_first, &d_bytes_first, &mailbox_child](
-            algos::VisitType visit, RFC5322TreeCoordinate const &coords) {
+        auto grab_data = [&d_first, &d_bytes_first,
+                          &mailbox_child](algos::VisitType visit,
+                                          RFC5322TreeCoordinate const &coords) {
                 using algos::begin;
                 using algos::end;
 

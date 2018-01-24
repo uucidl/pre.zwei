@@ -27,7 +27,10 @@ sha1(uint8_t const *bytes, size_t const bytes_size, uint8_t result[20])
         };
 
         uint32_t K[4] = {
-            0x5a827999UL, 0x6ed9eba1UL, 0x8f1bbcdcUL, 0xca62c1d6UL,
+            0x5a827999UL,
+            0x6ed9eba1UL,
+            0x8f1bbcdcUL,
+            0xca62c1d6UL,
         };
         uint32_t h0 = 0x67452301UL;
         uint32_t h1 = 0xefcdab89UL;

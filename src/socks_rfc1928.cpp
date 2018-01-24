@@ -375,15 +375,17 @@ SOCKSClientProtocol::Error SOCKSClientProtocolNext(SOCKSClientProtocol *client,
                         server_msg_method_selection p;
                         if (packet_data_size != sizeof p)
                                 return socks_client_protocol_error(
-                                    client, SOCKSClientProtocol::
-                                                Error_UnexpectedInputPacket,
+                                    client,
+                                    SOCKSClientProtocol::
+                                        Error_UnexpectedInputPacket,
                                     "input packet size expected %d got %d",
                                     sizeof p, packet_data_size);
                         memcpy(&p, packet_data, sizeof p);
                         if (p.ver != 0x05)
                                 return socks_client_protocol_error(
-                                    client, SOCKSClientProtocol::
-                                                Error_UnexpectedInputPacket,
+                                    client,
+                                    SOCKSClientProtocol::
+                                        Error_UnexpectedInputPacket,
                                     "wrong version, expected 5 got %d", p.ver);
                         if (p.method == socks_method::socks_method_last)
                                 return socks_client_protocol_error(
@@ -551,8 +553,8 @@ static void test_fake_client_server()
                 return cursor + d_size;
         };
 
-        auto const client_next = [&](
-            socks_rfc1928::SOCKSClientProtocol *client) {
+        auto const client_next = [&](socks_rfc1928::SOCKSClientProtocol
+                                         *client) {
                 auto error = socks_rfc1928::SOCKSClientProtocolNext(
                     client, c_buffer, c_buffer_last - c_buffer);
                 s_buffer_last = client->output_buffer_written_last;

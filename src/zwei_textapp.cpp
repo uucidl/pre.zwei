@@ -111,7 +111,9 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                 }
         };
         auto print_bytes_list_field = [&text_output_group](
-            const char *name, struct ByteCountedRange *values, size_t count) {
+                                          const char *name,
+                                          struct ByteCountedRange *values,
+                                          size_t count) {
                 if (count == 0) {
                         return;
                 }
@@ -133,8 +135,9 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
         // compare groups of recipients for instance and name
         // them somehow
         auto print_mailbox_list_field = [&text_output_group](
-            const char *name, RawMailbox const *mailboxes,
-            size_t mailboxes_count) {
+                                            const char *name,
+                                            RawMailbox const *mailboxes,
+                                            size_t mailboxes_count) {
                 if (mailboxes_count == 0) {
                         return;
                 }
@@ -194,8 +197,9 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
                 push_cstr(text_output_group, "ORIG_DATE");
                 push_tab(text_output_group);
                 CivilDateTime const &value = message_summary.orig_date;
-                push_formatted(text_output_group, "<%d-%02d-%02dT%02d:%02d:%"
-                                                  "02d%c%02d:%02d>",
+                push_formatted(text_output_group,
+                               "<%d-%02d-%02dT%02d:%02d:%"
+                               "02d%c%02d:%02d>",
                                value.year, value.month_count, value.day_count,
                                value.hour, value.minute, value.seconds,
                                value.zone_hour_offset >= 0 ? '+' : '-',

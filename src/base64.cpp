@@ -44,8 +44,8 @@ struct HammerUintTokenSequenceIterator {
 zw_internal std::pair<uint8_t *, uint8_t>
 gather_8from6bits(uint8_t *f, uint8_t *l, uint8_t *d_f)
 {
-        using algos::source;
         using algos::sink;
+        using algos::source;
         using algos::successor;
 
         auto const min = [](uint8_t a, uint8_t b) { return a < b ? a : b; };
@@ -206,8 +206,8 @@ const Base64 &make_base64(ABNF_RFC5234 const &rfc5234)
         };
 
         trace_print("should be equal to `any carnal pleasure.`:");
-        CHECK_PARSER2(global_base64.base64, "YW55IGNhcm5hbCBwbGVhc3VyZS4=",
-                      print_bytes);
+        CHECK_PARSER2(global_base64.base64,
+                      "YW55IGNhcm5hbCBwbGVhc3VyZS4=", print_bytes);
         CHECK_PARSER2(global_base64.base64,
                       "TWFuIGlzIGRpc3Rpbmd1aXNoZWQsIG5vdCBvbmx5IGJ5IGhpcyByZWFz"
                       "b24sIGJ1dCBieSB0aGlzIHNpbmd1bGFyIHBhc3Npb24gZnJvbSBvdGhl"
