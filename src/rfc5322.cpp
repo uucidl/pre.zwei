@@ -970,7 +970,7 @@ zw_internal void rfc5322_print_ast(FILE *stream,
                 algos::weight_recursive(top), algos::height_recursive(top));
 
         int next_indent = indent;
-        auto print_node = [&next_indent, stream,
+        auto print_node = [&next_indent,
                            indent_delta](algos::VisitType visit,
                                          const RFC5322TreeCoordinate &coord) {
                 if (visit == algos::PRE) {

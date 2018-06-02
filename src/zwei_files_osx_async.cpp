@@ -315,14 +315,12 @@ FileLoaderHandleList load_error_files(FileLoader &file_loader)
         auto const first_entry = file_loader.entries;
         auto const last_entry = first_entry + file_loader.entries_count;
 
-        size_t other_finished_count = 0;
-
         auto last_error = algos::apply_copy_if(
             first_entry, last_entry, file_loader.errors,
             [first_entry](FileLoaderEntry const &entry) -> FileLoaderHandle {
                     return {uint32_t(&entry - first_entry)};
             },
-            [&other_finished_count](FileLoaderEntry const &entry) {
+            [](FileLoaderEntry const &entry) {
                     return entry.state == FileLoaderEntry::ERROR;
             });
         file_loader.errors_count = last_error - file_loader.errors;

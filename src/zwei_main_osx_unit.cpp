@@ -217,8 +217,7 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
         // record a directory entry, depending if it's a file
         // or another directory
         auto record_directory_entry = [&trace_output, trace_optionally,
-                                       &work_arena, push_file, push_directory,
-                                       trace_on](
+                                       &work_arena, push_file, push_directory](
                                           char const *dir_path,
                                           DirEntryAttributes const *entry) {
                 char const *name = (char *)((uint8_t *)&entry->nameinfo) +
@@ -363,7 +362,6 @@ zw_internal PLATFORM_QUERY_ALL_FILES(directory_query_all_files)
                         FSEntry *dir_entry = push_directory();
                         dir_entry->path = path;
                 }
-
         };
 
         FSEntry *dir_entry;
@@ -1327,7 +1325,7 @@ int main(int argc, char **argv)
                             task.zwei = zwei;
                             task.message_task.files_loader = &files_loader;
                             task.message_task.result_arena =
-                                push_sub_arena(result_arena, KILOBYTES(8));
+                                push_sub_arena(result_arena, KILOBYTES(32));
                             task.message_task.file_handle = file_handle;
                             task.message_task.result = {};
 
