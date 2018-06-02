@@ -169,7 +169,7 @@ void file_loader_update_counters(FileLoader &file_loader)
                                             file_loader.available_count -
                                             file_loader.finished_count)));
 }
-}
+} // namespace
 
 void wait_for_available_files(FileLoader &file_loader)
 {

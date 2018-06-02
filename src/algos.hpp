@@ -25,7 +25,7 @@ template <typename T> const T &max(const T &a, const T &b)
         }
         return b;
 }
-}
+} // namespace algos
 
 // Integral types
 namespace algos
@@ -35,7 +35,7 @@ template <Integral I> bool zero(I i) { return i == 0; };
 template <Integral I> I successor(I i) { return i + 1; }
 
 template <Integral I> I predecessor(I i) { return i - 1; }
-}
+} // namespace algos
 
 // Pointer types
 namespace algos
@@ -69,7 +69,7 @@ template <typename T> T *predecessor(T *x) { return x - 1; }
 
 // # pointer as Writable
 template <typename T> T &sink(T *x) { return *x; }
-}
+} // namespace algos
 
 // Array types
 namespace algos
@@ -88,7 +88,7 @@ template <typename T, size_t N> constexpr T *end(T (&array)[N])
 {
         return array + N;
 }
-}
+} // namespace algos
 
 // # algorithms on ranges.
 //
@@ -449,7 +449,7 @@ std::pair<I, O> apply_copy_to_bounded_if(
         }
         return {first, dest_first};
 }
-}
+} // namespace algos
 
 // binary operations
 namespace algos
@@ -458,7 +458,7 @@ namespace algos
 template <typename T> struct BinaryOperationConcept<T &(*)(T &, T &)> {
         using type = T;
 };
-}
+} // namespace algos
 
 namespace algos
 {
@@ -507,7 +507,7 @@ apply_reduce(I first,
         }
         return apply_reduce_nonempty(first, last, fun, op);
 }
-}
+} // namespace algos
 
 // derived sequence algorithms
 namespace algos
@@ -566,7 +566,7 @@ bool equal_guarded(I0 f0,
         return sentinel == source(mismatch.first) &&
                sentinel == source(mismatch.second);
 }
-}
+} // namespace algos
 
 // void output iterators
 namespace algos
@@ -624,7 +624,7 @@ template <typename I> struct WritableConcept<VoidOutputIteratorAdapter<I>> {
 template <typename I> struct IteratorConcept<VoidOutputIteratorAdapter<I>> {
         using difference_type = typename IteratorConcept<I>::difference_type;
 };
-}
+} // namespace algos
 
 // tree concepts and algorithms
 namespace algos
@@ -637,7 +637,7 @@ template <typename T> struct TreeCoordinateConcept {
 
 template <TreeCoordinate C> C descendants_begin(C c);
 template <TreeCoordinate C> C descendants_end(C c);
-}
+} // namespace algos
 
 namespace algos
 {
@@ -691,7 +691,7 @@ Proc traverse_nonempty(const C &c, Proc proc)
         proc(POST, c);
         return proc;
 }
-}
+} // namespace algos
 
 namespace algos
 {
@@ -716,4 +716,4 @@ void traverse_each(C const &c, Proc proc)
 {
         traverse_nonempty(c, visit_element<C, Proc>(proc));
 }
-};
+}; // namespace algos

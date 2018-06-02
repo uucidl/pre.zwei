@@ -58,4 +58,4 @@ template <Writable W> typename WritableConcept<W>::value_type &sink(W &x);
 template <BinaryOperation Op> struct BinaryOperationConcept {
         using type = void;
 };
-}
+} // namespace algos

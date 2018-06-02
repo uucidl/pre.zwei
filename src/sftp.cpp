@@ -297,7 +297,7 @@ SFTP_API void SFTPClientStreamReaderClose(SFTPClientStreamReader *stream);
 SFTP_API SFTPClientStreamReader::Error
 SFTPClientStreamReaderNext(SFTPClientStreamReader *stream);
 
-} // END(namespace sftp)
+} // namespace sftp
 
 #endif
 
@@ -1025,7 +1025,7 @@ SFTPClientStreamReaderNext(SFTPClientStreamReader *stream)
         return stream->error = SFTPClientStreamReader::Error_None;
 }
 
-} // END(namespace sftp)
+} // namespace sftp
 
 #define SOCKS_RFC1928_IMPLEMENTATION
 #include "socks_rfc1928.cpp"

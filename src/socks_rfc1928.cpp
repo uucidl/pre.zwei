@@ -71,7 +71,7 @@ SOCKSClientProtocolNext(SOCKSClientProtocol *client,
                         uint8_t *packet_data,
                         std::size_t packet_data_size);
 
-} // END(namespace socks_rfc1928)
+} // namespace socks_rfc1928
 
 #endif // END(SOCKS_RFC1928_PROTOTYPES)
 
@@ -499,7 +499,7 @@ SOCKSClientProtocol::Error SOCKSClientProtocolNext(SOCKSClientProtocol *client,
         return client->error = SOCKSClientProtocol::Error_Unimplemented;
 }
 
-} // END(namespace socks_rfc1928)
+} // namespace socks_rfc1928
 
 #endif // END(SOCKS_RFC1928_IMPLEMENTATION)
 

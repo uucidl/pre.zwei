@@ -62,4 +62,4 @@ void run_tests()
                          "should not be equal");
         }
 }
-}
+} // namespace algos
