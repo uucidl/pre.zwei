@@ -1,6 +1,9 @@
-static constexpr auto USAGE = "<program> "
-                              "[--help|--ls|--can-ignore|--debug|--date-first "
-                              "<YYYY-MM-DD>] --root-dir <root-dir>";
+static constexpr auto USAGE =
+    "<program> "
+    "[--help|--ls|--can-ignore|--debug|--date-first "
+    "<YYYY-MM-DD>] --root-dir <root-dir>"
+    "\n"
+    "root-dir: [<filepath>|sftp:<username>@<host>[:<port>]]";
 
 /**
    NOTE(nicolas)
@@ -993,7 +996,7 @@ int main(int argc, char **argv)
                         current_arg++;
                         if (current_arg == argc) {
                                 error_print("expected date");
-                                trace_print(USAGE);
+                                fprintf(stderr, USAGE);
                                 return 1;
                         }
                         auto date_string =
@@ -1006,13 +1009,13 @@ int main(int argc, char **argv)
                         if (*cp || date_first == null_time) {
                                 error_print("expected date at: ");
                                 error_print(date_string);
-                                trace_print(USAGE);
+                                fprintf(stderr, USAGE);
                                 return 1;
                         }
                         cp = parse_date(cp, &date_last);
                 } else {
                         error_print("unexpected argument");
-                        trace_print(USAGE);
+                        fprintf(stderr, USAGE);
                         return 1;
                         current_arg++;
                 }
