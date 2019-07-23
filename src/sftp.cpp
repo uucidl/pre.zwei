@@ -11,17 +11,20 @@
 #define SFTP_IMPLEMENTATION (1)
 #endif
 
-#if defined(__APPLE__) && defined(__MACH__)
-#define SFTP_SSH2_MODULE_USE_DLFCN 1
-#define TCP_IP_CONNECTION_USE_BSD 1
-#endif
-
 #if !defined(SFTP_PROTOTYPES)
 #define SFTP_PROTOTYPES
 
 #include <cstddef>
 #include <cstdint>
 #include <unistd.h>
+
+#if defined(__APPLE__) && defined(__MACH__)
+#define SFTP_SSH2_MODULE_USE_DLFCN 1
+#define TCP_IP_CONNECTION_USE_BSD 1
+#elif defined(__GLIBC__)
+#define SFTP_SSH2_MODULE_USE_DLFCN 1
+#define TCP_IP_CONNECTION_USE_BSD 1
+#endif
 
 namespace sftp
 {
@@ -1190,9 +1193,9 @@ int main(int argc, char **argv)
         sftp::SFTPClient sftp_client = {};
         {
                 sftp_client.hostname = hostname;
-                sftp_client.hostname_size = std::strlen(hostname);
+                sftp_client.hostname_size = hostname_size;
                 sftp_client.username = username;
-                sftp_client.username_size = std::strlen(username);
+                sftp_client.username_size = username_size;
                 sftp_client.port = port;
                 sftp_client.opt_socks_proxy_hostname = opt_socks_proxy_hostname;
                 sftp_client.opt_socks_proxy_hostname_size =

@@ -4,6 +4,8 @@ set -u
 HERE="$(dirname ${0})"
 AHERE="$(cd "${HERE}" ; pwd)"
 
+os=${os:-osx}
+
 source "${HERE}"/scripts/lib/user.sh
 
 BUILD="${HERE}/builds"
@@ -26,6 +28,15 @@ function validate_config () {
 
 while [ "$#" -gt 0 ]; do
     case $1 in
+	--os)
+	    shift
+	    if [[ $# -eq 0 ]]; then
+		printf "expected an os\n"
+		exit 1
+	    fi
+	    os=${1}
+	    shift
+	    ;;
         --config)
             CONFIG=${2:?"build config expected"}
             validate_config
@@ -41,7 +52,7 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         --help|-h)
-            printf -- "Usage: %s [--profile-build][--config [%s]]\n" "${0}" "$(IFS="|" ; echo "${CONFIG_LIST[*]}")"
+            printf -- "Usage: %s [--os <linux,osx*>][--profile-build][--config [%s]]\n" "${0}" "$(IFS="|" ; echo "${CONFIG_LIST[*]}")"
             unset IFS
             exit 1
             shift
@@ -86,6 +97,32 @@ function must_compile_osx()
     fi
 }
 
+function must_compile_linux()
+{
+    local cflags
+    local cxxflags
+    cflags=("${cflags[@]}" "-DCOMPILER_GCC")
+    cflags=("${cflags[@]}" "-fno-rtti" "-fno-exceptions")
+    cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
+    cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Werror")
+    cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter")
+    cflags=("${cflags[@]}" -g -gdwarf-3 -fsanitize=address)
+    cxxflags=("${cxxflags[@]}" "-std=c++11")
+
+    if [[ "${CONFIG}" == "development" ]]; then
+        cflags=("${cflags[@]}" -DZWEI_SLOW -DZWEI_INTERNAL)
+    fi
+
+    if [[ "${CONFIG}" == "release" ]]; then
+        cflags=("${cflags[@]}" -O3 -DZWEI_SLOW=0 -DZWEI_INTERNAL=0)
+    fi
+
+    g++ "${cflags[@]}" "${cxxflags[@]}" "$@" -ldl
+    if [[ "$?" -ne 0 ]]; then
+        exit 1
+    fi
+}
+
 function must_compile_hammer()
 {
     "${SCONS}" -C "${HERE}"/modules/hammer \
@@ -113,62 +150,73 @@ SCONS=${SCONS:-$(which scons)}
 set -e
 must_compile_hammer
 
+function compile() {
+    case "${os}" in
+	osx) must_compile_osx "$@" ;;
+	linux) must_compile_linux "$@" ;;
+	*) die "Unknown os: '${os}'" ;;
+    esac
+}
+
 (
     PROGRAM="${BUILD}"/tests
-    must_compile_osx \
+    compile \
 	"${HERE}"/src/tests/tests_unit.cpp \
 	-o "${PROGRAM}" \
 	&& printf "PROGRAM\t%s\n" "${PROGRAM}"
 )
 
-must_compile_osx \
+[[ "${os}" != "osx" ]] || (must_compile_osx \
     -DZWEI_API_DLL=zw_dll_exported \
     -fvisibility=hidden -shared \
     "${HERE}"/src/spdr_unit.cpp \
     "${HERE}"/src/zwei_lib_osx_unit.cpp \
     -L"${BUILD}"/lib -lhammer \
     -o "${LIBRARY}" \
-    && printf "SHARED_LIBRARY\t%s\n" "${LIBRARY}"
+    && printf "SHARED_LIBRARY\t%s\n" "${LIBRARY}")
 
-must_compile_osx \
+[[ "${os}" != "osx" ]] || (must_compile_osx \
     "${HERE}"/src/spdr_unit.cpp \
     "${HERE}"/src/zwei_main_osx_unit.cpp \
     -o "${PROGRAM}" \
-    && printf "PROGRAM\t%s\n" "${PROGRAM}"
+    && printf "PROGRAM\t%s\n" "${PROGRAM}")
 
 (
     PROGRAM="${BUILD}"/shasum
-    must_compile_osx \
+    [[ "${os}" != "osx" ]] || (must_compile_osx \
         "${HERE}"/src/tests/shasum_unit.cpp \
         -DSHASUM_ASYNC=1 -DSHASUM_TRACING=0 \
         -o "${PROGRAM}" \
-        && printf "PROGRAM\t%s\n" "${PROGRAM}"
+        && printf "PROGRAM\t%s\n" "${PROGRAM}")
 )
+
 
 (
     PROGRAM="${BUILD}"/shasum_sync
-    must_compile_osx \
+    [[ "{$os}" != "osx" ]] || (must_compile_osx \
         "${HERE}"/src/tests/shasum_unit.cpp \
         -DSHASUM_ASYNC=0 -DSHASUM_TRACING=0 \
         -o "${PROGRAM}" \
-        && printf "PROGRAM\t%s\n" "${PROGRAM}"
+        && printf "PROGRAM\t%s\n" "${PROGRAM}")
 )
 
 (
     PROGRAM="${BUILD}"/socks_rfc1928
-    must_compile_osx \
+    compile \
         "${HERE}"/src/socks_rfc1928.cpp \
         -DSOCKS_RFC1928_MAIN=1 \
-        -o "${PROGRAM}"
+        -o "${PROGRAM}" \
+	&& printf "PROGRAM\t%s\n" "${PROGRAM}"
 )
 
 (
     PROGRAM="${BUILD}"/sftp
-    must_compile_osx \
+    compile \
         "${HERE}"/src/sftp.cpp \
         -DSFTP_MAIN=1 \
         -DSFTP_API=extern \
-        -o "${PROGRAM}"
+        -o "${PROGRAM}" \
+	&& printf "PROGRAM\t%s\n" "${PROGRAM}"
 )
 set +e
 

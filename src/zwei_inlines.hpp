@@ -10,10 +10,13 @@
 #include <cstdlib>
 #include <functional>
 
-#if defined(__clang__)
-#define zw_debugbreak() asm("int3")
+// TODO(nicolas): TAG(incomplete)
+#if defined(__clang__) // TAG(clang)
+#define zw_debugbreak() asm("int3") // TAG(x86)
+#elif defined(__GNUC__) // TAG(gcc)
+#define zw_debugbreak() asm("int3") // TAG(x86)
 #else
-#define zw_debugbreak() __debugbreak()
+#define zw_debugbreak() __debugbreak() // TAG(msvc)
 #endif
 
 #define zw_assert(__condition, __message)                                      \

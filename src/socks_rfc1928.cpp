@@ -86,7 +86,7 @@ SOCKSClientProtocolNext(SOCKSClientProtocol *client,
 #include <cstring>
 #include <limits>
 
-#if defined(__clang__)
+#if defined(__clang__) || defined (__GNUC__)
 #define SOCKS_PACKED_STRUCT_BEGIN _Pragma("pack(push)")
 #define SOCKS_PACKED_STRUCT_END _Pragma("pack(pop)")
 #endif
