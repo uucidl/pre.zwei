@@ -523,9 +523,9 @@ template <Iterator I, Integral N, UnaryPredicate P>
 bool all_n(I first, N count, P pred)
 {
         using ValueType = typename ReadableConcept<I>::value_type;
-        return find_if_n(first, count,
-                         [&](ValueType const &x) { return !pred(x); })
-                   .second == N(0);
+        return find_if_n(first, count, [&](ValueType const &x) {
+                       return !pred(x);
+               }).second == N(0);
 }
 
 template <InputIterator I0, InputIterator I1>

@@ -1508,17 +1508,17 @@ int main(int argc, char **argv)
                 trace(tog);
         }
         int fd = open(trace_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
-        spdr_report(global_spdr, SPDR_CHROME_REPORT,
-                    [](char const *string, void *user_data) {
-                            char buffer[4096];
-                            MemoryArena stack =
-                                memory_arena(buffer, sizeof buffer);
-                            int *fd_ptr = static_cast<int *>(user_data);
-                            auto tog = textoutputgroup_allocate(&stack, 64);
-                            push_cstr(tog, string);
-                            text_output_group_print(*fd_ptr, *tog);
-                    },
-                    &fd);
+        spdr_report(
+            global_spdr, SPDR_CHROME_REPORT,
+            [](char const *string, void *user_data) {
+                    char buffer[4096];
+                    MemoryArena stack = memory_arena(buffer, sizeof buffer);
+                    int *fd_ptr = static_cast<int *>(user_data);
+                    auto tog = textoutputgroup_allocate(&stack, 64);
+                    push_cstr(tog, string);
+                    text_output_group_print(*fd_ptr, *tog);
+            },
+            &fd);
         close(fd);
         spdr_deinit(&global_spdr);
 

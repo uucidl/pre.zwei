@@ -147,12 +147,13 @@ int main(int argc, char *argv[])
         if (cstr_terminate(trace_file_end, algos::end(trace_file))) {
                 printf("Writing traces to %s\n", trace_file);
                 int fd = open(trace_file, O_CREAT | O_TRUNC | O_WRONLY, 0644);
-                spdr_report(global_spdr, SPDR_CHROME_REPORT,
-                            [](char const *string, void *user_data) {
-                                    int fd = *((int *)user_data);
-                                    write(fd, string, cstr_len(string));
-                            },
-                            &fd);
+                spdr_report(
+                    global_spdr, SPDR_CHROME_REPORT,
+                    [](char const *string, void *user_data) {
+                            int fd = *((int *)user_data);
+                            write(fd, string, cstr_len(string));
+                    },
+                    &fd);
                 close(fd);
         }
         spdr_deinit(&global_spdr);
