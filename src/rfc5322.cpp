@@ -946,6 +946,7 @@ zw_internal void rfc5322_pprint_node(FILE *stream,
                         }
                         break;
                 }
+                TAG_FALLTHROUGH;
         }
         default:
                 if (base_token_type < TT_USER) {

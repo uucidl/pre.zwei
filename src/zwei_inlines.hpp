@@ -10,6 +10,13 @@
 #include <cstdlib>
 #include <functional>
 
+// tag switch cases which do fallthrough explicitely.
+#if defined(__GNUC__) and __GNUC__ >= 7
+#define TAG_FALLTHROUGH [[gnu::fallthrough]]
+#else
+#define TAG_FALLTHROUGH
+#endif
+
 // TODO(nicolas): TAG(incomplete)
 #if defined(__clang__)              // TAG(clang)
 #define zw_debugbreak() asm("int3") // TAG(x86)
