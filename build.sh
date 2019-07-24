@@ -193,19 +193,34 @@ function compile_c() {
 
 function must_compile_hammer()
 {
+    local HAMMER_DIR
+    local OUT
+    local OUTDIR
+
+    HAMMER_DIR="${HERE}"/modules/hammer
     if false; then
 	[[ -x "${SCONS}" ]] || die "missing scons or SCONS env variable"
-	"${SCONS}" -C "${HERE}"/modules/hammer \
+	"${SCONS}" -C "${HAMMER_DIR}" \
 		   prefix="/" DESTDIR="${ABUILD}" bindings=cpp \
 		   install
     else
 	compile_c -c -I"${HERE}" -D_GNU_SOURCE "${HERE}"/src/hammer_unit.c -o "${BUILD}"/hammer.o
-	ar r "${BUILD}"/libhammer.a "${BUILD}"/hammer.o
-	ranlib "${BUILD}"/libhammer.a
+	[[ -d "${BUILD}"/lib ]] || mkdir "${BUILD}"/lib
+	OUT="${BUILD}"/lib/libhammer.a
+	ar r "${OUT}" "${BUILD}"/hammer.o
+	ranlib "${OUT}"
+	printf "STATIC_LIBRARY\t%s\n" "${OUT}"
+	OUTDIR="${BUILD}"/include/hammer
+
+	[[ -d "${OUTDIR}" ]] || mkdir -p "${OUTDIR}"
+	for hf in allocator.h compiler_specifics.h glue.h hammer.h; do
+	    cp "${HAMMER_DIR}"/src/"${hf}" "${OUTDIR}"
+	done
+	printf "HEADERS\t%s\n" "${OUTDIR}"
     fi
     if [[ "$?" -ne 0 ]]; then
-        printf "error building hammer"
-        exit 1
+	printf "error building hammer"
+	exit 1
     fi
 }
 
