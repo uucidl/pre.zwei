@@ -262,6 +262,19 @@ must_compile_hammer
     -o "${PROGRAM}" \
     && printf "PROGRAM\t%s\n" "${PROGRAM}")
 
+[[ "${os}" != "linux" ]] || \
+    (must_compile_linux_cxx \
+	 "${HERE}"/src/spdr_unit.cpp \
+	 -Wno-error \
+	 -c -o "${BUILD}"/spdr.o \
+	 &&
+	 must_compile_linux_cxx \
+	     "${BUILD}"/spdr.o \
+	     "${HERE}"/src/zwei_main_linux_unit.cpp \
+	     -L"${BUILD}"/lib -lhammer \
+	     -o "$PROGRAM" \
+	     && printf "PROGRAM\t%s\n" "${PROGRAM}")
+
 (
     PROGRAM="${BUILD}"/shasum
     [[ "${os}" != "osx" ]] || (must_compile_osx \
