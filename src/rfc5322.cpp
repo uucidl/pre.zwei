@@ -11,8 +11,10 @@
 
 #include "../modules/uu.spdr/include/spdr/spdr.hh"
 #include "hammer.hpp"
+
 #include <cinttypes>
 #include <functional>
+#include <cstring>
 
 /**
   @file
