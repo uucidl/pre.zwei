@@ -65,7 +65,7 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-function must_compile_osx()
+function must_compile_osx_cxx()
 {
     local cflags
     local cxxflags
@@ -76,7 +76,7 @@ function must_compile_osx()
     cxxflags=("${cxxflags[@]}" -stdlib=libc++)
 
     cflags=("${cflags[@]}" "-DCOMPILER_LLVM")
-    cflags=("${cflags[@]}" "-fno-rtti" "-fno-exceptions")
+    cxxflags=("${cflags[@]}" "-fno-rtti" "-fno-exceptions")
     cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
     cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Wshorten-64-to-32" "-Werror")
     cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter")
@@ -97,12 +97,12 @@ function must_compile_osx()
     fi
 }
 
-function must_compile_linux()
+function must_compile_linux_cxx()
 {
     local cflags
     local cxxflags
     cflags=("${cflags[@]}" "-DCOMPILER_GCC")
-    cflags=("${cflags[@]}" "-fno-rtti" "-fno-exceptions")
+    cxxflags=("${cflags[@]}" "-fno-rtti" "-fno-exceptions")
     cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
     cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Werror")
     cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter")
@@ -121,6 +121,14 @@ function must_compile_linux()
     if [[ "$?" -ne 0 ]]; then
         exit 1
     fi
+}
+
+function compile() {
+    case "${os}" in
+	osx) must_compile_osx_cxx "$@" ;;
+	linux) must_compile_linux_cxx "$@" ;;
+	*) die "Unknown os: '${os}'" ;;
+    esac
 }
 
 function must_compile_hammer()
@@ -145,18 +153,9 @@ if ${PROFILING}; then
 fi
 
 SCONS=${SCONS:-$(which scons)}
-[[ -x "${SCONS}" ]] || die "missing scons or SCONS env variable"
 
 set -e
 must_compile_hammer
-
-function compile() {
-    case "${os}" in
-	osx) must_compile_osx "$@" ;;
-	linux) must_compile_linux "$@" ;;
-	*) die "Unknown os: '${os}'" ;;
-    esac
-}
 
 (
     PROGRAM="${BUILD}"/tests
