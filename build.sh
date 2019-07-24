@@ -123,6 +123,58 @@ function must_compile_linux_cxx()
     fi
 }
 
+function must_compile_osx_c()
+{
+    local cflags
+    local cxxflags
+    local PLATFORM_SDK="/Applications/Xcode.app/Contents//Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/usr/include/"
+
+    cflags=("${cflags[@]}" -mmacosx-version-min=10.8)
+    cflags=("${cflags[@]}" -isystem "${PLATFORM_SDK}")
+
+    cflags=("${cflags[@]}" "-DCOMPILER_LLVM")
+    cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
+    cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Wshorten-64-to-32" "-Werror")
+    cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter")
+    cflags=("${cflags[@]}" -g -gdwarf-3 -fsanitize=address)
+
+    if [[ "${CONFIG}" == "development" ]]; then
+        cflags=("${cflags[@]}" -DZWEI_SLOW -DZWEI_INTERNAL)
+    fi
+
+    if [[ "${CONFIG}" == "release" ]]; then
+        cflags=("${cflags[@]}" -O3 -DZWEI_SLOW=0 -DZWEI_INTERNAL=0)
+    fi
+
+    clang "${cflags[@]}" "$@"
+    if [[ "$?" -ne 0 ]]; then
+        exit 1
+    fi
+}
+
+function must_compile_linux_c()
+{
+    local cflags
+    cflags=("${cflags[@]}" "-DCOMPILER_GCC")
+    cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
+    cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Werror")
+    cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter")
+    cflags=("${cflags[@]}" -g -gdwarf-3 -fsanitize=address)
+
+    if [[ "${CONFIG}" == "development" ]]; then
+        cflags=("${cflags[@]}" -DZWEI_SLOW -DZWEI_INTERNAL)
+    fi
+
+    if [[ "${CONFIG}" == "release" ]]; then
+        cflags=("${cflags[@]}" -O3 -DZWEI_SLOW=0 -DZWEI_INTERNAL=0)
+    fi
+
+    gcc "${cflags[@]}" "$@" -ldl
+    if [[ "$?" -ne 0 ]]; then
+        exit 1
+    fi
+}
+
 function compile() {
     case "${os}" in
 	osx) must_compile_osx_cxx "$@" ;;
@@ -131,11 +183,26 @@ function compile() {
     esac
 }
 
+function compile_c() {
+    case "${os}" in
+	osx) must_compile_osx_c "$@" ;;
+	linux) must_compile_linux_c "$@" ;;
+	*) die "Unknown os: '${os}'" ;;
+    esac
+}
+
 function must_compile_hammer()
 {
-    "${SCONS}" -C "${HERE}"/modules/hammer \
-               prefix="/" DESTDIR="${ABUILD}" bindings=cpp \
-               install
+    if false; then
+	[[ -x "${SCONS}" ]] || die "missing scons or SCONS env variable"
+	"${SCONS}" -C "${HERE}"/modules/hammer \
+		   prefix="/" DESTDIR="${ABUILD}" bindings=cpp \
+		   install
+    else
+	compile_c -c -I"${HERE}" -D_GNU_SOURCE "${HERE}"/src/hammer_unit.c -o "${BUILD}"/hammer.o
+	ar r "${BUILD}"/libhammer.a "${BUILD}"/hammer.o
+	ranlib "${BUILD}"/libhammer.a
+    fi
     if [[ "$?" -ne 0 ]]; then
         printf "error building hammer"
         exit 1
