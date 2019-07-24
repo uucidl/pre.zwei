@@ -13,8 +13,8 @@
 #include "hammer.hpp"
 
 #include <cinttypes>
-#include <functional>
 #include <cstring>
+#include <functional>
 
 /**
   @file
