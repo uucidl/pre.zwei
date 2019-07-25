@@ -1,4 +1,5 @@
 #include "zwei_app.hpp"
+#include "zwei_files.hpp"
 #include "zwei_textapp.cpp"
 
 #include <cstdio>
@@ -11,6 +12,11 @@ int main(int argc, char **argv)
 {
         Platform platform = {};          // trivial non-operative platform.
         ProgramResources resources = {}; // no memory whatsoever.
+
+        const auto scratch_buffer_size = 1 * 1024 * 1024 * 1024;
+        const auto scratch_buffer = calloc(scratch_buffer_size, 1);
+        fatal_ifnot(scratch_buffer, "Could not allocate scratch buffer");
+        DEFER(free(scratch_buffer));
 
         init_app(platform, 0, &resources);
 
@@ -29,10 +35,37 @@ int main(int argc, char **argv)
                                 continue;
                         }
 
-                        (void)process_message;         // TODO(nicolas)
-                        (void)print_processed_message; // TODO(nicolas)
+                        MemoryArena transient_arena =
+                            memory_arena(scratch_buffer, scratch_buffer_size);
+                        MemoryArena result_arena =
+                            push_sub_arena(transient_arena, MEGABYTES(2));
 
-                        break;
+                        const auto file_loader_size =
+                            get_file_loader_allocation_size(1, 1 * 1024 * 1024);
+                        auto &file_loader = create_file_loader(
+                            1, push_bytes(&transient_arena, file_loader_size),
+                            file_loader_size);
+                        push_file(file_loader, filename, 0);
+                        wait_for_available_files(file_loader);
+
+                        for (auto &&fh : available_files(file_loader)) {
+                                accept(file_loader, fh);
+                                printf("Loaded file %s\n",
+                                       get_filename(file_loader, fh));
+                                ProcessedMessage result = {};
+                                const auto content =
+                                    get_content(file_loader, fh);
+                                DEFER(release_content(file_loader, fh));
+                                process_message(
+                                    zwei, get_filename(file_loader, fh),
+                                    get_filepath(file_loader, fh),
+                                    begin(content), end(content),
+                                    transient_arena, result_arena, result);
+                                print_processed_message(result,
+                                                        transient_arena);
+                        }
+
+                        destroy(file_loader);
                 }
                 if (argi < argc) {
                         fprintf(stderr, "Ignoring extra arguments: %s...\n",
