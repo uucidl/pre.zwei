@@ -52,4 +52,5 @@ int main(int argc, char **argv)
 
 #define ZWEI_TEXTAPP_IMPLEMENTATION
 #include "secure_hash_standard.cpp"
+#include "zwei_files_unix_synchronous.cpp"
 #include "zwei_textapp.cpp"

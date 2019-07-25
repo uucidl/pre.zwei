@@ -1526,7 +1526,7 @@ int main(int argc, char **argv)
 }
 
 #if 0 * ZWEI_SLOW
-#include "zwei_files_osx_synchronous.cpp"
+#include "zwei_files_unix_synchronous.cpp"
 #else
 #include "zwei_files_osx_async.cpp"
 #endif

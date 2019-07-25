@@ -1,4 +1,7 @@
+#include "zwei_files.hpp"
+
 #include "block_allocator.hpp"
+#include "zwei_files_platform.cpp"
 
 #include <algorithm>
 #include <cmath>
@@ -17,7 +20,6 @@ struct FileLoaderFileEntry {
 
 struct FileLoader {
         MemoryArena arena;
-        MemoryArena transient_arena;
         size_t entries_capacity;
         size_t entries_count;
         FileLoaderFileEntry *entries;
@@ -56,8 +58,6 @@ create_file_loader(size_t maximum_file_count, void *memory, size_t memory_size)
             new (push_bytes(&base, sizeof(FileLoader))) FileLoader;
         FileLoader &file_loader = *ptr;
         file_loader.arena = push_sub_arena(base, memory_size - base.used);
-        file_loader.transient_arena =
-            push_sub_arena(file_loader.arena, MEGABYTES(1));
         file_loader.entries_capacity = maximum_file_count;
         file_loader.entries_count = 0;
         file_loader.entries =
@@ -144,7 +144,8 @@ zw_internal uint8_t *read_entire_file(FileLoader &file_loader,
                 return nullptr;
         }
         DEFER(close(entry_fd));
-        fcntl(entry_fd, F_RDAHEAD, 1);
+
+        unix_advise_sequential_readonce(entry_fd);
 
         SPDR_END(global_spdr, "file_loader", "open");
 
@@ -351,3 +352,6 @@ char const *get_filename(FileLoader &file_loader,
 
         return pos;
 }
+
+#define ZWEI_FILES_PLATFORM_IMPLEMENTATION
+#include "zwei_files_platform.cpp"

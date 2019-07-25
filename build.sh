@@ -278,7 +278,7 @@ must_compile_hammer
 (
     PROGRAM="${BUILD}"/shasum
     [[ "${os}" != "osx" ]] || (must_compile_osx \
-        "${HERE}"/src/tests/shasum_unit.cpp \
+        "${HERE}"/src/tests/shasum_osx_unit.cpp \
         -DSHASUM_ASYNC=1 -DSHASUM_TRACING=0 \
         -o "${PROGRAM}" \
         && printf "PROGRAM\t%s\n" "${PROGRAM}")
@@ -288,7 +288,7 @@ must_compile_hammer
 (
     PROGRAM="${BUILD}"/shasum_sync
     [[ "{$os}" != "osx" ]] || (must_compile_osx \
-        "${HERE}"/src/tests/shasum_unit.cpp \
+        "${HERE}"/src/tests/shasum_osx_unit.cpp \
         -DSHASUM_ASYNC=0 -DSHASUM_TRACING=0 \
         -o "${PROGRAM}" \
         && printf "PROGRAM\t%s\n" "${PROGRAM}")

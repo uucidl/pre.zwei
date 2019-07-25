@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
 #if SHASUM_ASYNC
 #include "../zwei_files_osx_async.cpp"
 #else
-#include "../zwei_files_osx_synchronous.cpp"
+#include "../zwei_files_unix_synchronous.cpp"
 #endif
 
 extern "C" {
