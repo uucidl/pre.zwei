@@ -1,5 +1,7 @@
 #include "hammer_utils.hpp"
 
+#include "hammer_defines.hpp"
+
 // TODO(nicolas): parsing performance of lower-case US-ASCII.
 //
 // All the ABNF string tokens areupposed to be case-insensitive.

@@ -5,6 +5,7 @@
 #include "hammer_iterators.hpp"
 #include "hammer_utils.hpp"
 #include "zwei_logging.hpp"
+#include "zwei_types.hpp"
 
 #include "hammer.hpp"
 

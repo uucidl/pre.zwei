@@ -1,5 +1,9 @@
 #include "bits.hpp"
 
+#include "zwei_inlines.hpp"
+
+#include <cstdio>
+
 #define fatal_ifnot_formatted(__expr, ...)                                     \
         do {                                                                   \
                 char buffer[4096];                                             \

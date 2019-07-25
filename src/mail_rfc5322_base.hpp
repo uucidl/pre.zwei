@@ -1,5 +1,10 @@
 #pragma once
 
+#include "hammer_fwd.hpp"
+#include "zwei_inlines.hpp"
+
+struct ABNF_RFC5234;
+
 struct RFC5322_Base {
         HParser *FWS;
         HParser *CFWS;

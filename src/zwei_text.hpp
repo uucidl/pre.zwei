@@ -1,9 +1,14 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
 // TODO(nicolas): question and critique this notion of text output group.
 // What is the problem that it solves? Does it solve it well? It seems
 // that it creates more useability problems than help. Most users of a
 // logging facility want a fire&forget facility.
+
+struct MemoryArena;
 
 /**
  * Container of commands for outputting (formatted) text.

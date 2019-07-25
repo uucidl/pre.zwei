@@ -2,6 +2,8 @@
 
 #include "zwei_text.hpp"
 
+#include "../builds/include/hammer/hammer.h"
+
 // <PARSERS...
 
 #define UH_SEQ(...) h_sequence(__VA_ARGS__, NULL)

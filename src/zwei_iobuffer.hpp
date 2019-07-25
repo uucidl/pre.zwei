@@ -1,5 +1,7 @@
 #pragma once
 
+#include "zwei_inlines.hpp"
+
 /** @file: buffer-centric IO.
  *
  * @url: https://fgiesen.wordpress.com/2011/11/21/buffer-centric-io/

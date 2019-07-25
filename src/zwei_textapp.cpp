@@ -94,7 +94,7 @@ zw_internal void print_message_summary(MessageSummary const &message_summary,
         // FEATURE(nicolas): print raw content of From: To: CC
         // Sender: Message-Id: In-Reply-To: Subject:
         auto text_output_group =
-            textoutputgroup_allocate(&transient_arena, KILOBYTES(16));
+            textoutputgroup_allocate(&transient_arena, KILOBYTES(32));
 
         // TODO(nicolas): having a delimited table printing abstraction
         // would help with these (and the app)

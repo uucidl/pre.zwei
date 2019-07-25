@@ -1,8 +1,16 @@
 #include "algos_tests.hpp"
 
+#include "algos.hpp"
+
+#include <cstdint>
+
 #if !defined(fatal_ifnot)
-#error "please define `fatal_ifnot` macro"
-#define fatal_ifnot(__expr, message)
+#include <cassert>
+#define fatal_ifnot(__expr, message) assert(__expr)
+#endif
+
+#if !defined(fatal_if)
+#define fatal_if(__expr, message) fatal_ifnot(!(__expr), message)
 #endif
 
 namespace algos

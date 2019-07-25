@@ -1,5 +1,9 @@
 #include "mail_rfc5322_base.hpp"
 
+#include "abnf_rfc5234.hpp"
+#include "hammer_defines.hpp"
+#include "hammer_utils.hpp"
+
 zw_internal RFC5322_Base rfc5322_base_parsers;
 
 HAMMER_ACTION(act_comment)

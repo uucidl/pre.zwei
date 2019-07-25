@@ -1,5 +1,7 @@
 #pragma once
 
+#include "zwei_inlines.hpp"
+
 // TODO(nicolas): whenever a segment of string is smaller than this 16
 // bytes, then it's worth actually storing it in place as bytes
 // directly

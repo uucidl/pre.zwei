@@ -11,6 +11,8 @@ sha1(uint8_t const *bytes, size_t bytes_size, uint8_t result[20])
 }
 // ..OSX implementation for sha1>
 #else
+#include <cstring>
+
 zw_internal void
 sha1(uint8_t const *bytes, size_t const bytes_size, uint8_t result[20])
 {

@@ -2,8 +2,8 @@
 // An allocator dividing a region of memory in blocks that can be split and
 // joined as needed
 
-#include <cmath>  // for std::ceil
-#include <thread> // for std::mutex
+#include <cmath> // for std::ceil
+#include <mutex> // for std::mutex
 
 template <typename N, Integral I> N smallest_multiple(N x, I divider)
 {

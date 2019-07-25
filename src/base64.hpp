@@ -1,6 +1,7 @@
 #pragma once
 
 #include "hammer_fwd.hpp"
+#include "zwei_inlines.hpp"
 
 struct ABNF_RFC5234;
 

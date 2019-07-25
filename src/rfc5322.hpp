@@ -5,6 +5,7 @@
 #include "hammer.hpp"
 #include "hammer_fwd.hpp"
 #include "hammer_iterators.hpp"
+#include "hammer_utils.hpp"
 #include "zwei_types.hpp"
 
 struct RFC2045;
