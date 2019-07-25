@@ -68,3 +68,5 @@ typedef GET_MESSAGE_SUMMARY((*GetMessageSummaryFn));
 #define PARSE_ZOE_MAILSTORE_FILENAME(name)                                     \
         int name(ZoeMailStoreFile *result, char const *filename)
 typedef PARSE_ZOE_MAILSTORE_FILENAME((*ParseZoeMailstoreFilenameFn));
+
+extern SPDR_Context *global_spdr;
