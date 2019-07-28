@@ -10,6 +10,7 @@
 #include "rfc2045.hpp"
 #include "rfc2047.hpp"
 #include "utf8_decode.cpp"
+#include "zwei_cstrings.hpp"
 
 #include "../modules/uu.spdr/include/spdr/spdr.hh"
 #include "hammer.hpp"

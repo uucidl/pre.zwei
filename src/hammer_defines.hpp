@@ -1,5 +1,6 @@
 #pragma once
 
+#include "algos_concepts.hpp"
 #include "zwei_text.hpp"
 
 #include "../builds/include/hammer/hammer.h"

@@ -2,6 +2,7 @@
 // An allocator dividing a region of memory in blocks that can be split and
 // joined as needed
 
+#include "algos.hpp"
 #include "algos_concepts.hpp"
 #include "zwei_app.hpp"
 #include "zwei_inlines.hpp"

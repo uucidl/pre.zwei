@@ -15,6 +15,7 @@
 #include "hammer_utils.hpp"
 #include "mime_types.hpp"
 #include "rfc2045.hpp"
+#include "zwei_cstrings.hpp"
 #include "zwei_logging.hpp"
 #include "zwei_types.hpp"
 

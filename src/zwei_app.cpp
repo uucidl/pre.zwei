@@ -17,7 +17,7 @@
   TODO(nicolas): work task queue
   TODO(nicolas): LINUX port. (started)
   TODO(nicolas): WIN32 port. (started)
-  TODO(nicolas): cross compilation to <powerpc e500 v2> (Synology NAS)
+  TODO(nicolas): cross compilation to <powerpc e500 v2> (Synology NAS) (started)
 
   ## Features
 
@@ -74,6 +74,7 @@
   2015/1/15/EF8AF508014AA7B30E7DB0475AB1742E.eml
 */
 
+#include "zwei_cstrings.hpp"
 #include "zwei_inlines.hpp"
 
 #include "zwei_app.hpp"

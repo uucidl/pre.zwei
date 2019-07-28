@@ -1,4 +1,6 @@
 #include "zwei_text.hpp"
+#include "algos.hpp"
+#include "zwei_cstrings.hpp"
 #include "zwei_textoutputgroup.hpp"
 
 #include <cstdarg>
