@@ -1,0 +1,97 @@
+import libc
+
+#foreign(header="../../builds/include/hammer/hammer.h")
+
+@foreign
+struct IHAllocator {
+    mem: char[64];
+}
+
+@foreign
+func hallocator_bridge_data(allocator: Allocator*): IHAllocator;
+
+func hallocator_bridge(data: IHAllocator*): HAllocator* {
+    return (:HAllocator*) data;
+}
+
+#foreign(header="hammer_bridge.h", source="hammer_bridge.c") // some glue between hammer and ion
+
+@foreign("HAllocator")
+struct HAllocator;
+
+@foreign("HArena")
+struct HArena;
+
+@foreign("HParser")
+struct HParser;
+
+@foreign
+struct HParseResult {
+    ast: HParsedToken*;
+    bit_length: int64;
+    arena: HArena*;
+}
+
+@foreign
+struct HParsedToken {
+    token_type: HTokenType;
+    union {
+        bytes: HBytes;
+        sint: int64;
+        uint: uint64;
+        dbl: double;
+        flt: float;
+        seq: HCountedArray*;
+        user: void*;
+    }
+    index: usize;
+    bit_length: usize;
+    bit_offset: char;
+}
+
+@foreign
+struct HBytes {
+    token: uint8 const*;
+    len: usize;
+}
+
+@foreign
+struct HCountedArray {
+    capacity: usize;
+    used: usize;
+    arena: HArena*;
+    elements: HParsedToken**;
+}
+
+@foreign
+enum HTokenType {
+  TT_INVALID = 0,
+  TT_NONE = 1,
+  TT_BYTES = 2,
+  TT_SINT = 4,
+  TT_UINT = 8,
+  TT_SEQUENCE = 16,
+  TT_RESERVED_1, // reserved for backend-specific internal use
+  TT_ERR = 32,
+  TT_USER = 64,
+  TT_MAX
+}
+
+
+@foreign
+func h_parse__m(a: HAllocator*, parser: HParser /*const*/*, input: uint8 const*, length: usize): HParseResult*;
+
+@foreign
+func h_pprint(stream: libc.FILE*, tok: HParsedToken const*, indent: int, delta: int): void;
+
+@foreign
+func h_ch__m(a: HAllocator*, c: uint8): HParser*;
+
+@foreign
+func h_ch_range__m(a: HAllocator*, lower: uint8, upper: uint8): HParser*;
+
+@foreign
+func h_choice__m(a: HAllocator*, ...): HParser*;
+
+@foreign
+func h_sequence__m(a: HAllocator*, ...): HParser*;

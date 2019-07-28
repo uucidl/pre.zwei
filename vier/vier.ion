@@ -1,0 +1,84 @@
+// vier is the followup to zwei
+var USAGE = """Usage:
+    <program> <file>*
+""";
+
+import libc
+import std
+
+import .parsing
+
+struct MessageSummary {
+    valid_rfc5322: bool;
+}
+
+struct Options {
+    input_files: char const*[];
+}
+
+func main(argc: int, argv: char const**): int {
+    libc.printf("Hello from vier.\n");
+    options := parse_args(argc-1, &argv[1]);
+    for (i:=0; i < std.alen(options.input_files); i++) {
+        libc.printf("Considering file %s.\n", options.input_files[i]);
+        message := parse_message_source_file(options.input_files[i]);
+        if (!message.valid_rfc5322) {
+            libc.printf("Message isn't valid RFC5322 message.\n");
+            continue;
+        }
+    }
+    return 0; // it's also unimplemented.
+}
+
+func parse_args(num_args: int, args: char const**): Options {
+    test_parsing();
+
+    options: Options;
+    i := 0;
+    // Parse -- options, stop at first non-option or "--":
+    while (i != num_args) {
+        if (libc.strcmp(args[i], "--help") == 0) {
+            i++;
+            libc.printf("%s", USAGE);
+            continue;
+        } else if (libc.strcmp(args[i], "--") == 0) {
+            i++;
+            break;
+        } else {
+            break;
+        }
+    }
+    // Positional arguments:
+    for (; i != num_args; i++) {
+        std.apush(options.input_files, args[i]);
+    }
+    return options;
+}
+
+func parse_message_source_file(path: char const*): MessageSummary {
+    return {};
+}
+
+func test_parsing() {
+    lol := parsing.abnf_rfc5234(0);
+    memdata := parsing.hallocator_bridge_data(0);
+    mem := parsing.hallocator_bridge(&memdata);
+    {
+        result := parsing.h_parse__m(mem, lol.CRLF, (:uint8*)"\r\n", 2);
+        if (result) {
+            libc.printf("Testing CRLF parser: Res: %d\n", result.ast.token_type);
+            parsing.h_pprint(libc.stdout, result.ast, 4, 4);
+        }
+    }
+    {
+        result := parsing.h_parse__m(mem, lol.CRLF, (:uint8*)"lol", 3);
+        if (result) {
+            libc.printf("Testing CRLF parser: Res: %d\n", result.ast.token_type);
+            parsing.h_pprint(libc.stdout, result.ast, 4, 4);
+        }
+    }
+}
+
+// Local Variables:
+// compile-command: "cd ~/code/ds213/pre.zwei && (IONHOME=~/code/bitwise/ion ~/code/bitwise/ion/ion -os linux -arch x64 vier) && (guix environment --ad-hoc gcc-toolchain -- gcc -g -c out_vier.c && guix environment --ad-hoc gcc-toolchain -- g++ -g -DZWEI_SLOW -DZWEI_INTERNAL out_vier.o src/spdr_unit.cpp src/zwei_lib_osx_unit.cpp -Lbuilds/lib -lhammer -o vier.elf) && ./vier.elf assets/test.eml"
+// End:

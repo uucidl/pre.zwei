@@ -1,0 +1,30 @@
+// Augmented BNF for syntax specifications: ABNF
+// RFC5234
+// @url: https://tools.ietf.org/html/rfc5234
+
+struct ABNF_RFC5234 {
+    ALPHA, BIT, CHAR, CRLF, CTL, DIGIT, DQUOTE, HEXDIG, LWSP, OCTET, SP, VCHAR, WSP:
+        HParser*;
+}
+
+func abnf_rfc5234(allocator: Allocator*): ABNF_RFC5234
+{
+    rules: ABNF_RFC5234;
+
+    allocator_data := hallocator_bridge_data(allocator);
+    mem := hallocator_bridge(&allocator_data);
+
+    rules.ALPHA = h_choice__m(mem, h_ch_range__m(mem, 0x41, 0x5a), h_ch_range__m(mem, 0x61, 0x7a), 0);
+    rules.BIT = h_choice__m(mem, h_ch__m(mem, '0'), h_ch__m(mem, '1'), 0);
+    // any 7-bit US-ASCII character, excluding NUL
+    rules.CHAR = h_ch_range__m(mem, 0x01, 0x7f);
+    CR := h_ch__m(mem, 0x0D);
+    LF := h_ch__m(mem, 0x0A);
+    rules.CRLF = h_sequence__m(mem, CR, LF, 0); // @perf @todo: why not a special ch sequence?
+
+    // controls
+    // @todo @incomplete finish this
+
+
+    return rules;
+}
