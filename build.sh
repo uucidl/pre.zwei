@@ -80,7 +80,8 @@ function must_compile_osx_cxx()
     cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
     cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Wshorten-64-to-32" "-Werror")
     cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter")
-    cflags=("${cflags[@]}" -g -gdwarf-3 -fsanitize=address)
+    cflags=("${cflags[@]}" -g -gdwarf-3)
+    cflags=("${cflags[@]}" -fsanitize=address)
     cxxflags=("${cxxflags[@]}" "-std=c++11")
 
     if [[ "${CONFIG}" == "development" ]]; then
@@ -106,7 +107,8 @@ function must_compile_linux_cxx()
     cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
     cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Werror")
     cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter")
-    cflags=("${cflags[@]}" -g -gdwarf-3 -fsanitize=address)
+    cflags=("${cflags[@]}" -g -gdwarf-3)
+    cflags=("${cflags[@]}" -fsanitize=address)
     cxxflags=("${cxxflags[@]}" "-std=c++11")
 
     if [[ "${CONFIG}" == "development" ]]; then
@@ -136,7 +138,8 @@ function must_compile_osx_c()
     cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
     cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Wshorten-64-to-32" "-Werror")
     cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter")
-    cflags=("${cflags[@]}" -g -gdwarf-3 -fsanitize=address)
+    cflags=("${cflags[@]}" -g -gdwarf-3)
+    cflags=("${cflags[@]}" -fsanitize=address)
 
     if [[ "${CONFIG}" == "development" ]]; then
         cflags=("${cflags[@]}" -DZWEI_SLOW -DZWEI_INTERNAL)
@@ -159,7 +162,8 @@ function must_compile_linux_c()
     cflags=("${cflags[@]}" "-isystem" "${HERE}"/include)
     cflags=("${cflags[@]}" "-Wall" "-Wextra" "-Werror")
     cflags=("${cflags[@]}" "-Wno-padded" "-Wno-unused-parameter")
-    cflags=("${cflags[@]}" -g -gdwarf-3 -fsanitize=address)
+    cflags=("${cflags[@]}" -g -gdwarf-3)
+    cflags=("${cflags[@]}" -fsanitize=address)
 
     if [[ "${CONFIG}" == "development" ]]; then
         cflags=("${cflags[@]}" -DZWEI_SLOW -DZWEI_INTERNAL)
@@ -204,7 +208,7 @@ function must_compile_hammer()
 		   prefix="/" DESTDIR="${ABUILD}" bindings=cpp \
 		   install
     else
-	compile_c -c -I"${HERE}" -D_GNU_SOURCE "${HERE}"/src/hammer_unit.c -o "${BUILD}"/hammer.o
+	compile_c -std=c11 -c -I"${HERE}" -D_GNU_SOURCE "${HERE}"/src/hammer_unit.c -o "${BUILD}"/hammer.o
 	[[ -d "${BUILD}"/lib ]] || mkdir "${BUILD}"/lib
 	OUT="${BUILD}"/lib/libhammer.a
 	ar r "${OUT}" "${BUILD}"/hammer.o
@@ -312,6 +316,12 @@ must_compile_hammer
         -o "${PROGRAM}" \
 	&& printf "PROGRAM\t%s\n" "${PROGRAM}"
 )
+
+find "${HERE}"/src \( -name "*.cpp" -a ! -name "*_osx[_\.]*" \) | while read x; do
+    #TODO(nicolas) convert to multiplatform
+    gcc -std=c++11 -DZWEI_SLOW=1 -DZWEI_INTERNAL=1 -fsyntax-only "${x}"
+done
+
 set +e
 
 # beep
