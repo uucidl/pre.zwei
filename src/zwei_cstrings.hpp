@@ -5,6 +5,8 @@
 
 #include "algos.hpp"
 
+#include <functional> // for std::equal_to
+
 // NOTE(nicolas): these query functions are not utf8 safe. their use is to be
 // reserved to programmatic/internal strings and not used for user strings.
 
