@@ -27,6 +27,8 @@ func main(argc: int, argv: char const**): int {
             continue;
         }
     }
+
+    std.afree(options.input_files);
     return 0; // it's also unimplemented.
 }
 
@@ -60,8 +62,11 @@ func parse_message_source_file(path: char const*): MessageSummary {
 }
 
 func test_parsing() {
-    lol := parsing.abnf_rfc5234(0);
-    memdata := parsing.hallocator_bridge_data(0);
+    allocator := std.arena_allocator(0, 0);
+
+    lol := parsing.abnf_rfc5234(&allocator.base);
+
+    memdata := parsing.hallocator_bridge_data(&allocator.base);
     mem := parsing.hallocator_bridge(&memdata);
     {
         result := parsing.h_parse__m(mem, lol.CRLF, (:uint8*)"\r\n", 2);
@@ -77,8 +82,10 @@ func test_parsing() {
             parsing.h_pprint(libc.stdout, result.ast, 4, 4);
         }
     }
+
+    std.arena_free(&allocator);
 }
 
 // Local Variables:
-// compile-command: "cd ~/code/ds213/pre.zwei && (IONHOME=~/code/bitwise/ion ~/code/bitwise/ion/ion -os linux -arch x64 vier) && (guix environment --ad-hoc gcc-toolchain -- gcc -g -c out_vier.c && guix environment --ad-hoc gcc-toolchain -- g++ -g -DZWEI_SLOW -DZWEI_INTERNAL out_vier.o src/spdr_unit.cpp src/zwei_lib_osx_unit.cpp -Lbuilds/lib -lhammer -o vier.elf) && ./vier.elf assets/test.eml"
+// compile-command: "cd ~/code/ds213/pre.zwei && (IONHOME=~/code/bitwise/ion ~/code/bitwise/ion/ion -os linux -arch x64 vier) && (guix environment --ad-hoc gcc-toolchain -- gcc -fsanitize=address -g -o vier.elf out_vier.c -Lbuilds/lib -lhammer) && ./vier.elf assets/test.eml"
 // End:

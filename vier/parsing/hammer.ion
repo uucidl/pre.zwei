@@ -94,4 +94,7 @@ func h_ch_range__m(a: HAllocator*, lower: uint8, upper: uint8): HParser*;
 func h_choice__m(a: HAllocator*, ...): HParser*;
 
 @foreign
+func h_many__m(a: HAllocator*, p: HParser*): HParser*;
+
+@foreign
 func h_sequence__m(a: HAllocator*, ...): HParser*;

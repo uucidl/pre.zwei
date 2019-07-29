@@ -3,28 +3,57 @@
 // @url: https://tools.ietf.org/html/rfc5234
 
 struct ABNF_RFC5234 {
-    ALPHA, BIT, CHAR, CRLF, CTL, DIGIT, DQUOTE, HEXDIG, LWSP, OCTET, SP, VCHAR, WSP:
+    ALPHA, BIT, CHAR, CRLF, CTL, DIGIT, DQUOTE, HEXDIG, OCTET, SP, VCHAR, WSP:
         HParser*;
 }
 
 func abnf_rfc5234(allocator: Allocator*): ABNF_RFC5234
 {
+    // We kept below some rules created but private. Those are rules that are
+    // defined in the RFC, but that we don't want to use. We keep them here
+    // in case they indeed need to be used.
     rules: ABNF_RFC5234;
 
     allocator_data := hallocator_bridge_data(allocator);
-    mem := hallocator_bridge(&allocator_data);
+    a := hallocator_bridge(&allocator_data);
 
-    rules.ALPHA = h_choice__m(mem, h_ch_range__m(mem, 0x41, 0x5a), h_ch_range__m(mem, 0x61, 0x7a), 0);
-    rules.BIT = h_choice__m(mem, h_ch__m(mem, '0'), h_ch__m(mem, '1'), 0);
-    // any 7-bit US-ASCII character, excluding NUL
-    rules.CHAR = h_ch_range__m(mem, 0x01, 0x7f);
-    CR := h_ch__m(mem, 0x0D);
-    LF := h_ch__m(mem, 0x0A);
-    rules.CRLF = h_sequence__m(mem, CR, LF, 0); // @perf @todo: why not a special ch sequence?
+    rules.ALPHA = h_choice__m(a, h_ch_range__m(a, 0x41, 0x5a), h_ch_range__m(a, 0x61, 0x7a), 0);
+    rules.BIT = h_choice__m(a, h_ch__m(a, '0'), h_ch__m(a, '1'), 0);
+    rules.CHAR = h_ch_range__m(a, 0x01, 0x7f); // any 7-bit US-ASCII character, excluding NUL
+    CR := h_ch__m(a, 0x0D);
+    LF := h_ch__m(a, 0x0A);
+    rules.CRLF = h_sequence__m(a, CR, LF, 0); // @perf @todo: why not a special ch sequence?
+    rules.CTL = h_choice__m(a, h_ch_range__m(a, 0x00, 0x1F), h_ch__m(a, 0x7F), 0);
 
-    // controls
-    // @todo @incomplete finish this
+    rules.DIGIT = h_ch_range__m(a, 0x30, 0x39); // 0-9
 
+    rules.DQUOTE = h_ch__m(a, 0x22); //  " (Double Quote)
+
+    rules.HEXDIG = h_choice__m(a, rules.DIGIT, h_ch_range__m(a, 0x41, 0x46), 0);
+
+    HTAB := h_ch__m(a, 0x09); // horizontal tab
+
+    rules.SP = h_ch__m(a, 0x20);
+
+    rules.WSP = h_choice__m(a, rules.SP, HTAB, 0); // white space
+
+    /*
+      Use of this linear-white-space rule
+      permits lines containing only white
+      space that are no longer legal in
+      mail headers and have caused
+      interoperability problems in other
+      contexts.
+
+      Do not use when defining mail
+      headers and use with caution in
+      other contexts.
+    */
+    LWSP := h_many__m(a, h_choice__m(a, rules.WSP, h_sequence__m(a, rules.CRLF, rules.WSP, 0), 0));
+
+    rules.OCTET = h_ch_range__m(a, 0x00, 0xFF); // 8 bits of data
+
+    rules.VCHAR = h_ch_range__m(a, 0x21, 0x7E); // visible (printing) characters
 
     return rules;
 }
