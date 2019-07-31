@@ -198,11 +198,11 @@ const Base64 &make_base64(ABNF_RFC5234 const &rfc5234)
         auto const print_bytes = [](FILE *file, const HParsedToken *ast,
                                     int /*offset*/, int /*increment*/) {
                 fatal_ifnot(ast->token_type == TT_BYTES, "expected bytes");
-                fprintf(file, "bytes as ascii: ");
+                fprintf(file, "bytes as ascii: '");
                 algos::for_each_n(
                     ast->bytes.token, ast->bytes.len,
                     [file](uint8_t x) { fprintf(file, "%c", x); });
-                fprintf(file, "\n");
+                fprintf(file, "'\n");
         };
 
         trace_print("should be equal to `any carnal pleasure.`:");
