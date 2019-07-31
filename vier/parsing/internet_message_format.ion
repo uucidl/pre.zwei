@@ -1,0 +1,70 @@
+struct InternetMessageFormatRFC5322 {
+    FWS, CFWS, quoted_string: HParser*;
+}
+
+func internet_message_format_rfc5322(abnf: ABNF_RFC5234*, allocator: Allocator*): InternetMessageFormatRFC5322 {
+    allocator_data := hallocator_bridge_data(allocator);
+    a := hallocator_bridge(&allocator_data);
+
+    rules: InternetMessageFormatRFC5322;
+
+    // ## 3.2.2.  Folding White Space and Comments
+    quoted_pair := h_right__m(a, h_ch__m(a, '\\'), h_choice__m(a, abnf.VCHAR, abnf.WSP, 0));
+
+    // Folding white space
+    rules.FWS = h_choice__m(a,
+        h_sequence__m(a, h_many__m(a, abnf.WSP), h_ignore__m(a, abnf.CRLF), h_many1__m(a, abnf.WSP), 0),
+        h_many1__m(a, abnf.WSP),
+        0);
+    // @todo would we benefit from a semantic action to post-process the FWS into something simpler?
+
+    // printable US-ASCII characters not including (, ), backslash
+    ctext := h_choice__m(a, h_ch_range__m(a, 33, 39), h_ch_range__m(a, 42, 91), h_ch_range__m(a, 93, 126), 0);
+    comment := h_indirect__m(a);
+    ccontent := h_choice__m(a, ctext, quoted_pair, comment, 0);
+
+    h_bind_indirect(
+        comment,
+        h_action__m(a,
+            h_sequence__m(
+                a,
+                h_ch__m(a, '('),
+                h_many__m(a, h_sequence__m(a, h_optional__m(a, rules.FWS), ccontent, 0)),
+                h_optional__m(a, rules.FWS),
+                h_ch__m(a, ')'),
+                0
+            ),
+            h_act_ignore,
+            0
+        ));
+
+    rules.CFWS = h_choice__m(a,
+        h_sequence__m(a,
+            h_many1__m(a, h_sequence__m(a, h_optional__m(a, rules.FWS), comment, 0)),
+            h_optional__m(a, rules.FWS), 0),
+        rules.FWS,
+        0);
+    /* @todo Implement Quoted Strings:
+
+        // ## 3.2.4.  Quoted Strings
+
+        H_RULE(qtext,
+               UH_ANY(h_ch(33), h_ch_range(35, 91), h_ch_range(93, 126)));
+
+        H_RULE(qcontent, UH_ANY(qtext, quoted_pair));
+
+        H_RULE(
+            quoted_string,
+            h_middle(h_optional(CFWS),
+                     h_middle(abnf.DQUOTE,
+                              UH_SEQ(h_many(UH_SEQ(h_optional(FWS), qcontent)),
+                                     h_optional(FWS)),
+                              abnf.DQUOTE),
+                     h_optional(CFWS)));
+
+        rfc5322_base_parsers.FWS = FWS;
+        rfc5322_base_parsers.CFWS = CFWS;
+        rfc5322_base_parsers.quoted_string = quoted_string;
+*/
+    return rules;
+}

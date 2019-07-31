@@ -67,6 +67,7 @@ func test_parsing() {
     allocator := std.arena_allocator(0, 0);
 
     lol := parsing.abnf_rfc5234(&allocator.base);
+    lol2 := parsing.internet_message_format_rfc5322(&lol, &allocator.base);
 
     memdata := parsing.hallocator_bridge_data(&allocator.base);
     mem := parsing.hallocator_bridge(&memdata);

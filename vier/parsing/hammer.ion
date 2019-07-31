@@ -89,6 +89,9 @@ func h_pprint(stream: libc.FILE*, tok: HParsedToken const*, indent: int, delta: 
 func h_action__m(a: HAllocator*, p: HParser*, a: HAction, user_data: void*): HParser*;
 
 @foreign
+func h_bind_indirect(indirect: HParser*, inner: HParser*);
+
+@foreign
 func h_ch__m(a: HAllocator*, c: uint8): HParser*;
 
 @foreign
@@ -98,13 +101,25 @@ func h_ch_range__m(a: HAllocator*, lower: uint8, upper: uint8): HParser*;
 func h_choice__m(a: HAllocator*, ...): HParser*;
 
 @foreign
+func h_ignore__m(a: HAllocator*, p: HParser*): HParser*;
+
+@foreign
 func h_in__m(a: HAllocator*, charset: uint8 const*, length: usize): HParser*;
+
+@foreign
+func h_indirect__m(a: HAllocator*): HParser*;
 
 @foreign
 func h_many__m(a: HAllocator*, p: HParser*): HParser*;
 
 @foreign
+func h_many1__m(a: HAllocator*, p: HParser*): HParser*;
+
+@foreign
 func h_optional__m(a: HAllocator*, p: HParser*): HParser*;
+
+@foreign
+func h_right__m(a: HAllocator*, left: HParser*, right: HParser*): HParser*;
 
 @foreign
 func h_repeat_n__m(a: HAllocator*, p: HParser*, n: usize): HParser*;
@@ -119,3 +134,6 @@ func h_arena_malloc(arena: HArena*, count: usize): void*;
 
 @foreign
 func h_make_bytes(arena: HArena*, array: uint8*, len: usize): HParsedToken*;
+
+@foreign
+func h_act_ignore(p: HParseResult*, user_data: void*): HParsedToken*;
