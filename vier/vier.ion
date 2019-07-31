@@ -62,7 +62,7 @@ func parse_message_source_file(path: char const*): MessageSummary {
 }
 
 func test_parsing() {
-    parsing.test_base_encoding();
+    parsing.test_parsing();
 
     allocator := std.arena_allocator(0, 0);
 

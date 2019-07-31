@@ -1,26 +1,29 @@
 import std
 
 struct BaseEncoding {
-    base64: HParser*;
+    base64: HParser*; // we only bother to support base64 for now.
 }
 
+// Create parsers for base encoding.
 func base_encoding_rfc4648(abnf: ABNF_RFC5234*, allocator: Allocator*): BaseEncoding {
     allocator_data := hallocator_bridge_data(allocator);
     a := hallocator_bridge(&allocator_data);
 
     rules: BaseEncoding;
-    plus := h_ch__m(a, '+');
-    slash := h_ch__m(a, '/');
-    equals := h_ch__m(a, '=');
-    bsfdig := h_choice__m(a, abnf.ALPHA, abnf.DIGIT, plus, slash, 0);
+    bsfdig := h_choice__m(a, abnf.ALPHA, abnf.DIGIT, h_ch__m(a, '+'), h_ch__m(a, '/'), 0);
     bsfdig_4bit := h_in__m(a, (:uint8*)"AEIMQUYcgkosw048", 16);
     bsfdig_2bit := h_in__m(a, (:uint8*)"AQgw", 4);
-    base64_3 := h_repeat_n__m(a, bsfdig, 4);
-    base64_2 := h_sequence__m(a, bsfdig, bsfdig, bsfdig_4bit, equals, 0);
-    base64_1 := h_sequence__m(a, bsfdig, bsfdig_2bit, equals, equals, 0);
-    rules.base64 = h_sequence__m(a, h_many__m(a, base64_3), h_optional__m(a, h_choice__m(a, base64_2, base64_1, 0)), 0);
+    base64_3bytes := h_repeat_n__m(a, bsfdig, 4);
 
-    rules.base64 = h_action__m(a, rules.base64, base64_action, 0);
+    padding := h_ch__m(a, '=');
+    base64_2bytes := h_sequence__m(a, bsfdig, bsfdig, bsfdig_4bit, padding, 0);
+    base64_1byte := h_sequence__m(a, bsfdig, bsfdig_2bit, padding, padding, 0);
+
+    rules.base64 = h_action__m(a,
+        h_sequence__m(a,
+            h_many__m(a, base64_3bytes),
+            h_optional__m(a, h_choice__m(a, base64_2bytes, base64_1byte, 0)), 0),
+        base64_action, 0);
 
     return rules;
 }
@@ -53,50 +56,67 @@ func test_base_encoding() {
 }
 
 func base64_action(p: HParseResult const*, user_data: void*): HParsedToken* {
+    // Semantic action converting input ascii digits into bytes.
     #assert(p.ast.token_type == TT_SEQUENCE);
     #assert(p.ast.seq.used == 2);
 
-    b64_3 := p.ast.seq.elements[0];
-    #assert(b64_3.token_type == TT_SEQUENCE);
+    #assert(p.ast.seq.elements[0].token_type == TT_SEQUENCE);
+    b64_3bytes_blocks := p.ast.seq.elements[0].seq;
 
+    output_bytes_size := 3 * b64_3bytes_blocks.used + 2 /* max size necessary */;
+    output_bytes: uint8 *const = h_arena_malloc(p.arena, output_bytes_size);
+    output_bytes_end := output_bytes + output_bytes_size;
+    output_bytes_last := output_bytes;
 
-    bytes_size := 4 * b64_3.seq.used + 3 /* max size necessary */;
-    bytes: uint8 *const = h_arena_malloc(p.arena, bytes_size);
-    bytes_end := bytes + bytes_size;
-    bytes_last := bytes;
-
-    // Concatenate base64_3 blocks:
-    for (block_index:=0; block_index < b64_3.seq.used; block_index++) {
-        block := b64_3.seq.elements[block_index];
+    // Concatenate 3x bytes (4x sextets) blocks:
+    for (block_index:=0; block_index < b64_3bytes_blocks.used; block_index++) {
+        block := b64_3bytes_blocks.elements[block_index];
         #assert(block.token_type == TT_SEQUENCE);
         #assert(block.seq.used == 4);
-        for (bytei:=0; bytei < block.seq.used; bytei++) {
-            e := block.seq.elements[bytei];
-            #assert(e.token_type == TT_UINT);
-            *bytes_last++ = e.uint;
-            #assert(bytes_last <= bytes_end);
-        }
+        digits := block.seq.elements;
+        #assert(output_bytes_last + 3 <= output_bytes_end);
+        sextet0 := bsf_decode(digits[0].uint);
+        sextet1 := bsf_decode(digits[1].uint);
+        sextet2 := bsf_decode(digits[2].uint);
+        sextet3 := bsf_decode(digits[3].uint);
+        *output_bytes_last++ = (bits_uint8(sextet0, 0, 6)<<2) | (bits_uint8(sextet1, 4, 2));
+        *output_bytes_last++ = (bits_uint8(sextet1, 0, 4)<<4) | (bits_uint8(sextet2, 2, 4));
+        *output_bytes_last++ = (bits_uint8(sextet2, 0, 2)<<6) | (bits_uint8(sextet3, 0, 6));
     }
     // Concatenate b64 end block (_2 or _1) where the '=' sentinel may indicate a stop
-    b64_end := p.ast.seq.elements[1];
-    if (b64_end.token_type == TT_SEQUENCE) {
-        digits := b64_end.seq.elements;
-        count := (digits[2].uint == '=') ? 2 : 3;
-        for (bytei:=0; bytei < count; bytei++) {
-            e := digits[bytei];
-            #assert(e.token_type == TT_UINT);
-            *bytes_last++ = e.uint;
-            #assert(bytes_last <= bytes_end);
+    end := p.ast.seq.elements[1];
+    if (end.token_type == TT_SEQUENCE) {
+        digits := end.seq.elements;
+        count := (digits[2].uint == '=') ? 1 : 2;
+        #assert(output_bytes_last + count <= output_bytes_end);
+        sextet0 := bsf_decode(digits[0].uint);
+        sextet1 := bsf_decode(digits[1].uint);
+        *output_bytes_last++ = (bits_uint8(sextet0, 0, 6)<<2) | (bits_uint8(sextet1, 4, 2));
+        if (digits[2].uint != '=') {
+            sextet2 := bsf_decode(digits[2].uint);
+            *output_bytes_last++ = (bits_uint8(sextet1, 0, 4) << 4) | (bits_uint8(sextet2, 2, 4));
         }
     }
-    bytes_last = base64_pipeline(bytes, bytes_last);
-    return h_make_bytes(p.arena, bytes, bytes_last - bytes);
+    #assert(output_bytes_last <= output_bytes_end);
+    return h_make_bytes(p.arena, output_bytes, output_bytes_last - output_bytes);
 }
 
 // encoded digits in [first, last) are turned into bytes [first, return_value)
-func base64_pipeline(first: uint8*, last: uint8*): uint8* {
-    bsf_decode_inplace(first, last); // after which [first,last) contains sextets
+func base64_decode_range(first: uint8*, last: uint8*): uint8* {
+    bsf_decode_range_inplace(first, last); // after which [first,last) contains sextets
     return gather_8from6bits(first, last, first);
+}
+
+func bsf_decode(x: uint8): uint8 {
+    switch(x) {
+    case 'A'...'Z': return x - 'A';
+    case 'a'...'z': return x - 'a' + 26;
+    case '0'...'9': return x - '0' + 52;
+    case '+': return 62;
+    case '/': return 63;
+    default: #assert(0); // invalid input
+    }
+    return -1;
 }
 
 func min_uint8(a: uint8, b: uint8): uint8 {
@@ -150,18 +170,9 @@ func gather_8from6bits(f: uint8*, l: uint8*, dst: uint8*): uint8* {
     return dst;
 }
 
-func bsf_decode_inplace(f: uint8*, l: uint8*) {
+
+func bsf_decode_range_inplace(f: uint8*, l: uint8*) {
     while (f != l) {
-        x:= *f;
-        y: uint8;
-        switch(x) {
-        case 'A'...'Z': y = x - 'A';
-        case 'a'...'z': y = x - 'a' + 26;
-        case '0'...'9': y = x - '0' + 52;
-        case '+': y = 62;
-        case '/': y = 63;
-        default: #assert(0); // invalid input
-        }
-        *f++ = y;
+        *f++ = bsf_decode(*f);
     }
 }
