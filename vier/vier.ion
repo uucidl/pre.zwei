@@ -62,6 +62,8 @@ func parse_message_source_file(path: char const*): MessageSummary {
 }
 
 func test_parsing() {
+    parsing.test_base_encoding();
+
     allocator := std.arena_allocator(0, 0);
 
     lol := parsing.abnf_rfc5234(&allocator.base);

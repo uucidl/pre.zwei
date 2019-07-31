@@ -9,13 +9,13 @@ struct ABNF_RFC5234 {
 
 func abnf_rfc5234(allocator: Allocator*): ABNF_RFC5234
 {
+    allocator_data := hallocator_bridge_data(allocator);
+    a := hallocator_bridge(&allocator_data);
+
     // We kept below some rules created but private. Those are rules that are
     // defined in the RFC, but that we don't want to use. We keep them here
     // in case they indeed need to be used.
     rules: ABNF_RFC5234;
-
-    allocator_data := hallocator_bridge_data(allocator);
-    a := hallocator_bridge(&allocator_data);
 
     rules.ALPHA = h_choice__m(a, h_ch_range__m(a, 0x41, 0x5a), h_ch_range__m(a, 0x61, 0x7a), 0);
     rules.BIT = h_choice__m(a, h_ch__m(a, '0'), h_ch__m(a, '1'), 0);
