@@ -73,6 +73,7 @@ func test_parsing() {
     mem := parsing.hallocator_bridge(&memdata);
     {
         result := parsing.h_parse__m(mem, lol.CRLF, (:uint8*)"\r\n", 2);
+        #assert(result);
         if (result) {
             libc.printf("Testing CRLF parser: Res: %d\n", result.ast.token_type);
             parsing.h_pprint(libc.stdout, result.ast, 4, 4);
@@ -80,12 +81,12 @@ func test_parsing() {
     }
     {
         result := parsing.h_parse__m(mem, lol.CRLF, (:uint8*)"lol", 3);
+        #assert(!result);
         if (result) {
             libc.printf("Testing CRLF parser: Res: %d\n", result.ast.token_type);
             parsing.h_pprint(libc.stdout, result.ast, 4, 4);
         }
     }
-
     std.arena_free(&allocator);
 }
 

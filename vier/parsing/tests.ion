@@ -1,3 +1,4 @@
 func test_parsing() {
     test_base_encoding();
+    test_internet_message_format();
 }

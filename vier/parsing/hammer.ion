@@ -116,6 +116,9 @@ func h_many__m(a: HAllocator*, p: HParser*): HParser*;
 func h_many1__m(a: HAllocator*, p: HParser*): HParser*;
 
 @foreign
+func h_middle__m(a: HAllocator*, left: HParser*, middle: HParser*, right: HParser*): HParser*;
+
+@foreign
 func h_optional__m(a: HAllocator*, p: HParser*): HParser*;
 
 @foreign
@@ -137,3 +140,6 @@ func h_make_bytes(arena: HArena*, array: uint8*, len: usize): HParsedToken*;
 
 @foreign
 func h_act_ignore(p: HParseResult*, user_data: void*): HParsedToken*;
+
+@foreign
+func h_act_flatten(p: HParseResult*, user_data: void*): HParsedToken*;

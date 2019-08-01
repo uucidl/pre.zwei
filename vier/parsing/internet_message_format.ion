@@ -9,18 +9,18 @@ func internet_message_format_rfc5322(abnf: ABNF_RFC5234*, allocator: Allocator*)
     rules: InternetMessageFormatRFC5322;
 
     // ## 3.2.2.  Folding White Space and Comments
-    quoted_pair := h_right__m(a, h_ch__m(a, '\\'), h_choice__m(a, abnf.VCHAR, abnf.WSP, 0));
 
     // Folding white space
     rules.FWS = h_choice__m(a,
         h_sequence__m(a, h_many__m(a, abnf.WSP), h_ignore__m(a, abnf.CRLF), h_many1__m(a, abnf.WSP), 0),
         h_many1__m(a, abnf.WSP),
         0);
-    // @todo would we benefit from a semantic action to post-process the FWS into something simpler?
 
     // printable US-ASCII characters not including (, ), backslash
     ctext := h_choice__m(a, h_ch_range__m(a, 33, 39), h_ch_range__m(a, 42, 91), h_ch_range__m(a, 93, 126), 0);
     comment := h_indirect__m(a);
+
+    quoted_pair := h_right__m(a, h_ch__m(a, '\\'), h_choice__m(a, abnf.VCHAR, abnf.WSP, 0));
     ccontent := h_choice__m(a, ctext, quoted_pair, comment, 0);
 
     h_bind_indirect(
@@ -34,7 +34,7 @@ func internet_message_format_rfc5322(abnf: ABNF_RFC5234*, allocator: Allocator*)
                 h_ch__m(a, ')'),
                 0
             ),
-            h_act_ignore,
+            h_act_ignore, // comments are ignored, so far I don't see what values they would have
             0
         ));
 
@@ -44,27 +44,105 @@ func internet_message_format_rfc5322(abnf: ABNF_RFC5234*, allocator: Allocator*)
             h_optional__m(a, rules.FWS), 0),
         rules.FWS,
         0);
-    /* @todo Implement Quoted Strings:
 
-        // ## 3.2.4.  Quoted Strings
+    // ## 3.2.4.  Quoted Strings
+    qtext := h_choice__m(a, h_ch__m(a, 33), h_ch_range__m(a, 35, 91), h_ch_range__m(a, 93, 126), 0);
+    qcontent := h_choice__m(a, qtext, quoted_pair, 0);
+    optional_fws := h_many__m(a, rules.FWS); // using many instead of optional to prevent emitting TT_NONE results.
+    rules.quoted_string = h_middle__m(a,
+        abnf.DQUOTE,
+        h_sequence__m(a,
+            h_many__m(a, h_sequence__m(a, optional_fws, qcontent, 0)),
+            optional_fws, 0),
+        abnf.DQUOTE
+    );
 
-        H_RULE(qtext,
-               UH_ANY(h_ch(33), h_ch_range(35, 91), h_ch_range(93, 126)));
+    optional_cfws := h_many__m(a, rules.CFWS); // using many instead of optional to prevent emitting TT_NONE results
 
-        H_RULE(qcontent, UH_ANY(qtext, quoted_pair));
-
-        H_RULE(
-            quoted_string,
-            h_middle(h_optional(CFWS),
-                     h_middle(abnf.DQUOTE,
-                              UH_SEQ(h_many(UH_SEQ(h_optional(FWS), qcontent)),
-                                     h_optional(FWS)),
-                              abnf.DQUOTE),
-                     h_optional(CFWS)));
-
-        rfc5322_base_parsers.FWS = FWS;
-        rfc5322_base_parsers.CFWS = CFWS;
-        rfc5322_base_parsers.quoted_string = quoted_string;
-*/
+    rules.quoted_string = h_middle__m(a,
+        optional_cfws,
+        rules.quoted_string,
+        optional_cfws);
     return rules;
+}
+
+func test_internet_message_format() {
+    arena := std.arena_allocator(0, 0);
+
+    verbose := false;
+
+    abnf := abnf_rfc5234(&arena.base);
+    rules := internet_message_format_rfc5322(&abnf, &arena.base);
+
+    allocator_data := hallocator_bridge_data(&arena.base);
+    mem := hallocator_bridge(&allocator_data);
+
+    libc.printf("Testing quoted_string parser .................... ");
+    quoted_string := h_action__m(mem, rules.quoted_string, h_act_flatten, 0);
+    /* Empty string: */ {
+        result := h_parse__m(mem, quoted_string, (:uint8*)"\"\"", 2);
+        #assert(result);
+        if (result) {
+            if (verbose) { h_pprint(libc.stdout, result.ast, 4, 4); }
+            #assert(compare_hammer_sequence_with_string(result.ast.seq, ""));
+        }
+    }
+    /* Trivial string */ {
+        result := h_parse__m(mem, quoted_string, (:uint8*)"\"a\"", 3);
+        #assert(result);
+        if (result) {
+            if (verbose) { h_pprint(libc.stdout, result.ast, 4, 4); }
+            #assert(compare_hammer_sequence_with_string(result.ast.seq, "a"));
+        }
+    }
+    {
+        result := h_parse__m(mem, quoted_string, (:uint8*)"\"a c\"", 5);
+        #assert(result);
+        if (result) {
+            if (verbose) { h_pprint(libc.stdout, result.ast, 4, 4); }
+            #assert(compare_hammer_sequence_with_string(result.ast.seq, "a c"));
+        }
+    }
+
+    /* String with folding white space */ {
+        result := h_parse__m(mem, quoted_string, (:uint8*)"\"  this is a piece of\r\n text\"", 32);
+        #assert(result);
+        if (result) {
+            if (verbose) { h_pprint(libc.stdout, result.ast, 4, 4); }
+            #assert(compare_hammer_sequence_with_string(result.ast.seq, "  this is a piece of text"));
+        }
+    }
+
+    /* String with preceding comment */ {
+        result := h_parse__m(mem, quoted_string, (:uint8*)"(test case) \"a\" (with comments)", 32);
+        #assert(result);
+        if (result) {
+            if (verbose) { h_pprint(libc.stdout, result.ast, 4, 4); }
+            #assert(compare_hammer_sequence_with_string(result.ast.seq, "a"));
+        }
+    }
+    libc.printf(" OK\n");
+
+    std.arena_free(&arena);
+}
+
+func compare_hammer_sequence_with_string(seq: HCountedArray*, str: char const*): bool {
+    f := &seq.elements[0];
+    l := &seq.elements[seq.used];
+    while (f != l && *str) {
+        tok := *f;
+        if (tok.token_type == TT_NONE) {
+            f++;
+        } else if (tok.token_type != TT_NONE) {
+            #assert(tok.token_type == TT_UINT);
+            if (tok.uint != *str) {
+                break;
+            }
+            f++;
+            str++;
+        }
+    }
+    all_equal := f == l && *str == 0;
+    #assert(all_equal);
+    return all_equal;
 }
