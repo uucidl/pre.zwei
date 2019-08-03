@@ -49,13 +49,13 @@ func internet_message_format_rfc5322(abnf: ABNF_RFC5234*, allocator: Allocator*)
     qtext := h_choice__m(a, h_ch__m(a, 33), h_ch_range__m(a, 35, 91), h_ch_range__m(a, 93, 126), 0);
     qcontent := h_choice__m(a, qtext, quoted_pair, 0);
     optional_fws := h_many__m(a, rules.FWS); // using many instead of optional to prevent emitting TT_NONE results.
-    rules.quoted_string = h_middle__m(a,
-        abnf.DQUOTE,
-        h_sequence__m(a,
-            h_many__m(a, h_sequence__m(a, optional_fws, qcontent, 0)),
-            optional_fws, 0),
-        abnf.DQUOTE
-    );
+    rules.quoted_string = h_action__m(a, h_middle__m(a,
+            abnf.DQUOTE,
+            h_sequence__m(a,
+                h_many__m(a, h_sequence__m(a, optional_fws, qcontent, 0)),
+                optional_fws, 0),
+            abnf.DQUOTE
+        ), h_act_flatten, 0);
 
     optional_cfws := h_many__m(a, rules.CFWS); // using many instead of optional to prevent emitting TT_NONE results
 
@@ -78,7 +78,7 @@ func test_internet_message_format() {
     mem := hallocator_bridge(&allocator_data);
 
     libc.printf("Testing quoted_string parser .................... ");
-    quoted_string := h_action__m(mem, rules.quoted_string, h_act_flatten, 0);
+    quoted_string := rules.quoted_string;
     /* Empty string: */ {
         result := h_parse__m(mem, quoted_string, (:uint8*)"\"\"", 2);
         #assert(result);
