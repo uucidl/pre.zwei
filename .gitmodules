@@ -1,6 +1,6 @@
 [submodule "modules/hammer"]
 	path = modules/hammer
-	url = https://github.com/UpstandingHackers/hammer
+	url = https://github.com/uucidl/hammer
 [submodule "spdr"]
 	path = modules/uu.spdr
 	url = git@github.com:uucidl/uu.spdr.git
