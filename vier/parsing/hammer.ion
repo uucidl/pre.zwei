@@ -1,6 +1,6 @@
 import libc
 
-#foreign(header="../../builds/include/hammer/hammer.h")
+#foreign(header="../../builds/include/hammer/hammer.h", source="../../src/hammer_unit.c")
 
 @foreign
 struct IHAllocator {

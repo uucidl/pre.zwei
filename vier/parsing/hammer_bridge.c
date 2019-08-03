@@ -8,6 +8,7 @@ void* iha_alloc(HAllocator* self_, size_t size) {
 void* iha_realloc(HAllocator* self_, void* ptr, size_t size) {
   IHAllocator* self = (IHAllocator*) self_;
   assert(0);
+  return NULL;
 }
 
 void iha_free(HAllocator* self_, void* ptr) {
