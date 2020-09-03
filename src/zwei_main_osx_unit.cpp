@@ -696,6 +696,7 @@ zw_internal PLATFORM_QUERY_ALL_FILES(sftp_query_all_files)
         DEFER(auto x = sftp_client.error_msg; if (x) error_print(x));
         if (sftp_client.error != sftp::SFTPClient::Error_None) {
                 error_print("could not open sftp session");
+                error_print(sftp_client.hostname);
                 if (auto x = sftp_client.error_msg)
                         error_print(x);
         }
