@@ -251,7 +251,7 @@ must_compile_hammer
 	&& printf "PROGRAM\t%s\n" "${PROGRAM}"
 )
 
-[[ "${os}" != "osx" ]] || (must_compile_osx \
+[[ "${os}" != "osx" ]] || (compile \
     -DZWEI_API_DLL=zw_dll_exported \
     -fvisibility=hidden -shared \
     "${HERE}"/src/spdr_unit.cpp \
@@ -260,19 +260,19 @@ must_compile_hammer
     -o "${LIBRARY}" \
     && printf "SHARED_LIBRARY\t%s\n" "${LIBRARY}")
 
-[[ "${os}" != "osx" ]] || (must_compile_osx \
+[[ "${os}" != "osx" ]] || (compile \
     "${HERE}"/src/spdr_unit.cpp \
     "${HERE}"/src/zwei_main_osx_unit.cpp \
     -o "${PROGRAM}" \
     && printf "PROGRAM\t%s\n" "${PROGRAM}")
 
 [[ "${os}" != "linux" ]] || \
-    (must_compile_linux_cxx \
+    (compile \
 	 "${HERE}"/src/spdr_unit.cpp \
 	 -Wno-error \
 	 -c -o "${BUILD}"/spdr.o \
 	 &&
-	 must_compile_linux_cxx \
+	 compile \
 	     "${BUILD}"/spdr.o \
 	     "${HERE}"/src/zwei_main_linux_unit.cpp \
 	     -L"${BUILD}"/lib -lhammer \
@@ -281,7 +281,7 @@ must_compile_hammer
 
 (
     PROGRAM="${BUILD}"/shasum
-    [[ "${os}" != "osx" ]] || (must_compile_osx \
+    [[ "${os}" != "osx" ]] || (compile \
         "${HERE}"/src/tests/shasum_osx_unit.cpp \
         -DSHASUM_ASYNC=1 -DSHASUM_TRACING=0 \
         -o "${PROGRAM}" \
@@ -291,7 +291,7 @@ must_compile_hammer
 
 (
     PROGRAM="${BUILD}"/shasum_sync
-    [[ "{$os}" != "osx" ]] || (must_compile_osx \
+    [[ "{$os}" != "osx" ]] || (compile \
         "${HERE}"/src/tests/shasum_osx_unit.cpp \
         -DSHASUM_ASYNC=0 -DSHASUM_TRACING=0 \
         -o "${PROGRAM}" \
