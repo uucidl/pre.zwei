@@ -10,7 +10,7 @@ void unix_advise_sequential_readonce(int fd);
 #if defined(__APPLE__) // TAG(platform_specific) TAG(osx)
 #include <fcntl.h>
 
-void unix_advise_sequential_readonce(int fd) { fcntl(entry_fd, F_RDAHEAD, 1); }
+void unix_advise_sequential_readonce(int fd) { fcntl(fd, F_RDAHEAD, 1); }
 
 #elif _POSIX_C_SOURCE >= 20112L
 #include <fcntl.h>
