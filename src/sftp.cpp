@@ -413,8 +413,14 @@ static bool module_open(module *module,
         };
 
         module->handle = load("", name);
+        if (!module->handle) {
+          perror("dlopen");
+        }
         while (source_dirs_size-- && !module->handle) {
                 module->handle = load(*source_dirs_first, name);
+                if (!module->handle) {
+                  perror("dlopen");
+                }
                 ++source_dirs_first;
         }
         return module->handle;
