@@ -71,7 +71,7 @@ function must_compile_osx_cxx()
     local cxxflags
     local PLATFORM_SDK="/Applications/Xcode.app/Contents//Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/usr/include/"
 
-    cflags=("${cflags[@]}" -mmacosx-version-min=10.8)
+    cflags=("${cflags[@]}" -mmacosx-version-min=10.9)
     cflags=("${cflags[@]}" -isystem "${PLATFORM_SDK}")
     cxxflags=("${cxxflags[@]}" -stdlib=libc++)
 
