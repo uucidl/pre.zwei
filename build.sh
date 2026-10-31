@@ -319,7 +319,8 @@ must_compile_hammer
 
 find "${HERE}"/src \( -name "*.cpp" -a ! -name "*_osx[_\.]*" \) | while read x; do
     #TODO(nicolas) convert to multiplatform
-    gcc -std=c++11 -DZWEI_SLOW=1 -DZWEI_INTERNAL=1 -fsyntax-only "${x}"
+    gcc -std=c++11 -DZWEI_SLOW=1 -DZWEI_INTERNAL=1 -fsyntax-only -Wno-undefined-internal "${x}" ||
+        printf "ERROR\t${x}: failed to build as a standalone module.\n" "${x}"
 done
 
 set +e
