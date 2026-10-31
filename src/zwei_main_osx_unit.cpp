@@ -25,6 +25,7 @@ static constexpr auto USAGE =
 
 #include "zwei_inlines.hpp"
 
+#include "zwei_cstrings.hpp"
 #include "zwei_files.hpp"
 #include "zwei_iobuffer.hpp"
 #include "zwei_iobuffer_inlines.hpp"
