@@ -13,7 +13,7 @@
 #include <functional>
 
 // tag switch cases which do fallthrough explicitely.
-#if defined(__GNUC__) and __GNUC__ >= 7
+#if defined(__GNUC__) && __GNUC__ >= 7
 #define TAG_FALLTHROUGH [[gnu::fallthrough]]
 #else
 #define TAG_FALLTHROUGH
