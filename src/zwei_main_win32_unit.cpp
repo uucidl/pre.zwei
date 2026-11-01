@@ -1,4 +1,5 @@
 #include "zwei_app.hpp"
+#include "zwei_cstrings.hpp"
 #include "zwei_inlines.hpp"
 #include "zwei_logging.hpp"
 #include "zwei_text.hpp"
