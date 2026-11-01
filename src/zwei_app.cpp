@@ -119,7 +119,8 @@ zw_global Platform global_platform;
 
 struct MacRomanWorkaround {
         // TODO(nicolas) this is way too low
-        enum { RUNE_COUNT = 64,
+        enum {
+                RUNE_COUNT = 64,
         };
         uint8_t utf8_output_block[3 * RUNE_COUNT];
         size_t utf8_output_block_count;
@@ -274,8 +275,9 @@ macroman_workaround_stream(MacRomanWorkaroundBufferedReader *stream,
 // ...MacromanWorkaround>
 
 struct MessageBeingParsed {
-        enum { UNPARSED,
-               MESSAGE_SUMMARY,
+        enum {
+                UNPARSED,
+                MESSAGE_SUMMARY,
         } content_state;
         struct MessageSummary message_summary;
 };
@@ -315,12 +317,13 @@ zw_internal void fill_message_summary(MessageSummary *message_summary,
         *message_summary = {};
 
         auto collect = [&message_summary, arena](HParsedToken const *token) {
-                enum { NONE,
-                       BYTES,
-                       BYTES_LIST,
-                       MAILBOX,
-                       MAILBOX_LIST,
-                       CIVIL_DATE_TIME,
+                enum {
+                        NONE,
+                        BYTES,
+                        BYTES_LIST,
+                        MAILBOX,
+                        MAILBOX_LIST,
+                        CIVIL_DATE_TIME,
                 } process = NONE;
                 ByteCountedRange *d_bytes_range = nullptr;
                 ByteCountedRange **d_bytes_ranges = nullptr;
