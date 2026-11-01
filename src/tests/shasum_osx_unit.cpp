@@ -34,7 +34,7 @@ struct FileShaWork {
         uint8_t digest[20];
 };
 
-zw_global SPDR_Context *global_spdr = nullptr;
+zw_internal SPDR_Context *global_spdr = nullptr;
 
 void shasum_task(void *tasks_ptr, size_t task_index)
 {

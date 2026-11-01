@@ -50,11 +50,7 @@ print_processed_message(ProcessedMessage const &processed_message,
 #include "secure_hash_standard.hpp"
 #include "zwei_iobuffer.hpp"
 #include "zwei_iobuffer_inlines.hpp"
-
-// TODO(nicolas): wrap spdr somehow so that we always have this global variable
-// in every executable
-#include "../modules/uu.spdr/include/spdr/spdr.hh"
-extern SPDR_Context *global_spdr;
+#include "zwei_spdr.hpp"
 
 zw_internal bool
 should_skip_message_file(Zwei const &zwei,

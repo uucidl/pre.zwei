@@ -49,7 +49,6 @@ static constexpr auto USAGE =
 #include <cstdio>
 #include <ctime>
 
-zw_global SPDR_Context *global_spdr = nullptr;
 zw_global bool global_can_ignore_file = false;
 #include <mach/mach.h> // for vm_allocate
 #include <sys/vnode.h> // for enum vtype

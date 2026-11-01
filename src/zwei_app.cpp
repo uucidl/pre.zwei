@@ -93,6 +93,7 @@
 #include "zwei_iobuffer.hpp"
 #include "zwei_iobuffer_inlines.hpp"
 #include "zwei_logging.hpp"
+#include "zwei_spdr.hpp"
 #include "zwei_types.hpp"
 
 // modules:
@@ -105,7 +106,6 @@
 zw_global RFC5322 mail_parsers;
 zw_global bool global_debug_mode;
 zw_global Platform global_platform;
-zw_global SPDR_Context *global_spdr;
 
 // <MacromanWorkaround...
 // NOTE(nicolas) the following is a work around for some bad transcoding that

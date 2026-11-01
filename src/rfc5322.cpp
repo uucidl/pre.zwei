@@ -11,15 +11,13 @@
 #include "rfc2047.hpp"
 #include "utf8_decode.cpp"
 #include "zwei_cstrings.hpp"
+#include "zwei_spdr.hpp"
 
-#include "../modules/uu.spdr/include/spdr/spdr.hh"
 #include "hammer.hpp"
 
 #include <cinttypes>
 #include <cstring>
 #include <functional>
-
-extern SPDR_Context *global_spdr; // TODO(nicolas): header file
 
 /**
   @file
