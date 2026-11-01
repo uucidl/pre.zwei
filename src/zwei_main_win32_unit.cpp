@@ -8,6 +8,8 @@
 
 #include "utf8_decode.cpp"
 
+#include "algos.hpp"
+
 #include "win32_gdi.hpp"
 #include "win32_kernel.hpp"
 #include "win32_opengl.hpp"
