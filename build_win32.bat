@@ -1,4 +1,6 @@
 set HereDir=%~dp0
+
+set PATH=%PATH%;%HereDir%\deps\scons-local-4.11.1
 set OutputDir=%HereDir%\builds
 set CLFlags=-nologo -Gm- -GR- -EHa- -Z7 -FC -EHsc -DEBUG
 set CLFlags=%CLFlags% -Fo%OutputDir%\obj\
