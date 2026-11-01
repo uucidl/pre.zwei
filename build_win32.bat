@@ -1,4 +1,5 @@
-set OutputDir=H:\pre.zwei\builds
+set HereDir=%~dp0
+set OutputDir=%HereDir%\builds
 set CLFlags=-nologo -Gm- -GR- -EHa- -Z7 -FC -EHsc -DEBUG
 set CLFlags=%CLFlags% -Fo%OutputDir%\obj\
 set CLFlags=%CLFlags% -WX -W4 -wd4201 -wd4100 -wd4189 -wd4505 -wd4127
