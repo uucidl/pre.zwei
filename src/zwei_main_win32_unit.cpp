@@ -3,6 +3,7 @@
 #include "zwei_logging.hpp"
 #include "zwei_text.hpp"
 #include "zwei_textapp.cpp"
+#include "zwei_spdr.hpp"
 
 #include "utf8_decode.cpp"
 
@@ -15,7 +16,6 @@
 #define GL_GLEXT_PROTOTYPES 1
 #include "../modules/khronos/gl/glcorearb.h"
 #include "../modules/nothings_stb/stb_truetype.h"
-#include "../modules/uu.spdr/include/spdr/spdr.hh"
 
 #include <cstdint>
 
@@ -297,7 +297,6 @@ stbtt_packedchar *find_glyph_data(Win32FontRenderData const *data,
         return nullptr;
 }
 
-zw_internal SPDR_Context *global_spdr;
 zw_internal void *global_main_window;
 zw_internal bool global_is_running = true;
 zw_internal Win32FontRenderData global_font_render_data;
